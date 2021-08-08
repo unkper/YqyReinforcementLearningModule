@@ -174,6 +174,9 @@ class GridWorldEnv(gym.Env):
         self.seed()  # 产生一个随机子
         self.reset()
 
+    def class_name(self):
+        return "gridworld"
+
     def _adjust_size(self):
         '''调整场景尺寸适合最大宽度、高度不超过800
         '''
@@ -499,6 +502,9 @@ class CliffWalk2(GridWorldEnv):
             self.rewards.append((i + 1, 0, -100))
             # self.ends.append((i+1,0))
         self.refresh_setting()
+
+    def class_name(self):
+        return "gridworld"
 
     def step(self, action):
         assert self.action_space.contains(action), \

@@ -1,6 +1,7 @@
 import time
 import gym
 import random
+import numpy as np
 
 from gym import Env
 from random import random,choice
@@ -92,7 +93,7 @@ class Agent():
         :param lambda_:
         :param gamma:用于td更新时乘以往后看的Q值,即 update = r + gamma*Q'
         :param alpha:用于td更新时乘以累进更新值,即 old_q = old_q + alpha * (update - old_q)
-        :param epsilon:
+        :param epsilon:用于epsilon-贪心策略使用
         :param display:
         :return:
         '''
@@ -117,7 +118,9 @@ class Agent():
 
     def learning(self,
                  lambda_ = 0.9,
-                 epsilon = None,
+                 epsilon_high = 1.0,
+                 epsilon_low = 0.05,
+                 p = 0.5,
                  decaying_epsilon = True,
                  gamma = 0.9,
                  alpha = 0.1,
@@ -128,10 +131,11 @@ class Agent():
                  waitSecond = 0.01)->tuple:
         '''
         agent的主要循环在该方法内，用于整个学习过程，通过设置相应超参数，其会调用自己的learning_method进行学习
-        同时返回（经历的总次数，每个经历的奖励，以及经历的编号）
-
+        同时返回（经历的总次数，每个经历的奖励，以及经历的编号）\n
         :param lambda_:
-        :param epsilon:
+        :param epsilon_high:
+        :param epsilon_low:
+        :param p:
         :param decaying_epsilon:
         :param gamma:
         :param alpha:
@@ -144,12 +148,12 @@ class Agent():
             wait = False
         total_time, episode_reward, num_episode = 0,0,0
         total_times,episode_rewards,num_episodes = [],[],[]
-        if epsilon is None:
-            epsilon = 1e-10
         for i in tqdm(range(max_episode_num)):
             #用于ε-贪心算法中ε随着经历的递增而逐级减少
-            if decaying_epsilon and num_episode >= 100: #为了保证充分的探索
-                epsilon = 1.0 / (1 + num_episode)
+            if decaying_epsilon:
+                epsilon = epsilon_low +( epsilon_high - epsilon_low) * np.power(np.e,-4/p*i/max_episode_num)
+            else:
+                epsilon = epsilon_high
             time_in_episode,episode_reward = self.learning_method(lambda_=lambda_,
                 gamma = gamma, alpha = alpha,epsilon = epsilon,display = display,wait = wait,
                 waitSecond = waitSecond)

@@ -1,3 +1,4 @@
+import random
 import time
 
 import torch
@@ -5,12 +6,13 @@ import torch.nn.functional as F
 import numpy as np
 
 from gym import Env
+from gym.spaces import Discrete
 
-from rl import OrnsteinUhlenbeckActionNoise
 from rl.agents.Agent import Agent
-from rl.utils.networks import Critic, Actor
+from rl.utils.networks import Critic, Actor, SimpleCritic, SimpleActor
 from rl.utils.updates import soft_update, hard_update
-from rl.utils.classes import SaveNetworkMixin
+from rl.utils.classes import SaveNetworkMixin,OrnsteinUhlenbeckActionNoise
+from rl.utils.functions import back_specified_dimension
 
 
 class DDPGAgent(Agent,SaveNetworkMixin):
@@ -24,9 +26,13 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         if env is None:
             raise Exception("agent should have an environment!")
         super(DDPGAgent, self).__init__(env,capacity)
-        self.state_dim = env.observation_space.shape[0]
-        self.action_dim = env.action_space.shape[0]
-        self.action_lim = action_lim
+        self.state_dim = back_specified_dimension(env.observation_space)
+        self.action_dim = back_specified_dimension(env.action_space)
+        if type(env.action_space) is Discrete:
+            self.discrete = True
+        else:
+            self.discrete = False
+        self.action_lim = action_lim #行为值的限制值，即动作被限制在[-action_lim,action_lim]之间
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.gamma = 0.999
@@ -35,13 +41,13 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         self.noise = OrnsteinUhlenbeckActionNoise(self.action_dim)
 
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-        self.actor = Actor(self.state_dim, self.action_dim, self.action_lim).to(self.device)
-        self.target_actor = Actor(self.state_dim, self.action_dim,
+        self.actor = SimpleActor(self.state_dim, self.action_dim, self.action_lim).to(self.device)
+        self.target_actor = SimpleActor(self.state_dim, self.action_dim,
                                   self.action_lim).to(self.device)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 self.learning_rate)
-        self.critic = Critic(self.state_dim, self.action_dim).to(self.device)
-        self.target_critic = Critic(self.state_dim, self.action_dim).to(self.device)
+        self.critic = SimpleCritic(self.state_dim, self.action_dim).to(self.device)
+        self.target_critic = SimpleCritic(self.state_dim, self.action_dim).to(self.device)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  self.learning_rate)
         hard_update(self.target_actor, self.actor)
@@ -55,11 +61,14 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         :param state: numpy数组
         :return: 动作 numpy数组
         '''
+        if type(state) is np.ndarray: state = torch.from_numpy(state)
         state = state.to(self.device)
         action = self.target_actor.forward(state).detach()
-        return action.data.numpy()
+        if self.discrete:
+            action = np.round(action)
+        return action.cpu().data.numpy()
 
-    def get_exploration_action(self, state):
+    def get_exploration_action(self, state, epsilon):
         '''
         得到给定状态下根据演员网络计算出的带噪声的行为，模拟一定的探索
         :param state: numpy数组
@@ -67,12 +76,25 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         '''
         state = state.to(self.device)
         action = self.actor.forward(state).detach()
-        new_action = action.cpu().data.numpy() + (self.noise.sample() * self.action_lim)
-        new_action = new_action.clip(
-            min = -1 * self.action_lim,
-            max = self.action_lim
-        )
+        value = random.random()
+        if value < epsilon:
+            new_action = action.cpu().data.numpy() + (self.noise.sample() * self.action_lim)
+            new_action = new_action.clip(
+                min = -1 * self.action_lim,
+                max = self.action_lim
+            )
+        else:
+            new_action = action.cpu().data.numpy()
+        if self.discrete:
+            new_action = np.round(new_action)
         return new_action
+
+    def play_init(self,savePath,s0):
+        self.load(savePath,self.target_actor)
+        return self.get_exploitation_action(s0)
+
+    def play_step(self,savePath,s0):
+        return self.get_exploitation_action(s0)
 
     def _learn_from_memory(self):
         '''
@@ -91,9 +113,10 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         s1 = torch.from_numpy(s1).to(self.device)
         a1 = self.target_actor.forward(s1).detach()
         next_val = torch.squeeze(self.target_critic.forward(s1,a1).detach().cpu())
-
+        # y_exp = r + gamma * Q'( s2, pi'(s2))
         y_expected = torch.from_numpy(r1) + self.gamma * next_val
         y_expected = y_expected.type(torch.FloatTensor)
+        # y_pred = Q( s1, a1)
         a0 = torch.from_numpy(a0).to(self.device)
         s0 = torch.from_numpy(s0).to(self.device)
         y_predicted = torch.squeeze(self.critic.forward(s0,a0)).cpu()
@@ -125,13 +148,15 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         while not is_done:
             s0 = torch.from_numpy(self.state)
             if explore:
-                a0 = self.get_exploration_action(s0)
+                a0 = self.get_exploration_action(s0,epsilon)
             else:
                 a0 = self.actor.forward(s0).detach().data.numpy()
+                if self.discrete:
+                    a0 = np.round(a0)
             s1,r1,is_done,info,total_reward = self.act(a0)
             if display:
                 self.env.render()
-            if self.total_trans % self.batch_size == 0:
+            if self.total_trans > self.batch_size:
                 loss_c, loss_a = self._learn_from_memory()
                 loss_critic += loss_c
                 loss_actor += loss_a
@@ -144,7 +169,8 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         loss_actor /= time_in_episode
         if display:
             print("{}".format(self.experience.last_episode))
-        return time_in_episode,total_reward,loss_critic,loss_actor
+        loss = loss_critic + loss_actor
+        return time_in_episode,total_reward
 
     def save_models(self, episode_count):
         torch.save(self.target_actor.state_dict(),'./Models/'+str(

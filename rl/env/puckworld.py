@@ -64,6 +64,9 @@ class PuckWorldEnv(gym.Env):
         self.seed()  # 产生一个随机数种子
         self.reset()
 
+    def class_name(self):
+        return "PuckWorld"
+
     def seed(self, seed=None):
         # 产生一个随机化时需要的种子，同时返回一个np_random对象，支持后续的随机化生成操作
         self.np_random, seed = seeding.np_random(seed)

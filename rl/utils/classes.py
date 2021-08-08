@@ -2,6 +2,7 @@ import datetime
 import os
 import pickle
 import time
+from queue import Queue
 
 import gym
 import random
@@ -24,8 +25,8 @@ class State():
 
 class Transition():
 
-    def __init__(self, s0, a0, reward: float, is_done: bool, s1):
-        self.data = [s0, a0, reward, is_done, s1]
+    def __init__(self, s0, a0, reward: float, is_done: bool, s1, global_state = None):
+        self.data = [s0, a0, reward, is_done, s1, global_state]
 
     def __iter__(self):
         return iter(self.data)
@@ -53,8 +54,13 @@ class Transition():
         return self.data[3]
 
     @property
-    def s1(self) -> State:
+    def s1(self):
         return self.data[4]
+
+    @property
+    def global_state(self):
+        if self.data[5] is None:print("Global State is None!")
+        return self.data[5]
 
 
 class Episode():
@@ -210,7 +216,11 @@ class OrnsteinUhlenbeckActionNoise():
 class SaveNetworkMixin():
 
     def save(self,name:str,network:nn.Module):
-        save_name = os.path.join(MODEL_PATH,"./{}_{}.pkl".format(name,datetime.datetime.now().__format__('%Y-%M-%D')))
+        now_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
+        p = os.path.join("./",now_time_str)
+        if not os.path.exists(p):
+            os.mkdir(p)
+        save_name = os.path.join("./",now_time_str,"./{}.pkl".format(name))
         torch.save(network.state_dict(),save_name)
         return save_name
 
@@ -219,7 +229,7 @@ class SaveNetworkMixin():
 
 class SaveDictMixin():
     def save_obj(self,obj, name):
-        save_name = os.path.join(MODEL_PATH,name+'.pkl')
+        save_name = os.path.join("./",name+'.pkl')
         with open(save_name, 'wb') as f:
             pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
         return save_name
@@ -227,3 +237,30 @@ class SaveDictMixin():
     def load_obj(self,savePath):
         with open(savePath , 'rb') as f:
             return pickle.load(f)
+
+class SimulationEnvModel():
+    def __init__(self,maxLength=2000):
+        self.maxSize = maxLength
+        self.queue = Queue(maxsize=-1)
+        self.dic = {}
+
+    def push(self,s,a,r,s1,is_done):
+        if self.queue.qsize() + 1 > self.maxSize:
+            ele = self.queue.get()
+            del self.dic[ele]
+        key = [s, a]
+        if key in self.dic.keys():
+            pass
+        else:
+            self.dic[key] = (r, s1, is_done)
+            self.queue.put(key)
+
+    def keys(self):
+        return self.dic.keys()
+
+    def __getitem__(self, item):
+        return self.dic[item]
+
+    def __len__(self):
+        return len(self.dic)
+

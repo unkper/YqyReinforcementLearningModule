@@ -1,4 +1,6 @@
-from rl.utils.functions import onehot_from_int
+import torch
+
+from rl.utils.functions import onehot_from_logits,gumbel_softmax
 
 def make_env(scenario_name, benchmark=False):
     '''
@@ -32,12 +34,15 @@ def make_env(scenario_name, benchmark=False):
     return env
 
 if __name__ == '__main__':
-    env = make_env("simple")
-    s0 = env.reset()
-    for i in range(10000):
-        a0 = []
-        for a in env.action_space:
-            a0.append(onehot_from_int(a.sample(),a.n))
-        s1,r1,is_done,info = env.step(a0)
-        print("s1:{},r1:{},is_done:{}".format(s1,r1,is_done))
-        env.render()
+    # env = make_env("simple")
+    # s0 = env.reset()
+    # for i in range(10000):
+    #     a0 = []
+    #     for a in env.action_space:
+    #         a0.append(onehot_from_logits(a.sample(),a.n))
+    #     s1,r1,is_done,info = env.step(a0)
+    #     print("s1:{},r1:{},is_done:{}".format(s1,r1,is_done))
+    #     env.render()
+    data = torch.rand(1,4)
+    ret = gumbel_softmax(data,hard=True)
+    print(ret)

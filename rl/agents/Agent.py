@@ -1,3 +1,4 @@
+import datetime
 import time
 import gym
 import random
@@ -41,6 +42,13 @@ class Agent():
         self.experience = Experience(capacity=capacity)
         #记录当前agent的状态
         self.state = None
+
+        self.loss_callback_ = None
+        self.save_callback_ = None
+
+        #为了保存方便而使用
+        self.init_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
+        self.total_time = 0
 
     def policy(self,A ,s = None,Q = None, epsilon = None):
         '''
@@ -111,17 +119,19 @@ class Agent():
             a1 = self.perform_policy(s1,epsilon)
             s0, a0 = s1, a1
             time_in_episode += 1
+            self.total_time += 1
             if wait:
                 time.sleep(waitSecond)
         print(self.experience.last_episode)
-        return time_in_episode, total_reward
+        return time_in_episode, total_reward, 0.0
 
     def learning(self,
                  lambda_ = 0.9,
                  epsilon_high = 1.0,
                  epsilon_low = 0.05,
-                 p = 0.5,
+                 p = 1.2,
                  decaying_epsilon = True,
+                 explore_episodes_percent = 0.4,
                  gamma = 0.9,
                  alpha = 0.1,
                  max_episode_num = 800,
@@ -148,13 +158,14 @@ class Agent():
             wait = False
         total_time, episode_reward, num_episode = 0,0,0
         total_times,episode_rewards,num_episodes = [],[],[]
+        max_explore_num = int(max_episode_num * explore_episodes_percent)
         for i in tqdm(range(max_episode_num)):
             #用于ε-贪心算法中ε随着经历的递增而逐级减少
             if decaying_epsilon:
-                epsilon = epsilon_low +( epsilon_high - epsilon_low) * np.power(np.e,-4/p*i/max_episode_num)
+                epsilon = epsilon_low +(epsilon_high - epsilon_low) * np.power(np.e,-4/p*i/max_explore_num) if i < max_explore_num else 0
             else:
                 epsilon = epsilon_high
-            time_in_episode,episode_reward = self.learning_method(lambda_=lambda_,
+            time_in_episode,episode_reward,loss = self.learning_method(lambda_=lambda_,
                 gamma = gamma, alpha = alpha,epsilon = epsilon,display = display,wait = wait,
                 waitSecond = waitSecond)
             total_time += time_in_episode
@@ -165,6 +176,10 @@ class Agent():
             total_times.append(total_time)
             episode_rewards.append(episode_reward)
             num_episodes.append(num_episode)
+            if self.loss_callback_ and loss:
+                self.loss_callback_(loss)
+            if self.save_callback_:
+                self.save_callback_(self,num_episode)
         return total_times,episode_rewards,num_episodes
 
     def play(self,savePath:str = None,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):
@@ -176,9 +191,9 @@ class Agent():
                 self.env.render()
             a0 = self.play_init(savePath, s0)
             time_in_episode, total_reward = 0, 0
-            is_done = False
+            is_done = [False]
             ep += 1
-            while not is_done:
+            while not is_done[0]:
                 s1, r1, is_done, info, total_reward = self.act(a0)
                 if display:
                     self.env.render()
@@ -218,4 +233,4 @@ class Agent():
         return self.experience.total_trans
 
     def last_episode_detail(self):
-        self.experience.last_episode.print_detail()
+        print(self.experience.last_episode.__str__())

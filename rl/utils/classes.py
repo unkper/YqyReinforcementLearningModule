@@ -1,7 +1,7 @@
 import datetime
 import os
 import pickle
-import time
+import math
 from queue import Queue
 
 import gym
@@ -25,8 +25,8 @@ class State():
 
 class Transition():
 
-    def __init__(self, s0, a0, reward: float, is_done: bool, s1, global_state = None):
-        self.data = [s0, a0, reward, is_done, s1, global_state]
+    def __init__(self, s0, a0, reward: float, is_done: bool, s1):
+        self.data = [s0, a0, reward, is_done, s1]
 
     def __iter__(self):
         return iter(self.data)
@@ -57,12 +57,6 @@ class Transition():
     def s1(self):
         return self.data[4]
 
-    @property
-    def global_state(self):
-        if self.data[5] is None:print("Global State is None!")
-        return self.data[5]
-
-
 class Episode():
 
     def __init__(self, id: int = 0) -> None:
@@ -77,7 +71,10 @@ class Episode():
         :return:
         '''
         self.trans_list.append(trans)
-        self.total_reward += trans.reward  # 不计衰减的总奖励
+        if type(trans.reward) is list:
+            self.total_reward += np.mean(trans.reward)
+        else:
+            self.total_reward += trans.reward  # 不计衰减的总奖励
         return self.total_reward
 
     @property
@@ -91,12 +88,17 @@ class Episode():
     def is_compute(self) -> bool:
         if self.len == 0:
             return False
+        is_done = self.trans_list[self.len - 1].is_done
+        if type(is_done) is list:return is_done[0]
         return self.trans_list[self.len - 1].is_done
 
     def pop(self) -> Transition:
         if self.len == 0: return None
         var = self.trans_list.pop()
-        self.total_reward -= var.reward
+        if type(var.reward) is list:
+            self.total_reward -= np.mean(var.reward)
+        else:
+            self.total_reward -= var.reward
         return var
 
     def sample(self,batch_size = 1)->list:
@@ -158,7 +160,7 @@ class Experience():
             self.next_id += 1
             self.episodes.append(curEpisode)
         else:
-            curEpisode =  self.episodes[self.len-1]
+            curEpisode = self.episodes[self.len-1]
         return curEpisode.push(trans)
 
     def sample(self, batch_size=1): # sample transition
@@ -170,9 +172,13 @@ class Experience():
             list of Transition.
         '''
         sample_trans = []
-        for _ in range(batch_size):
+        while batch_size > 0:
             index = int(random.random() * self.len)
-            sample_trans += self.episodes[index].sample()
+            episode_len = self.episodes[index].len
+            count = int(round(random.random() * episode_len))
+            count = min(count, batch_size, episode_len)
+            sample_trans += self.episodes[index].sample(count)
+            batch_size -= count
         return sample_trans
 
     def sample_episode(self, episode_num = 1):  # sample episode
@@ -215,12 +221,11 @@ class OrnsteinUhlenbeckActionNoise():
 
 class SaveNetworkMixin():
 
-    def save(self,name:str,network:nn.Module):
-        now_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
-        p = os.path.join("./",now_time_str)
+    def save(self,save_file_name:str,name:str,network:nn.Module):
+        p = os.path.join("./",save_file_name)
         if not os.path.exists(p):
             os.mkdir(p)
-        save_name = os.path.join("./",now_time_str,"./{}.pkl".format(name))
+        save_name = os.path.join("./",save_file_name,"./{}.pkl".format(name))
         torch.save(network.state_dict(),save_name)
         return save_name
 

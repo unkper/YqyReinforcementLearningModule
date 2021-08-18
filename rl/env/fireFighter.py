@@ -124,7 +124,7 @@ class FireFighterWrapper(gym.Env):
     def get_observation(self):
         obs = self.wrapperEnv.get_obs()
         obs.append(self.wrapperEnv.firelevel)
-        return obs
+        return np.array(obs)
 
     def is_done(self):
         return True if np.sum(self.wrapperEnv.firelevel) == 0 else False

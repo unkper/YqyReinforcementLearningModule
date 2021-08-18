@@ -71,6 +71,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
                     batch_size = 128,
                     epochs = 2,
                     tau:float = 0.1,
+                    update_frequent = 50,
                     network:nn.Module = None):
         if env is None:
             raise Exception("agent should have an environment!")
@@ -98,6 +99,8 @@ class DQNAgent(Agent,SaveNetworkMixin):
         self.batch_size = batch_size
         self.epochs = epochs
         self.tau = tau
+        self.update_frequent = update_frequent
+
 
     def _update_target_Q(self):
         # 使用软更新策略来缓解不稳定的问题
@@ -126,7 +129,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
             s1, r1, is_done, info, total_reward = self.act(a0)
             if display:
                 self.env.render()
-            if self.total_trans > self.batch_size:
+            if self.total_trans > self.batch_size and time_in_episode % self.update_frequent == 0:
                 loss += self._learn_from_memory(gamma,alpha)
             time_in_episode += 1
 
@@ -161,7 +164,8 @@ class DQNAgent(Agent,SaveNetworkMixin):
                                    learning_rate = learning_rate,
                                    epochs=self.epochs)
         mean_loss = loss.sum().item() / self.batch_size
-        self._update_target_Q()
+        if self.experience.total_trans % 100 == 0:
+            self._update_target_Q()
         return mean_loss
 
     def play_init(self,savePath,s0):

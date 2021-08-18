@@ -164,10 +164,13 @@ class EnvMoveBox(object):
             reward = 10
             done = True
             self.reset()
-        if self.box_pos == [1, 7]:
+        elif self.box_pos == [1, 7]:
             reward = 100
             done = True
             self.reset()
+        else:
+            reward = -1
+            done = False
         return reward, done
 
     def get_global_obs(self):
@@ -292,13 +295,19 @@ class MoveBoxWrapper(gym.Env):
     def __init__(self):
         self.wrappedEnv = EnvMoveBox()
         self.agent_count = 2 #智能体数量
-        self.observation_space = [Box(low=0,high=1,shape=[3,3,3]),Box(low=0,high=1,shape=[3,3,3]),
-                                  Box(low=0,high=1,shape=[4,10,3])]
+        self.observation_space = [Box(low=0,high=1,shape=[1,3]),Box(low=0,high=1,shape=[1,3]),
+                                  Box(low=0,high=1,shape=[15, 15, 3])]
         self.action_space = [Discrete(n=5),Discrete(n=5)]
 
     def get_observation(self):
-        return [self.wrappedEnv.get_agt1_obs(),self.wrappedEnv.get_agt2_obs(),
-                self.wrappedEnv.get_global_obs()]
+        state = self.wrappedEnv.get_state()
+        state_1 = np.zeros((1,3))
+        state_2 = np.zeros((1,3))
+        state_1[0,0:2] = state[0,0:2]
+        state_2[0,0:2] = state[0,2:4]
+        state_1[0,2] = state[0,4]
+        state_2[0,2] = state[0,5]
+        return [state_1,state_2,self.wrappedEnv.get_global_obs()]
 
     def reset(self):
         self.wrappedEnv.reset()
@@ -312,7 +321,7 @@ class MoveBoxWrapper(gym.Env):
         #is_done以数组形式进行返回
         r = [r for _ in range(self.agent_count)]
         is_done = [is_done for _ in range(self.agent_count)]
-        info = "FindGoal"
+        info = "MoveBox"
         return self.get_observation(),r,is_done,info
 
     def render(self, mode='human'):

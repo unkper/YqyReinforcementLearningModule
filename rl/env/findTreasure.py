@@ -1,3 +1,5 @@
+from copy import copy
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -9,7 +11,7 @@ from matplotlib.gridspec import GridSpec
 
 
 class EnvFindTreasure(object):
-    def __init__(self, map_size):
+    def __init__(self, map_size, max_step = 200):
         self.map_size = map_size
         if map_size<7:
             self.map_size = 7
@@ -40,6 +42,9 @@ class EnvFindTreasure(object):
 
         # sub pos = [self.map_size - 2, self.map_size - 2]
         self.sub_pos = [self.map_size - 3, self.map_size - 2]
+
+        self.step_in_env = 0
+        self.max_step = max_step
 
     def reset(self):
         self.occupancy = np.zeros((self.map_size, self.map_size))
@@ -98,6 +103,11 @@ class EnvFindTreasure(object):
                 self.occupancy[self.agt1_pos[0]][self.agt1_pos[1]] = 1
             else:
                 reward = reward - 0.1
+        else: #wait
+            if self.agt1_pos == self.lever_pos or self.agt2_pos == self.lever_pos:
+                pass
+            else:
+                reward = reward - 0.05
 
         # agent2 move
         if action_list[1] == 0:  # move up
@@ -128,6 +138,12 @@ class EnvFindTreasure(object):
                 self.occupancy[self.agt2_pos[0]][self.agt2_pos[1]] = 1
             else:
                 reward = reward - 0.1
+        else: #wait
+            if self.agt1_pos == self.lever_pos or self.agt2_pos == self.lever_pos:
+                pass
+            else:
+                reward = reward - 0.05
+
 
         # check lever
         if self.agt1_pos == self.lever_pos or self.agt2_pos == self.lever_pos:
@@ -139,16 +155,17 @@ class EnvFindTreasure(object):
             self.occupancy[self.half_pos][self.half_pos - 1] = 1  # open secret door
             self.occupancy[self.half_pos][self.half_pos + 1] = 1  # open secret door
 
+        self.step_in_env += 1
+        done = False #if self.step_in_env < self.max_step else True
+
         # check treasure
         if self.agt1_pos == self.treasure_pos or self.agt2_pos == self.treasure_pos:
-            reward = reward + 100
+            reward = reward + 200
+            print("Find Treasure!!!")
+            done = True
 
         if (self.agt1_pos == self.sub_pos and self.agt2_pos == self.lever_pos) or (self.agt1_pos == self.lever_pos and self.agt2_pos == self.sub_pos):
-            reward = reward + 3
-
-        done = False
-        if reward > 0:
-            done = True
+            reward = reward
 
         return reward, done
 
@@ -243,11 +260,13 @@ class EnvFindTreasure(object):
         return [self.get_agt1_obs(), self.get_agt2_obs()]
 
     def get_state(self):
-        state = np.zeros((1, 4))
+        state = np.zeros((1, 6))
         state[0, 0] = self.agt1_pos[0] / self.map_size
         state[0, 1] = self.agt1_pos[1] / self.map_size
-        state[0, 2] = self.agt2_pos[0] / self.map_size
-        state[0, 3] = self.agt2_pos[1] / self.map_size
+        state[0, 2] = (self.treasure_pos[1] - self.agt1_pos[1])**2+ (self.treasure_pos[0] - self.agt1_pos[0])**2
+        state[0, 3] = self.agt2_pos[0] / self.map_size
+        state[0, 4] = self.agt2_pos[1] / self.map_size
+        state[0 ,5] = (self.treasure_pos[1] - self.agt2_pos[1])**2+(self.treasure_pos[0] - self.agt2_pos[0])**2
         return state
 
     def plot_scene(self):
@@ -270,13 +289,11 @@ class EnvFindTreasure(object):
         plt.show()
 
     def render(self):
-
         obs = self.get_global_obs()
         enlarge = 30
         new_obs = np.ones((self.map_size*enlarge, self.map_size*enlarge, 3))
         for i in range(self.map_size):
             for j in range(self.map_size):
-
                 if obs[i][j][0] == 0.0 and obs[i][j][1] == 0.0 and obs[i][j][2] == 0.0:
                     cv2.rectangle(new_obs, (j * enlarge, i * enlarge), (j * enlarge + enlarge, i * enlarge + enlarge), (0, 0, 0), -1)
                 if obs[i][j][0] == 1.0 and obs[i][j][1] == 0.0 and obs[i][j][2] == 0.0:
@@ -299,20 +316,16 @@ class FindTreasureWrapper(gym.Env):
         self.agent_count = 2 #智能体数量
         # self.observation_space = [Box(low=0,high=1,shape=[3,3,3]),Box(low=0,high=1,shape=[3,3,3]),
         #                           Box(low=0,high=1,shape=[mapsize,mapsize,3])]
-        self.observation_space = [Box(low=0,high=1,shape=[1,2]),Box(low=0,high=1,shape=[1,2]),
-                                  Box(low=0,high=1,shape=[mapsize,mapsize,3])]
+        self.observation_space = [Box(low=0,high=1,shape=[1,3]),Box(low=0,high=1,shape=[1,3])]
         self.action_space = [Discrete(n=5),Discrete(n=5)]
 
     def get_observation(self):
-        state_1 = np.zeros((1,2))
-        state_2 = np.zeros((1,2))
+        state_1 = np.zeros((1,3))
+        state_2 = np.zeros((1,3))
         state = self.wrappedEnv.get_state()
-        state_1[0, 0] = state[0, 0]
-        state_1[0, 1] = state[0, 1]
-        state_2[0, 0] = state[0, 2]
-        state_2[0, 1] = state[0, 3]
-        return [state_1,state_2,
-                self.wrappedEnv.get_global_obs()]
+        state_1[0,:] = state[0,0:3]
+        state_2[0,:] = state[0,3:6]
+        return [state_1, state_2]
 
     def reset(self):
         self.wrappedEnv.reset()
@@ -321,7 +334,8 @@ class FindTreasureWrapper(gym.Env):
 
     def step(self, action):
         #action是one_hot编码类型需要转换
-        action = torch.argmax(action,dim=1).cpu().numpy().tolist()
+        _action = copy(action)
+        action = torch.argmax(_action,dim=1).cpu().numpy().tolist()
         r,is_done = self.wrappedEnv.step(action)
         #r,is_done都作为数组返回
         r = [r for _ in range(self.agent_count)]

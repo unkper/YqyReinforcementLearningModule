@@ -293,16 +293,11 @@ class SimpleCritic(nn.Module):
         self.action_dim = action_dim
 
         self.fcs1 = nn.Linear(state_dim,64) #状态的第一次线性变换
-        self.fcs1.weight.data = random_init(self.fcs1.weight.data.size())
 
         self.fca1 = nn.Linear(action_dim,32) # 行为第一次线性变换
-        self.fca1.weight.data = fanin_init(self.fca1.weight.data.size())
 
-        self.fc2 = nn.Linear(96, 48)  # (􀀎 􀀏+􀀴 􀀕)􀂕 􀁶 􀀉 􀂑 􀂒 􀁊 􀂓 􀀒 􀂖 􀂗 􀁽 􀁾 􀂘
-        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
 
-        self.fc3 = nn.Linear(48, 1)  # (􀀎 􀀏+􀀴 􀀕)􀂕 􀁶 􀀉 􀂑 􀂒 􀁊 􀂓
-        self.fc3.weight.data.uniform_(-EPS,EPS)
+        self.fc3 = nn.Linear(96, 1)  # (􀀎 􀀏+􀀴 􀀕)􀂕 􀁶 􀀉 􀂑 􀂒 􀁊 􀂓
 
     def forward(self,state,action:Tensor)-> Tensor:
         '''
@@ -317,12 +312,29 @@ class SimpleCritic(nn.Module):
         a1 = F.relu(self.fca1(action))
         #将状态与行为连接起来
         x = torch.cat((s1,a1),dim=1)
-        x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
 
+class MADDPG_Critic(nn.Module):
+    def __init__(self,state_dims:list,action_dim,agent_count):
+        super(MADDPG_Critic, self).__init__()
+        input_dim = sum(state_dims) + action_dim * agent_count
+
+        self.layer1 = nn.Linear(input_dim, 64)
+        self.layer2 = nn.Linear(64, 64)
+        self.out_layer = nn.Linear(64, 1)
+        self.no_linear = F.relu
+
+    def forward(self, state, action):
+        action = action.view(action.size(0),-1)
+        temp = torch.cat([state, action],dim=1)
+        h1 = self.no_linear(self.layer1(temp))
+        h2 = self.no_linear(self.layer2(h1))
+        h3 = self.out_layer(h2)
+        return h3
+
 class SimpleActor(nn.Module):
-    def __init__(self, state_dim, action_dim, action_lim = -1):
+    def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64,norm_in = True):
         '''
         构建一个演员模型
         :param state_dim: 状态的特征数量 (int)
@@ -333,17 +345,53 @@ class SimpleActor(nn.Module):
 
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.action_lim = action_lim
+        self.discrete = discrete
 
-        self.fc1 = nn.Linear(self.state_dim,64)
-        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
+        self.fc1 = nn.Linear(self.state_dim, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, self.action_dim)
+        self.no_linear = F.relu
+        if self.discrete:
+            print("离散动作,采用softmax作为输出!")
+            self.out_fc = lambda x:x
+        else:
+            self.fc2.weight.data.uniform_(-EPS, EPS)
+            self.out_fc = torch.tanh
 
-        self.fc2 = nn.Linear(64,self.action_dim)
-        self.fc2.weight.data.uniform_(-EPS,EPS)
-        if self.action_lim == -1:
-            print("采用softmax作为输出!")
+    def forward(self,state) -> Tensor:
+        '''
+        前向运算，根据状态的特征表示得到具体的行为值
+        :param state: 状态的特征表示 Tensor [n,state_dim]
+        :return: 行为的特征表示 Tensor [n,action_dim]
+        '''
+        state = state.to(torch.float32)
+        x = self.no_linear(self.fc1(state))
+        x = self.no_linear(self.fc2(x))
+        action = self.out_fc(self.fc3(x))
+        return action
 
-        self.m = nn.Softmax()
+class SimpleActor02(nn.Module):
+    def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64,norm_in = True):
+        '''
+        构建一个演员模型
+        :param state_dim: 状态的特征数量 (int)
+        :param action_dim: 行为作为输入的特征数量 (int)
+        :param action_lim: 行为值的限定范围 [-action_lim, action_lim]
+        '''
+        super(SimpleActor02, self).__init__()
+
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.discrete = discrete
+
+        self.fc1 = nn.Linear(self.state_dim, 64)
+        self.fc2 = nn.Linear(64, self.action_dim)
+        if self.discrete:
+            print("离散动作,采用softmax作为输出!")
+            self.out_fc = lambda x:x
+        else:
+            self.fc2.weight.data.uniform_(-EPS, EPS)
+            self.out_fc = torch.tanh
 
     def forward(self,state) -> Tensor:
         '''
@@ -353,11 +401,5 @@ class SimpleActor(nn.Module):
         '''
         state = state.to(torch.float32)
         x = F.relu(self.fc1(state))
-        if self.action_lim == -1:
-            action = self.m(self.fc2(x))
-            return action
-        else:
-            action = torch.tanh(self.fc2(x)) #输出范围-1,1
-            action = action * self.action_lim # 更改输出范围
-            return action
-
+        action = self.out_fc(self.fc2(x))
+        return action

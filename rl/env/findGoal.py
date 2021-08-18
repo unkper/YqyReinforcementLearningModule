@@ -259,6 +259,8 @@ class EnvFindGoals(object):
                 self.occupancy[self.agt1_pos[0]][self.agt1_pos[1]] = 1
             else:
                 reward_1 = reward_1 - 3
+        else:
+            reward_1 = reward_1 - 1
 
         # agent2 move
         if action_list[1] == 0:    # move up
@@ -293,6 +295,8 @@ class EnvFindGoals(object):
                 self.occupancy[self.agt2_pos[0]][self.agt2_pos[1]] = 1
             else:
                 reward_2 = reward_2 - 3
+        else:
+            reward_2 = reward_2 - 1
 
         if self.agt1_pos == self.dest1:
             self.occupancy[self.agt1_pos[0]][self.agt1_pos[1]] = 0
@@ -365,8 +369,8 @@ class FindGoalWrapper(gym.Env):
         self.action_space = [Discrete(n=5),Discrete(n=5)]
 
     def get_observation(self):
-        return [self.wrappedEnv.get_agt1_obs(),self.wrappedEnv.get_agt2_obs(),
-                self.wrappedEnv.get_full_obs()]
+        return np.array([self.wrappedEnv.get_agt1_obs(),self.wrappedEnv.get_agt2_obs(),
+                self.wrappedEnv.get_full_obs()])
 
     def reset(self):
         self.wrappedEnv.reset()

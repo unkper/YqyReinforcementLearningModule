@@ -19,8 +19,8 @@ from rl.utils.functions import back_specified_dimension, onehot_from_int, onehot
 MSELoss = torch.nn.MSELoss()
 
 class DDPGAgent:
-    def __init__(self, state_dim, action_dim, agent_count,
-                 learning_rate, discrete, device, state_dims):
+    def __init__(self, state_dim, action_dim,
+                 learning_rate, discrete, device, state_dims, action_dims):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
@@ -30,15 +30,15 @@ class DDPGAgent:
         hard_update(self.target_actor, self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 learning_rate)
-        self.critic = MADDPG_Critic(state_dims,action_dim,agent_count).to(self.device)
-        self.target_critic = MADDPG_Critic(state_dims,action_dim,agent_count).to(self.device)
+        self.critic = MADDPG_Critic(state_dims,action_dims).to(self.device)
+        self.target_critic = MADDPG_Critic(state_dims,action_dims).to(self.device)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  learning_rate)
         self.noise = OrnsteinUhlenbeckActionNoise(1 if self.discrete else action_dim)
         self.count = [0 for _ in range(action_dim)]
 
-    def step(self, obs, explore, eps = 0.0):
+    def step(self, obs, explore):
         """
         Take a step forward in environment for a minibatch of observations
         Inputs:
@@ -85,7 +85,8 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                  capacity=2e6,
                  batch_size=128,
                  learning_rate=0.001,
-                 update_frequent = 50
+                 update_frequent = 50,
+                 gamma = 0.95
                  ):
         """
         环境的输入有以下几点变化，设此时有N个智能体：
@@ -105,7 +106,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         """
         if env is None:
             raise Exception("agent should have an environment!")
-        super(MADDPGAgent, self).__init__(env, capacity)
+        super(MADDPGAgent, self).__init__(env, capacity, gamma=gamma)
         self.state_dims = []
         for obs in env.observation_space:
             self.state_dims.append(back_specified_dimension(obs))
@@ -118,7 +119,6 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                 self.action_dims.append(action.n)
             else:
                 self.action_dims.append(back_specified_dimension(action))
-
         self.batch_size = batch_size
         self.update_frequent = update_frequent
         self.learning_rate = learning_rate
@@ -128,11 +128,10 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         self.agents = []
         self.experience = Experience(capacity)
         for i in range(self.env.agent_count):
-            ag = DDPGAgent(self.state_dims[i], self.action_dims[i], self.env.agent_count,
-                           self.learning_rate, self.discrete, self.device, self.state_dims)
+            ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
+                           self.learning_rate, self.discrete, self.device, self.state_dims,
+                           self.action_dims)
             self.agents.append(ag)
-
-        self.rewards = []
 
         def loss_callback(loss):
             pass
@@ -156,9 +155,9 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         action_list = []
         for i in range(self.env.agent_count):
             s = flatten_data(state[i], self.state_dims[i], self.device)
-            action = self.agents[i].step(s, False)
+            action = self.agents[i].step(s, False).detach().cpu().numpy()
             action_list.append(action)
-        action_list = torch.vstack(action_list)
+        action_list = np.array(action_list,dtype=object)
         return action_list
 
     def get_exploration_action(self, state, epsilon=0.1):
@@ -171,9 +170,9 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         value = random.random()
         for i in range(self.env.agent_count):
             s = flatten_data(state[i], self.state_dims[i], self.device)
-            action = self.agents[i].step(s, True if value < epsilon else False, epsilon)
+            action = self.agents[i].step(s, True if value < epsilon else False).detach().cpu().numpy()
             action_list.append(action)
-        action_list = torch.vstack(action_list)
+        action_list = np.array(action_list,dtype=object)
         return action_list
 
     def _learn_from_memory(self):
@@ -190,7 +189,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             trans_pieces = self.experience.sample(self.batch_size)
 
             s0 = np.array([x.s0 for x in trans_pieces])
-            a0 = np.array([x.a0.detach().cpu().numpy() for x in trans_pieces])
+            a0 = np.array([x.a0 for x in trans_pieces])
             r1 = np.array([x.reward for x in trans_pieces])
             is_done = np.array([x.is_done for x in trans_pieces])
             s1 = np.array([x.s1 for x in trans_pieces])
@@ -198,25 +197,26 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             s0 = [np.stack(s0[:, j], axis=0) for j in range(self.env.agent_count)]
             s1 = [np.stack(s1[:, j], axis=0) for j in range(self.env.agent_count)]
 
-            s0_s = [flatten_data(s0[j],self.state_dims[j],self.device,ifBatch=True)
+            s0_temp_in = [flatten_data(s0[j],self.state_dims[j],self.device,ifBatch=True)
                     for j in range(self.env.agent_count)]
 
-            s1_s = [flatten_data(s1[j],self.state_dims[j],self.device,ifBatch=True)
+            s1_temp_in = [flatten_data(s1[j],self.state_dims[j],self.device,ifBatch=True)
                     for j in range(self.env.agent_count)]
 
-            s0_critic_in = torch.cat([s0_s[j] for j in range(self.env.agent_count)],dim=1)
-            s1_critic_in = torch.cat([s1_s[j] for j in range(self.env.agent_count)],dim=1)
+            s0_critic_in = torch.cat([s0_temp_in[j] for j in range(self.env.agent_count)],dim=1)
+            s1_critic_in = torch.cat([s1_temp_in[j] for j in range(self.env.agent_count)],dim=1)
 
-            a0 = torch.from_numpy(a0).to(self.device)
+            a0 = torch.from_numpy(
+                np.stack([np.concatenate(a0[i,:]) for i in range(a0.shape[0])], axis=0).astype(float))\
+                .float().to(self.device)
+
             if self.discrete:
-                a1 = torch.stack([onehot_from_logits(self.agents[j].target_actor.forward(s1_s[j]).detach()).to(self.device)
+                a1 = torch.cat([gumbel_softmax(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
                                 for j in range(self.env.agent_count)],dim=1)
             else:
-                a1 = torch.stack([self.agents[j].target_actor.forward(s1_s[j]).detach()
+                a1 = torch.cat([self.agents[j].target_actor.forward(s1_temp_in[j]).detach()
                                 for j in range(self.env.agent_count)],dim=1)
-
-            r1 = torch.tensor(r1).type(torch.FloatTensor).to(self.device)
-
+            r1 = torch.tensor(r1).float().to(self.device)
             # detach()的作用是让梯度无法传导到target_critic,因为此时只有critic需要更新！
             next_val = torch.squeeze(
                 self.agents[i].target_critic.forward(s1_critic_in
@@ -233,15 +233,15 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             total_loss_critic += loss_critic.item()
 
             # 优化演员网络参数，优化的目标是使得Q增大
-            curr_pol_out = self.agents[i].actor.forward(s0_s[i])
+            curr_pol_out = self.agents[i].actor.forward(s0_temp_in[i])
             pred_a = []
             if self.discrete:
                 for j in range(self.env.agent_count):
-                    pred_a.append(gumbel_softmax(curr_pol_out, hard=True).to(self.device)
-                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0_s[j])).to(self.device))
-                pred_a = torch.stack(pred_a,dim=1)
+                    pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
+                                  if i == j else gumbel_softmax(self.agents[j].actor.forward(s0_temp_in[j])).to(self.device))
+                pred_a = torch.cat(pred_a,dim=1)
             else:
-                pred_a = torch.stack([self.agents[j].actor.forward(s0_s[j])
+                pred_a = torch.cat([self.agents[j].actor.forward(s0_temp_in[j])
                                 for j in range(self.env.agent_count)],dim=1)
             # 反向梯度下降
             loss_actor = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
@@ -253,17 +253,15 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             self.agents[i].actor_optimizer.step()
             total_loss_actor += loss_actor.item()
 
-            if self.total_time % 100 == 0:
+            if self.total_trans_in_train % 100 == 0:
                 # print("update target_network parameters!")
                 # 软更新参数
                 soft_update(self.agents[i].target_actor, self.agents[i].actor, self.tau)
                 soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
         return (total_loss_critic, total_loss_actor)
 
-    def learning_method(self, lambda_=0.9, gamma=0.9, alpha=0.5,
-                        epsilon=0.2, explore=True, display=False,
+    def learning_method(self, epsilon=0.2, explore=True, display=False,
                         wait=False, waitSecond: float = 0.01):
-        self.gamma = gamma
         self.state = self.env.reset()
         time_in_episode, total_reward = 0, 0
         is_done = [False]
@@ -278,12 +276,12 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             s1, r1, is_done, info, total_reward = self.act(a0)
             if display:
                 self.env.render()
-            if self.total_trans > self.batch_size and self.total_time % self.update_frequent == 0:
+            if self.total_trans > self.batch_size and self.total_trans_in_train % self.update_frequent == 0:
                 loss_c, loss_a = self._learn_from_memory()
                 loss_critic += loss_c
                 loss_actor += loss_a
             time_in_episode += 1
-            self.total_time += 1
+            self.total_trans_in_train += 1
             s0 = s1
             if wait:
                 time.sleep(waitSecond)
@@ -291,12 +289,13 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         loss_critic /= time_in_episode
         loss_actor /= time_in_episode
 
-        self.rewards.append(total_reward)
-
-        if self.total_time % 5000 == 0:
-            print("average rewards in last 5000 trans:{}".format(np.mean(self.rewards).item()))
+        if self.total_episodes_in_train > 0 and self.total_episodes_in_train % 500 == 0:
+            rewards = []
+            last_episodes = self.experience.last_n_episode(500)
+            for i in range(self.env.agent_count):
+                rewards.append(np.mean([x.total_reward[i] for x in last_episodes]))
+            print("average rewards in last 500 episodes:{}".format(rewards))
             print("{}".format(self.experience.__str__()))
-            self.rewards = []
             for i, agent in enumerate(self.agents):
                 print("Agent{}:{}".format(i, agent.count))
                 agent.count = [0 for _ in range(agent.action_dim)]

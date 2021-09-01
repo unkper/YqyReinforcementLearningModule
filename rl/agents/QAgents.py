@@ -15,7 +15,6 @@ from rl.utils.policys import epsilon_greedy_policy, greedy_policy, uniform_rando
 from rl.utils.classes import SaveDictMixin, SaveNetworkMixin, SimulationEnvModel, Transition
 from rl.utils.updates import soft_update
 
-
 class QAgent(Agent,SaveDictMixin):
     def __init__(self,env:Env,capacity:int = 20000):
         super(QAgent, self).__init__(env,capacity)
@@ -114,8 +113,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
         else:
             return int(np.argmax(action))
 
-    def learning_method(self,lambda_ = None,gamma = 0.9,alpha = 0.1,
-                        epsilon = 1e-5,display = False,wait = False,waitSecond:float = 0.01):
+    def learning_method(self,epsilon = 1e-5,display = False,wait = False,waitSecond:float = 0.01):
         self.state = self.env.reset()
         s0 = self.state #当前状态特征
         if display:
@@ -130,7 +128,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
             if display:
                 self.env.render()
             if self.total_trans > self.batch_size and time_in_episode % self.update_frequent == 0:
-                loss += self._learn_from_memory(gamma,alpha)
+                loss += self._learn_from_memory(self.gamma,self.alpha)
             time_in_episode += 1
 
         loss /= time_in_episode

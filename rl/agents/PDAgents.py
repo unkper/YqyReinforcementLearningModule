@@ -97,7 +97,7 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         # 随机获取记忆里的Transmition
         trans_pieces = self.sample(self.batch_size)
         s0 = np.vstack([x.s0 for x in trans_pieces])
-        a0 = np.array([x.a0.cpu().numpy() for x in trans_pieces])
+        a0 = np.array([x.a0 for x in trans_pieces])
         r1 = np.array([x.reward for x in trans_pieces])
         # is_done = np.array([x.is_done for x in trans_pieces])
         s1 = np.vstack([x.s1 for x in trans_pieces])
@@ -128,12 +128,12 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         self.actor_optimizer.step()
 
         #软更新参数
-        if self.total_time % 100 == 0:
+        if self.total_trans_in_train % 100 == 0:
             soft_update(self.target_actor, self.actor, self.tau)
             soft_update(self.target_critic, self.critic, self.tau)
         return (loss_critic.item(), loss_actor.item())
 
-    def learning_method(self,lambda_ = 0.9,gamma = 0.9,alpha = 0.5,
+    def learning_method(self,
                         epsilon = 0.2,explore = True,display = False,
                         wait = False,waitSecond:float = 0.01):
         self.state = np.float64(self.env.reset())
@@ -146,18 +146,16 @@ class DDPGAgent(Agent,SaveNetworkMixin):
                 a0 = self.get_exploration_action(s0,epsilon)
             else:
                 a0 = self.actor.forward(s0).detach().data.numpy()
-                if self.discrete:
-                    a0 = np.round(a0)
             s1,r1,is_done,info,reward = self.act(a0)
             if display:
                 self.env.render()
-            if self.total_trans > self.batch_size and self.total_time % 50 == 0:
+            if self.total_trans > self.batch_size and self.total_trans_in_train % 50 == 0:
                 loss_c, loss_a = self._learn_from_memory()
                 loss_critic += loss_c
                 loss_actor += loss_a
-            s0 = torch.from_numpy(s1).to(self.device)
+            s0 = s1
             time_in_episode += 1
-            self.total_time += 1
+            self.total_trans_in_train += 1
             total_reward += reward
             if wait:
                 time.sleep(waitSecond)
@@ -167,24 +165,24 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         loss = loss_critic + loss_actor
 
         self.rewards.append(total_reward)
-        if self.total_time % 500 == 0:
+        if self.total_trans_in_train % 500 == 0:
             print("{}".format(self.experience.__str__()))
             print("average reward in last 500 episodes:{}".format(np.mean(self.rewards).item()))
             self.rewards = []
         return time_in_episode,total_reward, loss
 
-    def save_models(self, episode_count):
-        torch.save(self.target_actor.state_dict(),'./Models/'+str(
-            episode_count
-        ) + '_actor.pt')
-        torch.save(self.target_critic.state_dict(),'./Models/'+str(
-            episode_count
-        )+ '_critic.pt')
-        print("Model saved successfully!")
-
-    def load_models(self, episode):
-        self.actor.load_state_dict(torch.load('./Models/' + str(episode) + '_actor.pt'))
-        self.critic.load_state_dict(torch.load('./Models/' + str(episode) + '_critic.pt'))
-        hard_update(self.target_actor, self.actor)
-        hard_update(self.target_critic, self.critic)
-        print("Models loaded succesfully")
+    # def save_models(self, episode_count):
+    #     torch.save(self.target_actor.state_dict(),'./Models/'+str(
+    #         episode_count
+    #     ) + '_actor.pt')
+    #     torch.save(self.target_critic.state_dict(),'./Models/'+str(
+    #         episode_count
+    #     )+ '_critic.pt')
+    #     print("Model saved successfully!")
+    #
+    # def load_models(self, episode):
+    #     self.actor.load_state_dict(torch.load('./Models/' + str(episode) + '_actor.pt'))
+    #     self.critic.load_state_dict(torch.load('./Models/' + str(episode) + '_critic.pt'))
+    #     hard_update(self.target_actor, self.actor)
+    #     hard_update(self.target_critic, self.critic)
+    #     print("Models loaded succesfully")

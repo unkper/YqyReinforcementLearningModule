@@ -15,7 +15,11 @@ class Agent():
     '''
     个体基类，没有学习能力
     '''
-    def __init__(self,env: Env = None,capacity = 10000):
+    def __init__(self,env: Env = None,capacity = 10000,
+                 lambda_=0.9,
+                 gamma=0.9,
+                 alpha=0.5,
+                 ):
         #保存一些Agent可以观测到的环境信息以及已经学到的经验
         self.env = env
         self.name = "Agent"
@@ -39,6 +43,10 @@ class Agent():
         else:
             self.A = None
 
+        self.lambda_ = lambda_
+        self.gamma = gamma
+        self.alpha = alpha
+
         self.experience = Experience(capacity=capacity)
         #记录当前agent的状态
         self.state = None
@@ -48,7 +56,8 @@ class Agent():
 
         #为了保存方便而使用
         self.init_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
-        self.total_time = 0
+        self.total_trans_in_train = 0
+        self.total_episodes_in_train = 0
 
     def policy(self,A ,s = None,Q = None, epsilon = None):
         '''
@@ -80,15 +89,13 @@ class Agent():
         '''
         s0 = self.state
         s1, r1, is_done, info = self.env.step(a0)
+
         trans = Transition(s0,a0,r1,is_done,s1)
         total_reward = self.experience.push(trans)
         self.state = s1
         return s1, r1, is_done, info, total_reward
 
     def learning_method(self,
-                        lambda_ = 0.9,
-                        gamma = 0.9,
-                        alpha = 0.5,
                         epsilon = 0.2,
                         display = False,
                         wait = False,
@@ -119,21 +126,18 @@ class Agent():
             a1 = self.perform_policy(s1,epsilon)
             s0, a0 = s1, a1
             time_in_episode += 1
-            self.total_time += 1
+            self.total_trans_in_train += 1
             if wait:
                 time.sleep(waitSecond)
         print(self.experience.last_episode)
         return time_in_episode, total_reward, 0.0
 
     def learning(self,
-                 lambda_ = 0.9,
                  epsilon_high = 1.0,
                  epsilon_low = 0.05,
                  p = 1.2,
                  decaying_epsilon = True,
                  explore_episodes_percent = 0.4,
-                 gamma = 0.9,
-                 alpha = 0.1,
                  max_episode_num = 800,
                  display = False,
                  display_in_episode = 0
@@ -165,11 +169,13 @@ class Agent():
                 epsilon = epsilon_low +(epsilon_high - epsilon_low) * np.power(np.e,-4/p*i/max_explore_num) if i < max_explore_num else 0
             else:
                 epsilon = epsilon_high
-            time_in_episode,episode_reward,loss = self.learning_method(lambda_=lambda_,
-                gamma = gamma, alpha = alpha,epsilon = epsilon,display = display,wait = wait,
+            time_in_episode,episode_reward,loss = self.learning_method(
+                epsilon = epsilon,
+                display = display,wait = wait,
                 waitSecond = waitSecond)
             total_time += time_in_episode
             num_episode += 1
+            self.total_episodes_in_train += 1
             if display_in_episode > 0 and num_episode >= display_in_episode:
                 display = True
                 wait = True
@@ -202,10 +208,9 @@ class Agent():
                 time_in_episode += 1
                 if wait:
                     time.sleep(waitSecond)
-        if display:
-            print(self.experience.last_episode)
+            if display:
+                print(self.experience.last_episode)
         self.env.close()
-        return time_in_episode, total_reward
 
     def play_init(self,savePath,s0):
         '''

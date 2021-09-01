@@ -1,5 +1,5 @@
 import numpy as np
-from social_force.vector3 import Vector3
+from Box2D import b2Vec2
 
 class Steering():
     def __init__(self):
@@ -8,5 +8,5 @@ class Steering():
     def reset(self):
         pass
 
-    def force(self)->Vector3:
+    def force(self)->b2Vec2:
         pass

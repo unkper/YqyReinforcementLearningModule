@@ -272,8 +272,6 @@ class Actor(nn.Module):
         :param state: 状态的特征表示 Tensor [n,state_dim]
         :return: 行为的特征表示 Tensor [n,action_dim]
         '''
-        device = self.device
-        state = state.type(torch.FloatTensor).to(device)
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
@@ -306,8 +304,6 @@ class SimpleCritic(nn.Module):
         :param action: 行为的特征表示 Tensor [n,action_dim]
         :return: Q(s,a) Tensor [n,1]
         '''
-        state = state.to(torch.float32)
-        action = action.to(torch.float32)
         s1 = F.relu(self.fcs1(state))
         a1 = F.relu(self.fca1(action))
         #将状态与行为连接起来
@@ -316,9 +312,9 @@ class SimpleCritic(nn.Module):
         return x
 
 class MADDPG_Critic(nn.Module):
-    def __init__(self,state_dims:list,action_dim,agent_count):
+    def __init__(self,state_dims:list,action_dims:list):
         super(MADDPG_Critic, self).__init__()
-        input_dim = sum(state_dims) + action_dim * agent_count
+        input_dim = sum(state_dims) + sum(action_dims)
 
         self.layer1 = nn.Linear(input_dim, 64)
         self.layer2 = nn.Linear(64, 64)
@@ -326,7 +322,6 @@ class MADDPG_Critic(nn.Module):
         self.no_linear = F.relu
 
     def forward(self, state, action):
-        action = action.view(action.size(0),-1)
         temp = torch.cat([state, action],dim=1)
         h1 = self.no_linear(self.layer1(temp))
         h2 = self.no_linear(self.layer2(h1))
@@ -364,7 +359,6 @@ class SimpleActor(nn.Module):
         :param state: 状态的特征表示 Tensor [n,state_dim]
         :return: 行为的特征表示 Tensor [n,action_dim]
         '''
-        state = state.to(torch.float32)
         x = self.no_linear(self.fc1(state))
         x = self.no_linear(self.fc2(x))
         action = self.out_fc(self.fc3(x))
@@ -399,7 +393,6 @@ class SimpleActor02(nn.Module):
         :param state: 状态的特征表示 Tensor [n,state_dim]
         :return: 行为的特征表示 Tensor [n,action_dim]
         '''
-        state = state.to(torch.float32)
         x = F.relu(self.fc1(state))
         action = self.out_fc(self.fc2(x))
         return action

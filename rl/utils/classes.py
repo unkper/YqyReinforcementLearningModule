@@ -9,14 +9,8 @@ import random
 import numpy as np
 import torch
 
-from gym import Env
-from random import choice
-from collections import namedtuple
 from typing import List
 from torch import nn
-from tqdm import tqdm
-
-from settings import MODEL_PATH
 
 class State():
     def __init__(self, name):
@@ -64,7 +58,7 @@ class Episode():
         self.trans_list = []  # 状态转移序列
         self.name = str(id)  # 名称
 
-    def push(self, trans: Transition) -> float:
+    def push(self, trans: Transition) -> List[float]:
         '''
         将一个状态转换送入状态序列中，返回该序列当前总的奖励值(不计衰减)
         :param trans:
@@ -72,7 +66,9 @@ class Episode():
         '''
         self.trans_list.append(trans)
         if type(trans.reward) is list:
-            self.total_reward += np.mean(trans.reward)
+            if type(self.total_reward) is not list:self.total_reward = [0.0 for _ in range(len(trans.reward))]
+            for idx, value in enumerate(trans.reward):
+                self.total_reward[idx] += value
         else:
             self.total_reward += trans.reward  # 不计衰减的总奖励
         return self.total_reward
@@ -82,6 +78,9 @@ class Episode():
         return len(self.trans_list)
 
     def __str__(self):
+        if isinstance(self.total_reward,list):
+            return "episode {}:{} steps,total reward:{}\n". \
+                    format(self.name, self.len, self.total_reward)
         return "episode {0:<4}:{1:>4} steps,total reward:{2:<8.2f}\n". \
             format(self.name, self.len, self.total_reward)
 
@@ -96,7 +95,9 @@ class Episode():
         if self.len == 0: return None
         var = self.trans_list.pop()
         if type(var.reward) is list:
-            self.total_reward -= np.mean(var.reward)
+            if type(self.total_reward) is not list:raise Exception()
+            for idx, value in enumerate(var.reward):
+                self.total_reward[idx] += value
         else:
             self.total_reward -= var.reward
         return var
@@ -185,6 +186,11 @@ class Experience():
         '''随机获取一定数量完整的Episode
         '''
         return random.sample(self.episodes, k = episode_num)
+
+    def last_n_episode(self,N):
+        if self.len >= N:
+            return self.episodes[self.len - N : self.len]
+        return None
 
     @property
     def last_episode(self):

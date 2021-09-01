@@ -23,8 +23,7 @@ class SarsaAgent(Agent,SaveDictMixin):
         '''
         return epsilon_greedy_policy(A,s,Q,epsilon)
 
-    def learning_method(self,lambda_ = 0.9,gamma = 0.9,alpha = 0.5,
-                        epsilon = 0.2,display = False,wait = False,waitSecond:float = 0.01):
+    def learning_method(self,epsilon = 0.2,display = False,wait = False,waitSecond:float = 0.01):
         self.state = self.env.reset()
         s0 = self.state
         if display:
@@ -39,8 +38,8 @@ class SarsaAgent(Agent,SaveDictMixin):
             a1 = self.perform_policy(s1,self.Q,epsilon)
             old_q = get_dict(self.Q,s0,a0)
             q_prime = get_dict(self.Q,s1,a1)
-            td_target = r1 + gamma * q_prime
-            new_q = old_q + alpha * (td_target - old_q)
+            td_target = r1 + self.gamma * q_prime
+            new_q = old_q + self.gamma * (td_target - old_q)
             set_dict(self.Q,new_q,s0,a0)
             s0,a0 = s1,a1
             time_in_episode += 1
@@ -65,8 +64,7 @@ class SarsaLambdaAgent(Agent,SaveDictMixin):
     def policy(self,A,s,Q,epsilon):
         return epsilon_greedy_policy(A, s, Q, epsilon)
 
-    def learning_method(self,lambda_ = 0.9,gamma = 0.9,alpha = 0.1,
-                        epsilon = 1e-5,display = False,wait = False,waitSecond:float = 0.01):
+    def learning_method(self,epsilon = 1e-5,display = False,wait = False,waitSecond:float = 0.01):
         self.state = self.env.reset()
         s0 = self.state
         if display:
@@ -82,7 +80,7 @@ class SarsaLambdaAgent(Agent,SaveDictMixin):
             a1 = self.perform_policy(s1,self.Q,epsilon)
             q = get_dict(self.Q, s0, a0)
             q_prime = get_dict(self.Q,s1,a1)
-            delta = r1 + gamma * q_prime - q
+            delta = r1 + self.gamma * q_prime - q
             e = get_dict(E,s0,a0)
             e += 1
             set_dict(E,e,s0,a0)
@@ -90,8 +88,8 @@ class SarsaLambdaAgent(Agent,SaveDictMixin):
                 for a in self.A:
                     e_value = get_dict(E,s,a)
                     old_q = get_dict(self.Q,s,a)
-                    new_q = old_q + alpha * delta * e_value
-                    new_e = gamma * lambda_ * e_value
+                    new_q = old_q + self.alpha * delta * e_value
+                    new_e = self.gamma * self.lambda_ * e_value
                     set_dict(self.Q,new_q,s,a)
                     set_dict(E,new_e,s,a)
 

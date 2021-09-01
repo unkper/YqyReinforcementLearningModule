@@ -1,5 +1,9 @@
-import gym
+import pyglet
 import socket
+import Box2D as b2d
+
+from env.utils.drawer import MyDrawer
+from pygame import Color
 
 class SimuationPedEnvironment():
     '''
@@ -17,7 +21,6 @@ class SimuationPedEnvironment():
     def __init__(self):
         self.socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket.connect(('127.0.0.1',12578))
-        
 
     def step(self, action):
         pass

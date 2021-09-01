@@ -136,7 +136,7 @@ def gumbel_softmax(logits, temperature=1.0, hard=False):
 def flatten_data(data, dim, device, ifBatch=False):
     #将状态数组打平!
     if type(data) is list:data = np.array(data)
-    data = torch.from_numpy(data).type(torch.FloatTensor).to(device)
+    data = torch.from_numpy(data).float().to(device)
     if ifBatch:
         batchSize = data.shape[0]
         return data.reshape(batchSize,dim)

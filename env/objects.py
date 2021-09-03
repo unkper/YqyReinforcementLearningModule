@@ -51,6 +51,8 @@ class Person(Agent):
         Person.counter += 1
         self.box = self.body.CreateFixture(fixtureDef)
 
+        self.type = ObjectType.Agent
+
     def setup(self, batch: Batch):
         x, y = self.body.position.x, self.body.position.y
         self.pic = pyglet.shapes.Circle(x * SCALE, y * SCALE, self.radius * SCALE, color=self.color, batch=batch)
@@ -61,7 +63,13 @@ class Person(Agent):
 
     def moveTo(self, targetX, targetY):
         x, y = self.body.position.x, self.body.position.y
-        force = b2Vec2()
+        force = b2Vec2(targetX - x, targetY - y)
+        self.move(force)
+
+    def delete(self):
+        self.pic.delete()
+        del (self.pic)
+        self.has_removed = True
 
     def __str__(self):
         x, y = self.body.position.x, self.body.position.y
@@ -99,6 +107,9 @@ class BoxWall():
         # And add a box fixture onto it
         self.box = self.body.CreatePolygonFixture(box=(new_width / 2, new_height / 2), density=0)
         self.box.userData = FixtureInfo(BoxWall.counter, self, ObjectType.Wall)
+        BoxWall.counter += 1
+
+        self.type = ObjectType.Wall
 
     def setup(self, batch: Batch):
         # pyglet以左下角那个点作为原点
@@ -112,7 +123,6 @@ class BoxWall():
 
 
 class Exit(BoxWall):
-    counter = 0
 
     def __init__(self, env: b2World, new_x, new_y, width, height, color=ColorRed):
         super(Exit, self).__init__(env, new_x, new_y, width, height, color)
@@ -124,3 +134,5 @@ class Exit(BoxWall):
         fixtrueDef.userData = FixtureInfo(Exit.counter, self, ObjectType.Exit)
         Exit.counter += 1
         self.box = self.body.CreateFixture(fixtrueDef)
+
+        self.type = ObjectType.Exit

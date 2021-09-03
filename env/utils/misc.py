@@ -10,3 +10,6 @@ class FixtureInfo():
         self.ID = id
         self.model = model
         self.type = type
+
+    def __str__(self):
+        return str(self.type) + str(self.ID)

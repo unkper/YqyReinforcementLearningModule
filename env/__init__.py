@@ -31,8 +31,41 @@ def HelloWorldProject():
             body.angle
         ))
 
+def test1():
+    import pyglet
+
+    canvas = {}
+
+    try:
+        config = pyglet.gl.Config(double_buffer=True)
+        window = pyglet.window.Window(1280, 720, resizable=True, config=config)
+        window.set_minimum_size(640, 480)
+
+        batch = pyglet.graphics.Batch()
+
+        canvas[1] = pyglet.text.Label("Moo", x=10, y=10, batch=batch)
+
+        @window.event
+        def on_draw():
+            window.clear()
+            batch.draw()
+
+        @window.event
+        def on_key_press(symbol, modifiers):
+            # As soon as a key is pressed, we delete the batch objects (all of them)
+            for index in list(canvas):
+                canvas[index].delete()
+                del (canvas[index])
+
+        pyglet.app.run()
+
+    finally:
+        window.close()
+
 #Hello World Project
 if __name__ == '__main__':
+    # test1()
+
     env = Env()
     env.start()
     env.setup()

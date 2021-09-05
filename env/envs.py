@@ -1,7 +1,8 @@
 import copy
 import random
-import sys
+import gym
 import pyglet
+import numpy
 import Box2D as b2d
 
 from Box2D import (b2World)
@@ -12,6 +13,7 @@ from env.objects import BoxWall, Person, Exit
 from env.utils.colors import (ColorBlue, ColorWall, ColorRed)
 from env.event_listeners import MyContactListener
 from env.utils.misc import ObjectType
+from env.utils.maps import map1
 
 TICKS_PER_SEC = 60
 vel_iters, pos_iters = 6, 2
@@ -28,9 +30,9 @@ class Model():
         raise NotImplemented
 
 
-class Box2DEnv1_Model(Model):
+class PedsMoveEnv(Model, gym.Env):
     def __init__(self, window, render: bool = True):
-        super(Box2DEnv1_Model, self).__init__()
+        super(PedsMoveEnv, self).__init__()
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.listener = MyContactListener(self)
         self.world.contactListener = self.listener
@@ -38,25 +40,48 @@ class Box2DEnv1_Model(Model):
         self.batch = pyglet.graphics.Batch()
         self.render = render
 
-    def start(self):
-        self.obstacle = BoxWall(self.world, 12.5, 25, 5, 30, ColorBlue)
-        start_nodes = [(0, 25), (50, 25), (25, 50), (25, 0)]
-        width_height = [(1, 50), (1, 50), (50, 1), (50, 1)]
-        self.walls = [BoxWall(self.world, start_nodes[i][0],
-                              start_nodes[i][1], width_height[i][0],
-                              width_height[i][1], ColorWall) for i in range(len(start_nodes))]
+    def start(self, maps:numpy.ndarray, person_num:List=[30,30], person_create_radius:float = 5):
+        # 根据shape为50*50的map来构建1*1的墙，当该处值为1代表是墙
+        start_nodes_obs = []
+        start_nodes_wall = []
+        start_nodes_exit = []
+        for i in range(maps.shape[0]):
+            for j in range(maps.shape[1]):
+                if maps[j, i] == 1:
+                    start_nodes_obs.append((i+0.5,j+0.5))
+                elif maps[j, i] == 2:
+                    start_nodes_wall.append((i+0.5,j+0.5))
+                elif maps[j, i] == 3:
+                    start_nodes_exit.append((i+0.5,j+0.5))
+        self.obstacles = self.create_walls(start_nodes_obs, (1, 1), Color=ColorBlue)
+        self.exits = self.create_walls(start_nodes_exit, (1, 1), Color=ColorRed, CreateClass=Exit)# 创建出口
+        self.walls = self.create_walls(start_nodes_wall, (1, 1))# 建造围墙
         # 随机初始化行人点
-        start_nodes = [(5, 15), (4, 15), (5, 35), (4, 35), (3, 35)]
-        self.peds = [Person(self.world, start_nodes[i][0],
-                            start_nodes[i][1]) for i in range(len(start_nodes))]
+        self.peds = self.random_create_persons((5, 20), person_create_radius, person_num[0]) \
+                    + self.random_create_persons((5, 30), person_create_radius, person_num[1])
         self.render_peds = copy.copy(self.peds)
-        start_nodes = [(50, 35), (50, 15)]
-        width_height = [(2, 10), (2, 10)]
-        self.exits = [Exit(self.world, start_nodes[i][0],
-                           start_nodes[i][1], width_height[i][0],
-                           width_height[i][1], ColorRed) for i in range(len(start_nodes))]
+        self.elements = self.exits + self.obstacles + self.walls + self.render_peds
 
-        self.elements = self.exits + [self.obstacle] + self.walls + self.render_peds
+    def create_walls(self, start_nodes, width_height, same=True, Color = ColorWall, CreateClass = BoxWall):
+        if same:
+            return [CreateClass(self.world, start_nodes[i][0],
+                              start_nodes[i][1], width_height[0],
+                              width_height[1], Color) for i in range(len(start_nodes))]
+        else:
+            return [CreateClass(self.world, start_nodes[i][0],
+                         start_nodes[i][1], width_height[i][0],
+                         width_height[i][1], Color) for i in range(len(start_nodes))]
+
+    def create_people(self, start_nodes):
+        return [Person(self.world, start_nodes[i][0],
+                            start_nodes[i][1]) for i in range(len(start_nodes))]
+
+    def random_create_persons(self, start_nodes, radius, person_num):
+        start_pos = []
+        for i in range(person_num):
+            new_x, new_y = start_nodes[0] + radius * random.random(), start_nodes[1] + radius * random.random()
+            start_pos.append((new_x, new_y))
+        return self.create_people(start_pos)
 
     def setup_graphics(self):
         for ele in self.elements:
@@ -85,21 +110,6 @@ class Box2DEnv1_Model(Model):
         self.pop_person_from_renderlist(per.id)
         per.delete()
 
-    def raycast(self, person_id: int, direction: b2d.b2Vec2) -> Tuple[b2d.b2Vec2, b2d.b2Vec2]:
-        person = self.find_person(person_id)
-        x, y = person.getX, person.getY
-        start_point = b2d.b2Vec2(x, y)
-        end_point = start_point + direction * 100
-
-        class CallBack(b2d.b2RayCastCallback):
-            def ReportFixture(self, fixture: b2d.b2Fixture, point, normal, fraction)->float:
-                print(fixture.userData)
-                return 1
-        callback = CallBack()
-
-        self.world.RayCast(callback, start_point, end_point)
-        return start_point, end_point
-
     def update(self):
         # update box2d physical world
         self.world.Step(1 / TICKS_PER_SEC, vel_iters, pos_iters)
@@ -117,12 +127,21 @@ class Box2DEnv1_Model(Model):
         if self.render:
             self.setup_graphics()
 
+    #Gym Functions
+    def reset(self):
+        pass
+
+    def step(self, action):
+        pass
+
+    def render(self, mode="human"):
+        pass
 
 class Box2DEnv1(pyglet.window.Window):
     def __init__(self):
         super().__init__(config=pyglet.gl.Config(double_buffer=True))
 
-        self.model = Box2DEnv1_Model(self)
+        self.model = PedsMoveEnv(self)
         self.width = 500
         self.height = 500
 
@@ -131,7 +150,7 @@ class Box2DEnv1(pyglet.window.Window):
         pyglet.clock.schedule_interval(self.update, 1.0 / TICKS_PER_SEC)
 
     def start(self):
-        self.model.start()
+        self.model.start(map1)
 
     def setup(self):
         pyglet.graphics.glClearColor(255, 255, 255, 0)
@@ -145,10 +164,10 @@ class Box2DEnv1(pyglet.window.Window):
 
     def on_key_press(self, symbol, modifiers):
         if symbol == key.UP:
-            self.model.raycast(0, b2d.b2Vec2(0, 1))
+            self.model.peds[0].raycast(self.model.world,b2d.b2Vec2(0, 1))
         elif symbol == key.DOWN:
-            self.model.raycast(0, b2d.b2Vec2(0, -1))
+            self.model.peds[0].raycast(self.model.world,b2d.b2Vec2(0, -1))
         elif symbol == key.LEFT:
-            self.model.raycast(0, b2d.b2Vec2(-1, 0))
+            self.model.peds[0].raycast(self.model.world,b2d.b2Vec2(1, 0))
         elif symbol == key.RIGHT:
-            self.model.raycast(0, b2d.b2Vec2(1, 0))
+            self.model.peds[0].raycast(self.model.world,b2d.b2Vec2(-1, 0))

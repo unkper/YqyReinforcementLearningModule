@@ -10,7 +10,7 @@ from gym.spaces import Discrete
 from torch.autograd import Variable
 
 from rl.agents.Agent import Agent
-from rl.utils.networks import Critic, Actor, SimpleCritic, SimpleActor02
+from rl.utils.networks.pd_network import Critic, Actor, SimpleCritic, SimpleActor02
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin,OrnsteinUhlenbeckActionNoise
 from rl.utils.functions import back_specified_dimension, onehot_from_int

@@ -11,10 +11,10 @@ from gym.spaces import Discrete
 from torch import nn
 
 from rl.agents.Agent import Agent
-from rl.utils.networks import SimpleActor, MADDPG_Critic
+from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience
-from rl.utils.functions import back_specified_dimension, onehot_from_int, onehot_from_logits, gumbel_softmax, flatten_data
+from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data
 
 MSELoss = torch.nn.MSELoss()
 

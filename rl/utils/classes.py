@@ -249,29 +249,3 @@ class SaveDictMixin():
         with open(savePath , 'rb') as f:
             return pickle.load(f)
 
-class SimulationEnvModel():
-    def __init__(self,maxLength=2000):
-        self.maxSize = maxLength
-        self.queue = Queue(maxsize=-1)
-        self.dic = {}
-
-    def push(self,s,a,r,s1,is_done):
-        if self.queue.qsize() + 1 > self.maxSize:
-            ele = self.queue.get()
-            del self.dic[ele]
-        key = [s, a]
-        if key in self.dic.keys():
-            pass
-        else:
-            self.dic[key] = (r, s1, is_done)
-            self.queue.put(key)
-
-    def keys(self):
-        return self.dic.keys()
-
-    def __getitem__(self, item):
-        return self.dic[item]
-
-    def __len__(self):
-        return len(self.dic)
-

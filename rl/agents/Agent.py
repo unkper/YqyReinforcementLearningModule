@@ -201,6 +201,7 @@ class Agent():
             ep += 1
             while not is_done[0]:
                 s1, r1, is_done, info, total_reward = self.act(a0)
+                if type(is_done) is bool:is_done = [is_done]
                 if display:
                     self.env.render()
                 a1 = self.play_step(savePath,s0)

@@ -2,6 +2,10 @@ import random
 
 from random import sample
 
+import numpy as np
+from gym import Env
+from torch import nn
+
 from rl.utils.functions import get_dict
 
 
@@ -34,3 +38,11 @@ def epsilon_greedy_policy(A, s, Q, epsilon = 0.05):
         return sample(A,k=1)[0]
     else:
         return greedy_policy(A, s, Q)
+
+def deep_epsilon_greedy_policy(s, epsilon, env:Env, behavior_Q:nn.Module):
+    action = behavior_Q(s)  # 经过神经网络输出一个[1,5]向量，里面代表前，后，左，右，不动的值，之后选取其中最大的输出
+    rand_value = random.random()
+    if epsilon is not None and rand_value < epsilon:
+        return env.action_space.sample()  # 有ε概率随机选取动作
+    else:
+        return int(np.argmax(action))

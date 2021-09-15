@@ -1,9 +1,6 @@
 import datetime
 import os
 import sys
-#为了Google colab挂载而加
-curPath = os.path.abspath(os.path.curdir)
-sys.path.append(curPath)
 
 import gym
 import torch
@@ -16,11 +13,16 @@ from rl.env.sisl import WaterWorld, MultiWalker
 from rl.env.mpe import SimpleAdversary, SimpleSpeakerListener, SimplePusher, \
     SimpleSpread, SimpleWorldComm, SimpleCrypto, SimpleTag, SimpleReference
 from rl.env.findTreasure import FindTreasureWrapper
-from rl.agents.QAgents import DQNAgent,QAgent,DYNA_QAgent
+from rl.agents.QAgents import DQNAgent,QAgent
+from rl.agents.QAgents import Deep_DYNA_QAgent as DDQAgent
 from rl.agents.PDAgents import DDPGAgent
 from rl.agents.MaddpgAgent import MADDPGAgent
 from rl.utils.miscellaneous import learning_curve
 from rl.utils.classes import OrnsteinUhlenbeckActionNoise
+
+#为了Google colab挂载而加
+curPath = os.path.abspath(os.path.curdir)
+sys.path.append(curPath)
 
 def test2():
     di = Discrete(7)
@@ -54,17 +56,29 @@ def test4(useEnv,envName):
     learning_curve(data, 2, 1, title="DQNAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
 
-def test5(useEnv,fileName,episode=3):
+def test5(useEnv,fileName,episode=3,AgentType=MADDPGAgent):
     env = useEnv
-    agent = MADDPGAgent(env)
+    agent = AgentType(env)
     agent.play(os.path.join("../data/models/",fileName),episode=episode,waitSecond=0.05)
+
+def test6():
+    envName = "CartPole-v1"
+    id = uuid1()
+    env = gym.make(envName)
+    agent = DQNAgent(env)
+    data = agent.learning(max_episode_num=10000)
+    agent.save(agent.init_time_str,"DQNAgent",agent.behavior_Q)
+    learning_curve(data, 2, 1, title="DQNAgent performance on {}".format(envName),
+                   x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
 
 if __name__ == '__main__':
     # envs = [(SimpleTag(),"SimpleTag"),(SimpleCrypto(),"SimpleCrypto"),(SimpleReference(),"SimpleReference")]
     # for item in envs:
     #     test4(item[0],item[1])
-    env = SimpleTag(maxStep=125)
-    test5(env,"2021_08_21_06_59_ddpg_SimpleTag_20000")
+    # env = gym.make("CartPole-v1")
+    # test5(env,"2021_09_15_15_40",AgentType=DQNAgent)
+
     # test4(env, "MultiWalker")
+    test6()
 
 

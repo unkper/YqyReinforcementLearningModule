@@ -90,7 +90,7 @@ class Agent():
         s0 = self.state
         s1, r1, is_done, info = self.env.step(a0)
 
-        trans = Transition(s0,a0,r1,is_done,s1)
+        trans = Transition(s0, a0, r1, is_done, s1)
         total_reward = self.experience.push(trans)
         self.state = s1
         return s1, r1, is_done, info, total_reward
@@ -157,6 +157,7 @@ class Agent():
         :param display:
         :return:
         '''
+        self.max_episode_num = max_episode_num #用于内部的方法使用
         if display_in_episode > 0:
             display = False
             wait = False

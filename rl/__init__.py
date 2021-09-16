@@ -7,6 +7,7 @@ import torch
 
 from uuid import uuid1
 from gym.spaces import Discrete,Box
+from rl.env.puckworld import PuckWorldEnv
 from rl.env.puckworld_continous import PuckWorldEnv as Continous_PuckWorldEnv
 from rl.env.gymEnvs import Pendulum
 from rl.env.sisl import WaterWorld, MultiWalker
@@ -65,10 +66,10 @@ def test6():
     envName = "CartPole-v1"
     id = uuid1()
     env = gym.make(envName)
-    agent = DQNAgent(env)
-    data = agent.learning(max_episode_num=10000)
-    agent.save(agent.init_time_str,"DQNAgent",agent.behavior_Q)
-    learning_curve(data, 2, 1, title="DQNAgent performance on {}".format(envName),
+    agent = DQNAgent(env, gamma=0.99, learning_rate=1e-3)
+    data = agent.learning(max_episode_num=1000)
+    agent.save(agent.init_time_str + "_" + envName, "DQNAgent", agent.behavior_Q)
+    learning_curve(data, 2, 1, title="QAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
 
 if __name__ == '__main__':
@@ -76,7 +77,7 @@ if __name__ == '__main__':
     # for item in envs:
     #     test4(item[0],item[1])
     # env = gym.make("CartPole-v1")
-    # test5(env,"2021_09_15_15_40",AgentType=DQNAgent)
+    # test5(env,"2021_09_16_16_27_CartPole-v1",episode=5,AgentType=DQNAgent)
 
     # test4(env, "MultiWalker")
     test6()

@@ -80,15 +80,15 @@ class NetApproximator(nn.Module):
         :return:
         '''
         if criterion is None:
-            self.criterion = torch.nn.MSELoss()
+            self.criterion = torch.nn.MSELoss(size_average=False)
         if optimizer is None:
             self.optimizer = torch.optim.Adam(self.parameters(),lr = learning_rate)
         if epochs < 1:epochs = 1
-        y = self._prepare_data(y,require_grad=False)
+        y = self._prepare_data(y, require_grad=False)
         y = self.to_device(y)
         x = self.to_device(x)
         for t in range(epochs):
-            y_pred = self.forward(x)#前向传播
+            y_pred = self.forward(x)# 前向传播
             y_pred = self.to_device(y_pred)
             loss = self.criterion(y_pred,y) #计算损失
             self.optimizer.zero_grad() #梯度重置，准备接受新梯度值

@@ -18,7 +18,7 @@ from rl.utils.networks.pd_network import NetApproximator
 from rl.utils.functions import get_dict, set_dict, back_specified_dimension, process_experience_data, print_train_string
 from rl.utils.policys import epsilon_greedy_policy, greedy_policy, uniform_random_policy, deep_epsilon_greedy_policy
 from rl.utils.classes import SaveDictMixin, SaveNetworkMixin, Transition, Experience
-from rl.utils.updates import soft_update
+from rl.utils.updates import hard_update, soft_update
 
 class QAgent(Agent,SaveDictMixin):
     def __init__(self,env:Env,capacity:int = 20000):
@@ -74,6 +74,8 @@ class DQNAgent(Agent,SaveNetworkMixin):
                     hidden_dim:int = 32,
                     batch_size = 128,
                     epochs = 2,
+                    gamma = 0.95,
+                    learning_rate = 1e-4,
                     tau:float = 0.1,
                     update_frequent = 50,
                     network:nn.Module = None):
@@ -100,38 +102,38 @@ class DQNAgent(Agent,SaveNetworkMixin):
         self.batch_size = batch_size
         self.epochs = epochs
         self.tau = tau
+        self.learning_rate = learning_rate
+        self.gamma = gamma
         self.update_frequent = update_frequent
-
 
     def _update_target_Q(self):
         # 使用软更新策略来缓解不稳定的问题
-        soft_update(self.target_Q, self.behavior_Q, self.tau)
+        hard_update(self.target_Q, self.behavior_Q)
 
     def policy(self,A ,s = None,Q = None, epsilon = None):
         return deep_epsilon_greedy_policy(s, epsilon, self.env, self.behavior_Q)
 
     def learning_method(self,epsilon = 1e-5,display = False,wait = False,waitSecond:float = 0.01):
         self.state = self.env.reset()
-        s0 = self.state
         if display:
             self.env.render()
         time_in_episode, total_reward = 0, 0
         is_done = False
         loss = 0
         while not is_done:
-            a0 = self.perform_policy(s0,epsilon=epsilon)
+            s0 = self.state
+            a0 = self.perform_policy(s0, epsilon=epsilon)
             s1, r1, is_done, info, total_reward = self.act(a0)
             if display:
                 self.env.render()
-            if self.total_trans > self.batch_size and time_in_episode % self.update_frequent == 0:
-                loss += self._learn_from_memory(self.gamma,self.alpha)
+
+            if self.total_trans > self.batch_size: #and time_in_episode % self.update_frequent == 0:
+                loss += self._learn_from_memory(self.gamma, self.learning_rate)
             time_in_episode += 1
 
-            s0 = s1
-
         loss /= time_in_episode
-        if self.total_episodes_in_train % 500 == 0:
-            print_train_string(self.experience)
+        if self.total_episodes_in_train % (self.max_episode_num // 10) == 0:
+            print_train_string(self.experience, self.max_episode_num // 10)
         return time_in_episode, total_reward, loss
 
     def _learn_from_memory(self, gamma, learning_rate):
@@ -142,8 +144,8 @@ class DQNAgent(Agent,SaveNetworkMixin):
         #准备训练数据
         X_batch = states_0
         y_batch = self.target_Q(states_0)
-        Q_target = reward_1 + gamma * np.max(self.target_Q(states_1),axis=1)*\
-                   (~is_done) # is_done则Q_target==reward_1
+        Q_target = reward_1 + gamma * np.max(self.target_Q(states_1), axis=1)*\
+                   (~ is_done) # is_done则Q_target==reward_1
 
         y_batch[np.arange(len(X_batch)), actions_0] = Q_target
 
@@ -156,7 +158,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
                                    learning_rate = learning_rate,
                                    epochs=self.epochs)
         mean_loss = loss.sum().item() / self.batch_size
-        if self.total_episodes_in_train % 100 == 0:
+        if self.total_episodes_in_train % self.update_frequent == 0:
             self._update_target_Q()
         return mean_loss
 
@@ -204,7 +206,6 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
 
         self.plan_experience = Experience(capacity=plan_capacity)
 
-
     def policy(self,A ,s = None,Q = None, epsilon = None):
         return deep_epsilon_greedy_policy(s, epsilon, self.env, self.Q)
 
@@ -229,12 +230,13 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
                 time.sleep(waitSecond)
             time_in_episode += 1
             if self.total_trans > self.batch_size and time_in_episode % self.update_frequent == 0:
-                loss += self._learn_from_memory(self.gamma, self._sample_from_du)
+                loss += self._learn_from_memory(gamma, self._sample_from_du)
                 self._learn_simulate_world()
-                self._planning(self.gamma)
+                self._planning(gamma)
+                self._update_target_Q()
             s0 = s1
-        if self.total_episodes_in_train % 500 == 0:
-            print_train_string(self.experience)
+        if self.total_episodes_in_train % (self.max_episode_num // 10) == 0:
+            print_train_string(self.experience, self.max_episode_num // 10)
         loss /= time_in_episode
 
         return time_in_episode,total_reward, loss

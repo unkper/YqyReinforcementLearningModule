@@ -1,5 +1,7 @@
 import copy
 import random
+from math import inf
+
 import gym
 import pyglet
 import numpy
@@ -7,6 +9,8 @@ import Box2D as b2d
 
 from Box2D import (b2World)
 from typing import List, Tuple
+
+from gym.spaces import Box, Discrete
 from pyglet.window import key
 
 from env.objects import BoxWall, Person, Exit
@@ -31,14 +35,15 @@ class Model():
 
 
 class PedsMoveEnv(Model, gym.Env):
-    def __init__(self, window, render: bool = True):
+    def __init__(self , person_num = 60, render: bool = True):
         super(PedsMoveEnv, self).__init__()
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.listener = MyContactListener(self)
         self.world.contactListener = self.listener
-        self.window = window
+        self.window = pyglet.window.Window(width=500, height=500, caption="行人行走模拟环境")
         self.batch = pyglet.graphics.Batch()
         self.render = render
+        self.person_num = person_num
 
     def start(self, maps:numpy.ndarray, person_num:List=[30,30], person_create_radius:float = 5):
         # 根据shape为50*50的map来构建1*1的墙，当该处值为1代表是墙
@@ -61,6 +66,13 @@ class PedsMoveEnv(Model, gym.Env):
                     + self.random_create_persons((5, 30), person_create_radius, person_num[1])
         self.render_peds = copy.copy(self.peds)
         self.elements = self.exits + self.obstacles + self.walls + self.render_peds
+
+        #强化学习MDP定义区域
+        #定义观察空间为[8个方向对墙的传感器,8个方向对人的传感器,智能体当前位置(x,y),智能体距离终点的距离(length)]一共19个值
+        self.observation_space = Box( -inf, inf, (19,))
+        #定义动作空间为[不动，向左，向右，向上，向下]施加1N的力
+        self.action_space = Discrete(5)
+        #定义奖励为靠近终点+1，远离终点-1，碰到障碍物-1,碰到其他智能体-1
 
     def create_walls(self, start_nodes, width_height, same=True, Color = ColorWall, CreateClass = BoxWall):
         if same:

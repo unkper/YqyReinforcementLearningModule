@@ -144,18 +144,27 @@ def flatten_data(data, dim, device, ifBatch=False):
     else:
         return data.reshape(dim)
 
-def process_experience_data(trans_pieces):
+def process_experience_data(trans_pieces, to_tensor = False, device = None):
     states_0 = np.vstack([x.s0 for x in trans_pieces])
     actions_0 = np.array([x.a0 for x in trans_pieces])
     reward_1 = np.array([x.reward for x in trans_pieces])
     is_done = np.array([x.is_done for x in trans_pieces])
     states_1 = np.vstack(x.s1 for x in trans_pieces)
+
+    if to_tensor:
+        states_0 = torch.from_numpy(states_0).float().to(device)
+        states_1 = torch.from_numpy(states_1).float().to(device)
+        actions_0 = torch.from_numpy(actions_0).float().to(device)
+        reward_1 = torch.from_numpy(reward_1).float()
+        is_done = torch.from_numpy(is_done)
     return states_0,actions_0,reward_1,is_done,states_1
 
 def print_train_string(experience:Experience, episodes=500):
     rewards = []
-    last_episodes = experience.last_n_episode(episodes)
-    if last_episodes is None:return
+    last_episodes = experience.last_n_episode(episodes if episodes > experience.len else experience.len)
+    if last_episodes is None:
+        print("episodes is None!!!")
+        return
     rewards.append(np.mean([x.total_reward for x in last_episodes]))
     print("average rewards in last {} episodes:{}".format(episodes, rewards))
     print("{}".format(experience.__str__()))

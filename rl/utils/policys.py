@@ -3,6 +3,7 @@ import random
 from random import sample
 
 import numpy as np
+import torch
 from gym import Env
 from torch import nn
 
@@ -41,6 +42,7 @@ def epsilon_greedy_policy(A, s, Q, epsilon = 0.05):
 
 def deep_epsilon_greedy_policy(s, epsilon, env:Env, behavior_Q:nn.Module):
     action = behavior_Q(s)  # 经过神经网络输出一个[1,5]向量，里面代表前，后，左，右，不动的值，之后选取其中最大的输出
+    if isinstance(action, torch.Tensor):action = action.detach().cpu().numpy()
     rand_value = random.random()
     if epsilon is not None and rand_value < epsilon:
         return env.action_space.sample()  # 有ε概率随机选取动作

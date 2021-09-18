@@ -140,7 +140,7 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         time_in_episode, total_reward = 0, 0
         is_done = False
         loss_critic, loss_actor = 0.0,0.0
-        s0 = torch.from_numpy(self.state).to(self.device)
+        s0 = self.state
         while not is_done:
             if explore:
                 a0 = self.get_exploration_action(s0,epsilon)

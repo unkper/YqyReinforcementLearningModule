@@ -2,11 +2,15 @@ import datetime
 import os
 import sys
 
+#为了Google colab挂载而加
+curPath = os.path.abspath("../" + os.path.curdir)
+sys.path.append(curPath)
+
 import gym
 import torch
 
 from uuid import uuid1
-from gym.spaces import Discrete,Box
+from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
 from rl.env.puckworld import PuckWorldEnv
 from rl.env.puckworld_continous import PuckWorldEnv as Continous_PuckWorldEnv
 from rl.env.gymEnvs import Pendulum
@@ -20,17 +24,6 @@ from rl.agents.PDAgents import DDPGAgent
 from rl.agents.MaddpgAgent import MADDPGAgent
 from rl.utils.miscellaneous import learning_curve
 from rl.utils.classes import OrnsteinUhlenbeckActionNoise
-
-#为了Google colab挂载而加
-curPath = os.path.abspath(os.path.curdir)
-sys.path.append(curPath)
-
-def test2():
-    di = Discrete(7)
-    di_samples = [di.sample() for i in range(10)]
-    print(di_samples)
-    bo = Box(-2.0,10000000,(4,4))
-    print(bo.sample())
 
 def test3():
     env = Continous_PuckWorldEnv()
@@ -62,13 +55,13 @@ def test5(useEnv,fileName,episode=3,AgentType=MADDPGAgent):
     agent = AgentType(env)
     agent.play(os.path.join("../data/models/",fileName),episode=episode,waitSecond=0.05)
 
-def test6():
-    envName = "CartPole-v1"
+def test6(env, envName, type=0):
     id = uuid1()
-    env = gym.make(envName)
-    agent = DQNAgent(env, gamma=0.99, learning_rate=1e-3)
+    agent_type_name = "DQNAgent" if type == 0 else "DDQAgent"
+    agent = DQNAgent(env, gamma=0.99, learning_rate=1e-3, ddqn=True) if type == 0 else \
+            DDQAgent(env, Q_net=dyna_q_network, model_net=dyna_model_network)
     data = agent.learning(max_episode_num=1000)
-    agent.save(agent.init_time_str + "_" + envName, "DQNAgent", agent.behavior_Q)
+    agent.save(agent.init_time_str + "_" + envName, agent_type_name, agent.behavior_Q if type==0 else agent.Q)
     learning_curve(data, 2, 1, title="QAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
 
@@ -76,10 +69,16 @@ if __name__ == '__main__':
     # envs = [(SimpleTag(),"SimpleTag"),(SimpleCrypto(),"SimpleCrypto"),(SimpleReference(),"SimpleReference")]
     # for item in envs:
     #     test4(item[0],item[1])
-    # env = gym.make("CartPole-v1")
-    # test5(env,"2021_09_16_16_27_CartPole-v1",episode=5,AgentType=DQNAgent)
 
     # test4(env, "MultiWalker")
-    test6()
+    envName = "CartPole-v1"
+    env = gym.make(envName)
+    operation = input()
+    if operation == "1":
+        test6(env, envName)
+    elif operation == "0":
+        test5(env,"2021_09_18_14_58_CartPole-v1", episode=5, AgentType=DQNAgent)
+    else:
+        test6(env, envName, 1)
 
 

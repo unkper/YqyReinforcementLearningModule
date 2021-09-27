@@ -7,6 +7,7 @@ import numpy as np
 
 from gym import Env
 from gym.spaces import Discrete
+from torch import nn
 from torch.autograd import Variable
 
 from rl.agents.Agent import Agent
@@ -22,7 +23,9 @@ class DDPGAgent(Agent,SaveNetworkMixin):
                       capacity = 2e6,
                       batch_size = 128,
                       learning_rate = 0.001,
-                      epochs = 2):
+                      epochs = 2,
+                      actor_network:nn.Module=None,
+                      critic_network:nn.Module=None):
         if env is None:
             raise Exception("agent should have an environment!")
         super(DDPGAgent, self).__init__(env,capacity)
@@ -40,13 +43,16 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         self.noise = OrnsteinUhlenbeckActionNoise(self.action_dim)
 
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-        self.actor = SimpleActor02(self.state_dim, self.action_dim, self.discrete).to(self.device)
-        self.target_actor = SimpleActor02(self.state_dim, self.action_dim,
-                                  self.discrete).to(self.device)
+        self.actor = SimpleActor02(self.state_dim,
+                                   self.action_dim,
+                                   self.discrete).to(self.device) if actor_network == None else actor_network(self.state_dim, self.action_dim)
+        self.target_actor = SimpleActor02(self.state_dim,
+                                          self.action_dim,
+                                          self.discrete).to(self.device) if actor_network == None else actor_network(self.state_dim, self.action_dim)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 self.learning_rate)
-        self.critic = SimpleCritic(self.state_dim, self.action_dim).to(self.device)
-        self.target_critic = SimpleCritic(self.state_dim, self.action_dim).to(self.device)
+        self.critic = SimpleCritic(self.state_dim, self.action_dim).to(self.device) if critic_network == None else critic_network(self.state_dim, self.action_dim)
+        self.target_critic = SimpleCritic(self.state_dim, self.action_dim).to(self.device) if critic_network == None else critic_network(self.state_dim, self.action_dim)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  self.learning_rate)
         hard_update(self.target_actor, self.actor)

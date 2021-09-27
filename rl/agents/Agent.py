@@ -184,9 +184,9 @@ class Agent():
             episode_rewards.append(episode_reward)
             num_episodes.append(num_episode)
             if self.loss_callback_ and loss:
-                self.loss_callback_(loss)
+                self.loss_callback_(self, loss)
             if self.save_callback_:
-                self.save_callback_(self,num_episode)
+                self.save_callback_(self, num_episode)
         return total_times,episode_rewards,num_episodes
 
     def play(self,savePath:str = None,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):

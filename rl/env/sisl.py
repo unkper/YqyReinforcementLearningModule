@@ -77,9 +77,9 @@ class WaterWorld(Env):
         self.wrappedEnv.seed(seed)
 
 if __name__ == '__main__':
-    # env = multiwalker_v7.parallel_env()
-    # print(env.observation_spaces)
-    # print(env.action_spaces)
+    # ped_env = multiwalker_v7.parallel_env()
+    # print(ped_env.observation_spaces)
+    # print(ped_env.action_spaces)
     env = MultiWalker()
     print(env.reset())
     for i in range(75):

@@ -70,7 +70,7 @@ class QAgent(Agent,SaveDictMixin):
 
 class DQNAgent(Agent,SaveNetworkMixin):
     def __init__(self,env:Env = None,
-                    capacity = 20000,
+                    capacity = 1e6,
                     hidden_dim:int = 32,
                     batch_size = 128,
                     epochs = 2,
@@ -78,6 +78,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
                     learning_rate = 1e-4,
                     tau:float = 0.4,
                     ddqn:bool = True,
+                    update_frequent = 2,
                     network:nn.Module = None):
         if env is None:
             raise Exception("agent should have an environment!")
@@ -105,6 +106,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
         self.learning_rate = learning_rate
         self.gamma = gamma
 
+        self.update_frequent = update_frequent
         self.ddqn = ddqn
         if self.ddqn:print("使用DDQN算法更新Q值!")
 
@@ -130,7 +132,7 @@ class DQNAgent(Agent,SaveNetworkMixin):
                 self.env.render()
             if self.total_trans > self.batch_size: #and time_in_episode % self.update_frequent == 0:
                 loss += self._learn_from_memory(self.gamma, self.learning_rate)
-            if time_in_episode > 5000: #防止CartPole长时间进行训练
+            if time_in_episode > 500: #防止CartPole长时间进行训练
                 is_done = True
             time_in_episode += 1
 
@@ -189,9 +191,14 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
                  model_net:nn.Module,
                  hidden_dim=32,
                  batch_size:int=128,
+                 C = 100, #每C步更新一次target_Q网络
+                 K = 50, #一次planning的总episode数
+                 L = 10, #一次planning_episode在多少步后跳出
+                 E = 10,#一次model_learn的总step数
+                 update_frequent = 1,#多少步更新一次Q值网络
                  tau: float = 0.4,
-                 capacity:int = 20000,
-                 plan_capacity:int = 10000,
+                 capacity:int = 1e6,
+                 plan_capacity:int = 1e6,
                  lookahead:int=10,
                  epochs:int=2,
                  learning_rate:float = 1e-4,
@@ -221,6 +228,22 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
         self.ddqn = ddqn
 
         self.plan_experience = Experience(capacity=plan_capacity)
+        self.C = C
+        self.K = K
+        self.L = L
+        self.E = E
+        self.update_frequent = update_frequent
+
+        self.loss_data = []
+
+        def loss_callback(self, loss):
+            self.loss_data.append([loss[0], loss[1]])
+            if self.total_episodes_in_train % 50 == 0:
+                x = 50 if len(self.loss_data) > 50 else len(self.loss_data)
+                print("last 100 episodes loss:{},model loss:{}".format(
+                    np.mean(self.loss_data[-x:-1][0]),np.mean(self.loss_data[-x:-1][1])
+                ))
+        self.loss_callback_ = loss_callback
 
     def policy(self,A ,s = None,Q = None, epsilon = None):
         s = torch.from_numpy(s).float().to(self.device)
@@ -235,6 +258,7 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
         time_in_episode, total_reward = 0, 0
         is_done = False
         loss = 0.0
+        model_loss = 0.0
         while not is_done:
             #行动部分
             a0 = self.perform_policy(s0, self.Q, epsilon)
@@ -246,18 +270,28 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
             if time_in_episode > 5000: #防止CartPole长时间进行训练
                 is_done = True
             time_in_episode += 1
-            if self.total_trans > self.batch_size:
-                loss += self._learn_from_memory(gamma, self._sample_from_du)
-                self._learn_simulate_world()
-                self._planning(gamma)
-                if self.total_trans_in_train % 100 == 0:
+            self.total_trans_in_train += 1
+            if self.total_trans > self.batch_size and time_in_episode % self.update_frequent == 0:
+                #为了效率考虑，统一执行sample操作
+                trans_pieces = self._sample_from_du(self.batch_size)
+                states_0, actions_0, \
+                reward_1, d_is_done, states_1 = process_experience_data(trans_pieces, to_tensor=True, device=self.device)
+                trans_pieces = (states_0, actions_0, reward_1, d_is_done, states_1)
+
+                loss += self._learn_from_memory(gamma, trans_pieces)
+                model_loss += self._learn_simulate_world(trans_pieces)
+                if self.total_trans_in_train % self.K == 0:
                     self._update_target_Q()
             s0 = s1
+        #在每次强化学习的episode结束后进行planning,只有在探索停止之后才开始planning
+        if epsilon < 0.01:
+            self._planning(self.gamma)
+
         if self.total_episodes_in_train % (self.max_episode_num // 10) == 0:
             print_train_string(self.experience, self.max_episode_num // 10)
         loss /= time_in_episode
 
-        return time_in_episode,total_reward, loss
+        return time_in_episode,total_reward, (loss, model_loss)
 
     def _update_target_Q(self):
         # 使用软更新策略来缓解不稳定的问题
@@ -277,10 +311,9 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
         '''
         return self.plan_experience.sample(self.batch_size if count == 0 else count)
 
-    def _learn_from_memory(self, gamma, sample_func):
-        trans_pieces = sample_func(self.batch_size)
+    def _learn_from_memory(self, gamma, trans_pieces):
         states_0, actions_0, \
-        reward_1, is_done, states_1 = process_experience_data(trans_pieces, to_tensor=True, device=self.device)
+        reward_1, is_done, states_1 = trans_pieces
 
         # 准备训练数据
         X_batch = states_0
@@ -318,24 +351,26 @@ class Deep_DYNA_QAgent(Agent, SaveNetworkMixin):
         #     self._update_target_Q()
         return mean_loss
 
-    def _learn_simulate_world(self):
-        trans_pieces = self.sample(self.batch_size)
+    def _learn_simulate_world(self, trans_pieces):
         states_0, actions_0, \
-        reward_1, is_done, states_1 = process_experience_data(trans_pieces, to_tensor=True, device=self.device)
+        reward_1, is_done, states_1 = trans_pieces
 
         reward_1 = torch.unsqueeze(reward_1, dim=1).to(self.device)
         is_done = torch.unsqueeze(is_done, dim=1).float().to(self.device)
-        #world model输入为(s,a)，输出为(s',r, is_done)
-        _state_1, _reward, _is_done = self.model(states_0, actions_0)
 
-        self.model_optimizer.zero_grad()
-        loss = F.mse_loss(_state_1, states_1) + \
-                F.mse_loss(_reward, reward_1) + \
-                F.binary_cross_entropy_with_logits(_is_done, is_done)
-        loss.backward()
-        self.model_optimizer.step()
+        total_loss = 0.0
+        for i in range(self.E):
+            # world model输入为(s,a)，输出为(s',r, is_done)
+            _state_1, _reward, _is_done = self.model(states_0, actions_0)
+            self.model_optimizer.zero_grad()
+            loss = F.mse_loss(_state_1, states_1) + \
+                    F.mse_loss(_reward, reward_1) + \
+                    F.binary_cross_entropy_with_logits(_is_done, is_done)
+            loss.backward()
+            self.model_optimizer.step()
+            total_loss += loss
 
-        mean_loss = loss.sum().item() / self.batch_size
+        mean_loss = loss.sum().item() / self.batch_size / self.E
         return mean_loss
 
     def _planning(self, gamma):

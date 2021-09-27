@@ -265,4 +265,4 @@ if __name__ == "__main__":
         env.step(action)
         env.render()
         time.sleep(1)
-    print("env closed")
+    print("ped_env closed")

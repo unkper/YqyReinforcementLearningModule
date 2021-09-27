@@ -575,4 +575,4 @@ if __name__ == "__main__":
         state, reward, isdone, info = env.step(a)
         print("{0}, {1}, {2}, {3}".format(a, reward, isdone, info))
 
-    print("env closed")
+    print("ped_env closed")

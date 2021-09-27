@@ -182,13 +182,13 @@ class SimpleReference(GymEnvWrapper):
 if __name__ == '__main__':
     # import torch
     # from rl.utils.functions import onehot_from_logits
-    # env = SimpleAdversary()
-    # obs = env.reset()
-    # print(env.wrappedEnv)
+    # ped_env = SimpleAdversary()
+    # obs = ped_env.reset()
+    # print(ped_env.wrappedEnv)
     # is_done = [False]
     # while not is_done[0]:
-    #     env.render()
-    #     next_obs, reward, is_done, info = env.step(onehot_from_logits(torch.randn((3,5))))
+    #     ped_env.render()
+    #     next_obs, reward, is_done, info = ped_env.step(onehot_from_logits(torch.randn((3,5))))
 
     env = simple_reference_v2.parallel_env()
     print(env.observation_spaces)

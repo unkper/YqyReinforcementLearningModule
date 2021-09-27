@@ -151,15 +151,15 @@ class FireFighterWrapper(gym.Env):
 #     return tgt_list
 #
 #
-# env = EnvFireFighter(4)
+# ped_env = EnvFireFighter(4)
 #
 # max_iter = 100
 # for i in range(max_iter):
 #     print("iter= ", i)
-#     print("actual fire level: ", env.firelevel)
-#     print("observed fire level: ", env.get_obs())
+#     print("actual fire level: ", ped_env.firelevel)
+#     print("observed fire level: ", ped_env.get_obs())
 #     tgt_list = generate_tgt_list(3)
 #     print("agent target: ", tgt_list)
-#     reward = env.step(tgt_list)
+#     reward = ped_env.step(tgt_list)
 #     print("reward: ", reward)
 #     print(" ")

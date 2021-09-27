@@ -1,4 +1,4 @@
-
+import numpy as np
 
 
 def transfer_to_render(x,y,X,Y,scale=10.0):
@@ -15,3 +15,6 @@ def transfer_to_render(x,y,X,Y,scale=10.0):
     return x_ * scale, y_ * scale, X * scale, Y * scale
 
 
+def parse_discrete_action(type:np.ndarray):
+    actions = [(0.0,0.0),(-1.0,0.0),(1.0,0.0),(0.0,1.0),(0.0,-1.0)]
+    return np.array(actions[np.argmax(type).item()])

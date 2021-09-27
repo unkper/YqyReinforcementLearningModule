@@ -2,7 +2,7 @@ import pyglet
 import socket
 import Box2D as b2d
 
-from env.utils.drawer import MyDrawer
+from ped_env.utils.viewer import MyDrawer
 from pygame import Color
 
 class SimuationPedEnvironment():

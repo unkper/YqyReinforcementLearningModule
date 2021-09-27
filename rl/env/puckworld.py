@@ -250,7 +250,7 @@ if __name__ == "__main__":
     print(env.action_space)
 
     # for _ in range(10000):
-    #    env.render()
-    #    env.step(env.action_space.sample())
+    #    ped_env.render()
+    #    ped_env.step(ped_env.action_space.sample())
 
-    print("env closed")
+    print("ped_env closed")

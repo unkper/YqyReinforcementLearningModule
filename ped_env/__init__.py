@@ -3,8 +3,9 @@ import time
 import Box2D as b2d
 import pyglet
 
-from env.utils.drawer import MyDrawer
-from env.envs import Box2DEnv1 as Env
+from ped_env.envs import PedsMoveEnv as Env
+from ped_env.utils.maps import map_03, map_01
+
 
 def HelloWorldProject():
     world = b2d.b2World()
@@ -64,9 +65,23 @@ def test1():
 
 #Hello World Project
 if __name__ == '__main__':
+    import time
+    import numpy as np
     # test1()
-
-    env = Env()
-    env.start()
-    env.setup()
-    pyglet.app.run()
+    person_num = 4
+    env = Env(map_01, person_num, maxStep=10000)
+    # print(obs)
+    for epoch in range(100):
+        starttime = time.time()
+        step = 0
+        obs = env.reset()
+        is_done = [False]
+        while not is_done[0]:
+            action = np.random.random([person_num, 5])
+            obs, reward, is_done, info = env.step(action)
+            step += 1
+            # env.render()
+            # print(obs, reward, is_done)
+        endtime = time.time()
+        print("智能体碰撞次数为{}!".format(env.listener.collision_count))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step,endtime - starttime,step/(endtime - starttime)))

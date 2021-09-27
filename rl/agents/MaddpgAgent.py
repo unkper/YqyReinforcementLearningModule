@@ -14,7 +14,7 @@ from rl.agents.Agent import Agent
 from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience
-from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data
+from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, onehot_from_int
 
 MSELoss = torch.nn.MSELoss()
 
@@ -52,7 +52,8 @@ class DDPGAgent:
         if self.discrete:
             action = torch.unsqueeze(action, dim=0)
             if explore:
-                action = gumbel_softmax(action, hard=True)
+                #  action = gumbel_softmax(action, hard=True)
+                action = onehot_from_int(random.randint(0, self.action_dim - 1), self.action_dim)
             else:
                 action = onehot_from_logits(action)
             action = torch.squeeze(action).to(self.device)
@@ -80,15 +81,19 @@ class DDPGAgent:
         self.critic_optimizer.load_state_dict(params['critic_optimizer'])
 
 class MADDPGAgent(Agent, SaveNetworkMixin):
+    loss_recoder = []
 
     def __init__(self, env: Env = None,
                  capacity=2e6,
                  batch_size=128,
                  learning_rate=0.001,
                  update_frequent = 50,
-                 gamma = 0.95
+                 debug_log_frequent = 500,
+                 gamma = 0.95,
+                 tau = 0.01,
+                 env_name = "training_env"
                  ):
-        """
+        '''
         环境的输入有以下几点变化，设此时有N个智能体：
         状态为(o1,o2,...,oN)
         每个状态o的形状暂定为一样，对于Actor有如下几种情况：
@@ -96,14 +101,14 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             类型为Box，其Shape为（x1,x2,...,xn)，则输入层为x1*x2*xn
         对于Critic
         动作一般为一维的Box，则根据维数来进行转换
-
         :param env:
         :param capacity:
         :param batch_size:
-        :param action_lim:
         :param learning_rate:
-        :param epochs:
-        """
+        :param update_frequent:
+        :param debug_log_frequent:
+        :param gamma:
+        '''
         if env is None:
             raise Exception("agent should have an environment!")
         super(MADDPGAgent, self).__init__(env, capacity, gamma=gamma)
@@ -121,28 +126,34 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                 self.action_dims.append(back_specified_dimension(action))
         self.batch_size = batch_size
         self.update_frequent = update_frequent
+        self.log_frequent = debug_log_frequent
         self.learning_rate = learning_rate
-        self.gamma = 0.95
-        self.tau = 0.01
+        self.gamma = gamma
+        self.tau = tau
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.agents = []
         self.experience = Experience(capacity)
+        self.env_name = env_name
         for i in range(self.env.agent_count):
             ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
                            self.learning_rate, self.discrete, self.device, self.state_dims,
                            self.action_dims)
             self.agents.append(ag)
 
-        def loss_callback(loss):
-            pass
-            # print("Critic total Loss:{},Actor total Loss:{}".format(loss[0],loss[1]))
+        def loss_callback(agent:MADDPGAgent, loss):
+            self.loss_recoder.append(list(loss))
+            if agent.total_episodes_in_train % self.log_frequent == 0 \
+                    and len(self.loss_recoder) > 0:
+                arr = np.array(self.loss_recoder)
+                print("Critic mean Loss:{},Actor mean Loss:{}"
+                      .format(np.mean(arr[-self.log_frequent:-1, 0]),np.mean(arr[-self.log_frequent:-1, 1])))
         self.loss_callback_ = loss_callback
-        def save_callback(agent:MADDPGAgent,episode_num:int):
+        def save_callback(agent:MADDPGAgent, episode_num:int):
             if episode_num % 1000 == 0:
                 print("save network!......")
                 for i in range(agent.env.agent_count):
-                    agent.save(agent.init_time_str,"Actor{}".format(i), agent.agents[i].actor)
-                    agent.save(agent.init_time_str,"Critic{}".format(i), agent.agents[i].critic)
+                    agent.save(agent.init_time_str + "_" + agent.env_name ,"Actor{}".format(i), agent.agents[i].actor)
+                    agent.save(agent.init_time_str + "_" + agent.env_name ,"Critic{}".format(i), agent.agents[i].critic)
         self.save_callback_ = save_callback
         return
 
@@ -181,9 +192,8 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         :return:
         '''
         # 随机获取记忆里的Transmition
-
-        total_loss_actor = 0.0
         total_loss_critic = 0.0
+        total_loss_actor = 0.0
 
         for i in range(self.env.agent_count):
             trans_pieces = self.experience.sample(self.batch_size)
@@ -211,7 +221,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                 .float().to(self.device)
 
             if self.discrete:
-                a1 = torch.cat([gumbel_softmax(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
+                a1 = torch.cat([onehot_from_logits(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
                                 for j in range(self.env.agent_count)],dim=1)
             else:
                 a1 = torch.cat([self.agents[j].target_actor.forward(s1_temp_in[j]).detach()
@@ -221,7 +231,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             next_val = torch.squeeze(
                 self.agents[i].target_critic.forward(s1_critic_in
                                                      , a1)).detach()
-            # 优化评判家网络参数，优化的目标是评判值与r+gamma*Q'(s1,a)尽量接近
+            # 优化评判家网络参数，优化的目标是使评判值与r + gamma * Q'(s1,a1)尽量接近
             y_expected = r1[:,i] + self.gamma * next_val * torch.tensor(1 - is_done[:,i]).to(self.device)
             y_expected = y_expected.to(self.device)
             y_predicted = torch.squeeze(self.agents[i].critic.forward(s0_critic_in, a0))  # 此时没有使用detach！
@@ -238,7 +248,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             if self.discrete:
                 for j in range(self.env.agent_count):
                     pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
-                                  if i == j else gumbel_softmax(self.agents[j].actor.forward(s0_temp_in[j])).to(self.device))
+                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0_temp_in[j])).to(self.device))
                 pred_a = torch.cat(pred_a,dim=1)
             else:
                 pred_a = torch.cat([self.agents[j].actor.forward(s0_temp_in[j])
@@ -252,13 +262,14 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             torch.nn.utils.clip_grad_norm_(self.agents[i].actor.parameters(), 0.5)
             self.agents[i].actor_optimizer.step()
             total_loss_actor += loss_actor.item()
-
-            if self.total_trans_in_train % 100 == 0:
-                # print("update target_network parameters!")
-                # 软更新参数
-                soft_update(self.agents[i].target_actor, self.agents[i].actor, self.tau)
-                soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
+        self.update_all_targets()
         return (total_loss_critic, total_loss_actor)
+
+    def update_all_targets(self):
+        for agent in self.agents:
+            # 软更新参数
+            soft_update(agent.target_actor, agent.actor, self.tau)
+            soft_update(agent.target_critic, agent.critic, self.tau)
 
     def learning_method(self, epsilon=0.2, explore=True, display=False,
                         wait=False, waitSecond: float = 0.01):
@@ -289,17 +300,18 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         loss_critic /= time_in_episode
         loss_actor /= time_in_episode
 
-        if self.total_episodes_in_train > 0 and self.total_episodes_in_train % 500 == 0:
+        if self.total_episodes_in_train > 0 \
+                and self.total_episodes_in_train % self.log_frequent == 0:
             rewards = []
-            last_episodes = self.experience.last_n_episode(500)
+            last_episodes = self.experience.last_n_episode(self.log_frequent)
             for i in range(self.env.agent_count):
                 rewards.append(np.mean([x.total_reward[i] for x in last_episodes]))
-            print("average rewards in last 500 episodes:{}".format(rewards))
+            print("average rewards in last {} episodes:{}".format(self.log_frequent, rewards))
             print("{}".format(self.experience.__str__()))
             for i, agent in enumerate(self.agents):
                 print("Agent{}:{}".format(i, agent.count))
                 agent.count = [0 for _ in range(agent.action_dim)]
-        return time_in_episode, total_reward , [loss_critic, loss_actor]
+        return time_in_episode, total_reward, [loss_critic, loss_actor]
 
     def play_init(self, savePath, s0):
         import os

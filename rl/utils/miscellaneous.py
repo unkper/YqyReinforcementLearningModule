@@ -19,7 +19,8 @@ def str_key(*args):
 
 def learning_curve(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
                    x_name = "", y_name = "",
-                   y1_legend = "", y2_legend="", saveName = "picture"):
+                   y1_legend = "", y2_legend="", saveName = "picture",
+                   save=True, show=False):
     '''根据统计数据绘制学习曲线，
     Args:
         statistics: 数据元组，每一个元素是一个列表，各列表长度一致 ([], [], [])
@@ -50,5 +51,7 @@ def learning_curve(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
     #plt.grid(True)
     import os
     import datetime
-    plt.savefig(os.path.join("./","curve_{}.png".format(saveName)))
-    plt.show()
+    if save:
+        plt.savefig(os.path.join("./","curve_{}.png".format(saveName)))
+    if show:
+        plt.show()

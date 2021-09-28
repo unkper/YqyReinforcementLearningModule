@@ -188,31 +188,31 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         total_loss_critic = 0.0
         total_loss_actor = 0.0
 
+        trans_pieces = self.experience.sample(self.batch_size)
+
+        s0 = np.array([x.s0 for x in trans_pieces])
+        a0 = np.array([x.a0 for x in trans_pieces])
+        r1 = np.array([x.reward for x in trans_pieces])
+        is_done = np.array([x.is_done for x in trans_pieces])
+        s1 = np.array([x.s1 for x in trans_pieces])
+
+        s0 = [np.stack(s0[:, j], axis=0) for j in range(self.env.agent_count)]
+        s1 = [np.stack(s1[:, j], axis=0) for j in range(self.env.agent_count)]
+
+        s0_temp_in = [flatten_data(s0[j], self.state_dims[j], self.device, ifBatch=True)
+                      for j in range(self.env.agent_count)]
+
+        s1_temp_in = [flatten_data(s1[j], self.state_dims[j], self.device, ifBatch=True)
+                      for j in range(self.env.agent_count)]
+
+        s0_critic_in = torch.cat([s0_temp_in[j] for j in range(self.env.agent_count)], dim=1)
+        s1_critic_in = torch.cat([s1_temp_in[j] for j in range(self.env.agent_count)], dim=1)
+
+        a0 = torch.from_numpy(
+            np.stack([np.concatenate(a0[j, :]) for j in range(a0.shape[0])], axis=0).astype(float)) \
+            .float().to(self.device)
+
         for i in range(self.env.agent_count):
-            trans_pieces = self.experience.sample(self.batch_size)
-
-            s0 = np.array([x.s0 for x in trans_pieces])
-            a0 = np.array([x.a0 for x in trans_pieces])
-            r1 = np.array([x.reward for x in trans_pieces])
-            is_done = np.array([x.is_done for x in trans_pieces])
-            s1 = np.array([x.s1 for x in trans_pieces])
-
-            s0 = [np.stack(s0[:, j], axis=0) for j in range(self.env.agent_count)]
-            s1 = [np.stack(s1[:, j], axis=0) for j in range(self.env.agent_count)]
-
-            s0_temp_in = [flatten_data(s0[j],self.state_dims[j],self.device,ifBatch=True)
-                    for j in range(self.env.agent_count)]
-
-            s1_temp_in = [flatten_data(s1[j],self.state_dims[j],self.device,ifBatch=True)
-                    for j in range(self.env.agent_count)]
-
-            s0_critic_in = torch.cat([s0_temp_in[j] for j in range(self.env.agent_count)],dim=1)
-            s1_critic_in = torch.cat([s1_temp_in[j] for j in range(self.env.agent_count)],dim=1)
-
-            a0 = torch.from_numpy(
-                np.stack([np.concatenate(a0[i,:]) for i in range(a0.shape[0])], axis=0).astype(float))\
-                .float().to(self.device)
-
             if self.discrete:
                 a1 = torch.cat([onehot_from_logits(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
                                 for j in range(self.env.agent_count)],dim=1)

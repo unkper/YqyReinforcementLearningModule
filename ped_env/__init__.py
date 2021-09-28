@@ -4,7 +4,7 @@ import Box2D as b2d
 import pyglet
 
 from ped_env.envs import PedsMoveEnv as Env
-from ped_env.utils.maps import map_03, map_01
+from ped_env.utils.maps import map_02, map_01
 
 
 def HelloWorldProject():
@@ -68,8 +68,8 @@ if __name__ == '__main__':
     import time
     import numpy as np
     # test1()
-    person_num = 8
-    env = Env(map_01, person_num, maxStep=10000)
+    person_num = 16
+    env = Env(map_02, person_num, maxStep=10000)
     # print(obs)
     for epoch in range(100):
         starttime = time.time()
@@ -80,7 +80,7 @@ if __name__ == '__main__':
             action = np.random.random([person_num, 9])
             obs, reward, is_done, info = env.step(action)
             step += 1
-            # env.render()
+            #env.render()
             # print(obs, reward, is_done)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"

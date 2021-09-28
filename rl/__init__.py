@@ -2,13 +2,14 @@ import datetime
 import os
 import sys
 import gym
-import ped_env.envs as my_env
 
 #为了Google colab挂载而加
-from ped_env.utils.maps import map_03, map_01
-
 curPath = os.path.abspath("./" + os.path.curdir)
 sys.path.append(curPath)
+
+import ped_env.envs as my_env
+
+from ped_env.utils.maps import map_02, map_01, map_04
 
 from uuid import uuid1
 from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
@@ -101,10 +102,10 @@ if __name__ == '__main__':
     # for item in envs:
     #     test4(item[0],item[1])
     envName = "PedsMoveEnv"
-    env = my_env.PedsMoveEnv(terrain=map_01, person_num=8, maxStep=1500)
+    env = my_env.PedsMoveEnv(terrain=map_02, person_num=4, maxStep=1500)
     #test4(env, envName)
     test7(env, envName)
-    #test5(env, '2021_09_27_13_30_PedsMoveEnv', episode=10)
+    #test5(env, '2021_09_28_14_24_PedsMoveEnv', episode=10)
 
     # envName = "CartPole-v1"
     # env = gym.make(envName)

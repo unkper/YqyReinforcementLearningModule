@@ -16,7 +16,7 @@ from ped_env.objects import BoxWall, Person, Exit
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
 from ped_env.event_listeners import MyContactListener
 from ped_env.utils.misc import ObjectType
-from ped_env.utils.maps import Map, map_03
+from ped_env.utils.maps import Map
 from ped_env.functions import parse_discrete_action
 from ped_env.utils.viewer import PedsMoveEnvViewer
 

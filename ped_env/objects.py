@@ -104,7 +104,7 @@ class Person(Agent):
             return observation
         observation.append(self.id)
 
-        #依次得到8个方向上的障碍物,在回调函数中体现，每次调用该函数都会给observation数组中添加两个值，分别代表该方向上最近的障碍物有多远（5米代表不存在）
+        #依次得到8个方向上的障碍物,在回调函数中体现，每次调用该函数都会给observation数组中添加值，分别代表该方向上最近的障碍物有多远（5米代表不存在）
         for i in range(8):
             temp = self.raycast(world, self.directions[i], self.view_length)
             observation.append(temp)

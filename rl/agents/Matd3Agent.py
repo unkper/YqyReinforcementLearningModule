@@ -41,6 +41,13 @@ class DDPGAgent:
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  learning_rate)
+        self.other_critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
+            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
+        self.other_target_critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
+            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
+        hard_update(self.other_target_critic, self.other_critic)
+        self.other_critic_optimizer = torch.optim.Adam(self.other_critic.parameters(),
+                                                       learning_rate)
         self.noise = OrnsteinUhlenbeckActionNoise(1 if self.discrete else action_dim)
         self.count = [0 for _ in range(action_dim)]
 
@@ -70,7 +77,7 @@ class DDPGAgent:
         self.count[torch.argmax(action).item()] += 1
         return action
 
-class MADDPGAgent(Agent, SaveNetworkMixin):
+class MATD3Agent(Agent, SaveNetworkMixin):
     loss_recoder = []
 
     def __init__(self, env: Env = None,
@@ -81,6 +88,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                  debug_log_frequent = 500,
                  gamma = 0.95,
                  tau = 0.01,
+                 K = 5,
                  actor_network = None,
                  critic_network = None,
                  hidden_dim = 64,
@@ -104,7 +112,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         '''
         if env is None:
             raise Exception("agent should have an environment!")
-        super(MADDPGAgent, self).__init__(env, capacity, gamma=gamma)
+        super(MATD3Agent, self).__init__(env, capacity, gamma=gamma)
         self.state_dims = []
         for obs in env.observation_space:
             self.state_dims.append(back_specified_dimension(obs))
@@ -123,6 +131,8 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.tau = tau
+        self.train_update_count = 0
+        self.K = K
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.agents = []
         self.experience = Experience(capacity)
@@ -133,7 +143,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                            self.action_dims,actor_network,critic_network,hidden_dim)
             self.agents.append(ag)
 
-        def loss_callback(agent:MADDPGAgent, loss):
+        def loss_callback(agent:MATD3Agent, loss):
             self.loss_recoder.append(list(loss))
             if agent.total_episodes_in_train % self.log_frequent == 0 \
                     and len(self.loss_recoder) > 0:
@@ -141,7 +151,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                 print("Critic mean Loss:{},Actor mean Loss:{}"
                       .format(np.mean(arr[-self.log_frequent:-1, 0]),np.mean(arr[-self.log_frequent:-1, 1])))
         self.loss_callback_ = loss_callback
-        def save_callback(agent:MADDPGAgent, episode_num:int):
+        def save_callback(agent:MATD3Agent, episode_num:int):
             if episode_num % 1000 == 0:
                 print("save network!......")
                 for i in range(agent.env.agent_count):
@@ -222,39 +232,50 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             r1 = torch.tensor(r1).float().to(self.device)
             # detach()的作用是让梯度无法传导到target_critic,因为此时只有critic需要更新！
             next_val = torch.squeeze(
-                self.agents[i].target_critic.forward(s1_critic_in
-                                                     , a1)).detach()
-            # 优化评判家网络参数，优化的目标是使评判值与r + gamma * Q'(s1,a1)尽量接近
-            y_expected = r1[:,i] + self.gamma * next_val * torch.tensor(1 - is_done[:,i]).to(self.device)
-            y_predicted = torch.squeeze(self.agents[i].critic.forward(s0_critic_in, a0))  # 此时没有使用detach！
-            loss_critic = MSELoss(y_predicted, y_expected).to(self.device)
+                self.agents[i].target_critic.forward(s1_critic_in, a1)).detach()
+            next_val_2 = torch.squeeze(
+                self.agents[i].other_target_critic.forward(s1_critic_in, a1)).detach()
+            # 用两个目标价值网络来计算取其中最小者为TD目标
+            true_next_val = torch.min(next_val, next_val_2)
+            # 优化两个评判家网络参数，优化的目标是使评判值与r + gamma * Q'(s1,a1)尽量接近
+            y_expected = r1[:,i] + self.gamma * true_next_val * torch.tensor(1 - is_done[:,i]).to(self.device)
+            y_predicted_1 = torch.squeeze(self.agents[i].critic.forward(s0_critic_in, a0))  # 此时没有使用detach！
+            y_predicted_2 = torch.squeeze(self.agents[i].other_critic.forward(s0_critic_in, a0))
+            loss_critic = MSELoss(y_predicted_1, y_expected) + MSELoss(y_predicted_2, y_expected)
             self.agents[i].critic_optimizer.zero_grad()
+            self.agents[i].other_critic_optimizer.zero_grad()
             loss_critic.backward()
             torch.nn.utils.clip_grad_norm_(self.agents[i].critic.parameters(), 0.5)
+            torch.nn.utils.clip_grad_norm_(self.agents[i].other_critic.parameters(), 0.5)
             self.agents[i].critic_optimizer.step()
+            self.agents[i].other_critic_optimizer.step()
             total_loss_critic += loss_critic.item()
+            # 每隔K轮才对演员网络进行一次更新
+            if self.train_update_count % self.K == 0:
+                # 优化演员网络参数，优化的目标是使得Q增大
+                curr_pol_out = self.agents[i].actor.forward(s0_temp_in[i])
+                pred_a = []
+                if self.discrete:
+                    for j in range(self.env.agent_count):
+                        pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
+                                      if i == j else onehot_from_logits(self.agents[j].actor.forward(s0_temp_in[j])).to(self.device))
+                    pred_a = torch.cat(pred_a,dim=1)
+                else:
+                    pred_a = torch.cat([self.agents[j].actor.forward(s0_temp_in[j])
+                                    for j in range(self.env.agent_count)],dim=1)
+                # 反向梯度下降
+                loss_actor = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
+                loss_actor += (curr_pol_out**2).mean() * 1e-3
 
-            # 优化演员网络参数，优化的目标是使得Q增大
-            curr_pol_out = self.agents[i].actor.forward(s0_temp_in[i])
-            pred_a = []
-            if self.discrete:
-                for j in range(self.env.agent_count):
-                    pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
-                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0_temp_in[j])).to(self.device))
-                pred_a = torch.cat(pred_a,dim=1)
-            else:
-                pred_a = torch.cat([self.agents[j].actor.forward(s0_temp_in[j])
-                                for j in range(self.env.agent_count)],dim=1)
-            # 反向梯度下降
-            loss_actor = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
-            loss_actor += (curr_pol_out**2).mean() * 1e-3
-
-            self.agents[i].actor_optimizer.zero_grad()
-            loss_actor.backward()
-            torch.nn.utils.clip_grad_norm_(self.agents[i].actor.parameters(), 0.5)
-            self.agents[i].actor_optimizer.step()
-            total_loss_actor += loss_actor.item()
-        self.update_all_targets()
+                self.agents[i].actor_optimizer.zero_grad()
+                loss_actor.backward()
+                torch.nn.utils.clip_grad_norm_(self.agents[i].actor.parameters(), 0.5)
+                self.agents[i].actor_optimizer.step()
+                total_loss_actor += loss_actor.item()
+        # 每隔K轮才对目标网络进行一次更新
+        if self.train_update_count % self.K == 0:
+            self.update_all_targets()
+        self.train_update_count += 1
         return (total_loss_critic, total_loss_actor)
 
     def update_all_targets(self):
@@ -262,6 +283,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             # 软更新参数
             soft_update(agent.target_actor, agent.actor, self.tau)
             soft_update(agent.target_critic, agent.critic, self.tau)
+            soft_update(agent.other_target_critic, agent.other_critic, self.tau)
 
     def learning_method(self, epsilon=0.2, explore=True, display=False,
                         wait=False, waitSecond: float = 0.01):

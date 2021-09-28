@@ -1,14 +1,14 @@
 from Box2D import b2ContactListener, b2Contact
-from ped_env.objects import BoxWall, Exit, Person
 from ped_env.utils.misc import ObjectType
 
 class MyContactListener(b2ContactListener):
-    def __init__(self):
+    def __init__(self, world):
         super(MyContactListener, self).__init__()
-        self.collision_count = 0
+        self.world = world
+        self.col_with_agent = 0
+        self.col_with_wall = 0
 
     def BeginContact(self, contact:b2Contact):
-        self.collision_count += 1
         infoA, infoB = contact.fixtureA.userData, contact.fixtureB.userData
         if (infoA.type == ObjectType.Agent and infoB.type == ObjectType.Exit) or (infoA.type == ObjectType.Exit and infoB.type == ObjectType.Agent):
             agent = infoA if infoA.type == ObjectType.Agent else infoB
@@ -18,9 +18,11 @@ class MyContactListener(b2ContactListener):
             agent.model.is_done = True
             # print("One Agent{} has reached exit{}!!!".format(agent.ID, exit.ID))
         elif (infoA.type == ObjectType.Agent and infoB.type == ObjectType.Agent):
+            self.col_with_agent += 1
             infoA.model.collide_with_agent = True
             infoB.model.collide_with_agent = True
         elif (infoA.type == ObjectType.Agent and infoB.type == ObjectType.Wall) or (infoA.type == ObjectType.Wall and infoB.type == ObjectType.Agent):
+            self.col_with_wall += 1
             agent = infoA if infoA.type == ObjectType.Agent else infoB
             agent.model.collide_with_wall = True
 

@@ -22,6 +22,7 @@ from ped_env.utils.viewer import PedsMoveEnvViewer
 
 TICKS_PER_SEC = 60
 vel_iters, pos_iters = 6, 2
+ACTION_DIM = 9
 
 class Model():
     def __init__(self):
@@ -63,6 +64,7 @@ class PedsMoveEnv(Model, gym.Env):
     viewer = None
     peds = []
     render_peds = []
+    peds_exit_time= {}
     def __init__(self,
                  terrain:Map,
                  person_num = 10,
@@ -87,7 +89,7 @@ class PedsMoveEnv(Model, gym.Env):
         #定义观察空间为[智能体id,8个方向的传感器,智能体当前位置(x,y),智能体当前速度(dx,dy)]一共13个值
         self.observation_space = [Box( -inf, inf, (13,)) for _ in range(self.person_num)]
         #定义动作空间为[不动，向左，向右，向上，向下]施加1N的力
-        self.action_space = [Discrete(5) for _ in range(self.person_num)]
+        self.action_space = [Discrete(ACTION_DIM) for _ in range(self.person_num)]
         self.agent_count = person_num
         self.distance_to_exit = []
 
@@ -100,7 +102,7 @@ class PedsMoveEnv(Model, gym.Env):
     def start(self, maps:numpy.ndarray, person_num:List=[30,30], person_create_radius:float = 5):
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.factory = PedsMoveEnvFactory(self.world)
-        self.listener = MyContactListener()
+        self.listener = MyContactListener(self)
         self.world.contactListener = self.listener
 
         self.batch = pyglet.graphics.Batch()
@@ -177,6 +179,7 @@ class PedsMoveEnv(Model, gym.Env):
         BoxWall.counter = 0
         Exit.counter = 0
         self.step_in_env  = 0
+        self.peds_exit_time.clear()
         self.peds.clear()
         self.render_peds.clear()
         self.elements.clear()
@@ -193,7 +196,7 @@ class PedsMoveEnv(Model, gym.Env):
         is_done = [False for _ in range(self.agent_count)]
         obs = []
         if len(actions) != self.person_num: raise Exception("动作向量与智能体数量不匹配!")
-        if len(actions[0]) != 5: raise Exception("动作向量的长度不正确!")
+        if len(actions[0]) != ACTION_DIM: raise Exception("动作向量的长度不正确!")
 
         for i, ped in enumerate(self.peds):
             ped.self_driven_force(parse_discrete_action(actions[i]))

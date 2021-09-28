@@ -68,7 +68,7 @@ if __name__ == '__main__':
     import time
     import numpy as np
     # test1()
-    person_num = 4
+    person_num = 8
     env = Env(map_01, person_num, maxStep=10000)
     # print(obs)
     for epoch in range(100):
@@ -77,11 +77,12 @@ if __name__ == '__main__':
         obs = env.reset()
         is_done = [False]
         while not is_done[0]:
-            action = np.random.random([person_num, 5])
+            action = np.random.random([person_num, 9])
             obs, reward, is_done, info = env.step(action)
             step += 1
             # env.render()
             # print(obs, reward, is_done)
         endtime = time.time()
-        print("智能体碰撞次数为{}!".format(env.listener.collision_count))
+        print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
+              .format(env.listener.col_with_agent, env.listener.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step,endtime - starttime,step/(endtime - starttime)))

@@ -249,3 +249,7 @@ class SaveDictMixin():
         with open(savePath , 'rb') as f:
             return pickle.load(f)
 
+if __name__ == "__main__":
+    noise = OrnsteinUhlenbeckActionNoise(2)
+    for i in range(1000):
+        print(noise.sample())

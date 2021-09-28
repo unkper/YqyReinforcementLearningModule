@@ -38,7 +38,7 @@ class Person(Agent):
                  new_x,
                  new_y,
                  color=ColorRed,
-                 desired_velocity = 2.0,
+                 desired_velocity = 1.0,
                  max_velocity = 1.6,
                  view_length = 5.0):
         '''
@@ -69,10 +69,19 @@ class Person(Agent):
         self.view_length = view_length
         self.desired_velocity = desired_velocity
         self.max_velocity = max_velocity
-        self.damping = 0.1
+        self.damping = 0.2
 
         self.collide_with_wall = False
         self.collide_with_agent = False
+
+        # 通过射线得到8个方向上的其他行人与障碍物
+        identity = b2Vec2(1, 0)
+        self.directions = []
+        for angle in range(0, 360, int(360 / 8)):
+            mat = b2Mat22(cos(angle), -sin(angle),
+                          sin(angle), cos(angle))
+            vec = b2Mul(mat, identity)
+            self.directions.append(vec)
 
     def clamp_velocity(self):
         vec = self.body.linearVelocity
@@ -94,17 +103,10 @@ class Person(Agent):
             observation.extend([0.0, 0.0]) #智能体的速度设置为0
             return observation
         observation.append(self.id)
-        #通过射线得到8个方向上的其他行人与障碍物
-        identity = b2Vec2(1, 0)
-        directions = []
-        for angle in range(0, 360, int(360/8)):
-            mat = b2Mat22(cos(angle), -sin(angle),
-                           sin(angle), cos(angle))
-            vec = b2Mul(mat, identity)
-            directions.append(vec)
+
         #依次得到8个方向上的障碍物,在回调函数中体现，每次调用该函数都会给observation数组中添加两个值，分别代表该方向上最近的障碍物有多远（5米代表不存在）
         for i in range(8):
-            temp = self.raycast(world, directions[i], self.view_length)
+            temp = self.raycast(world, self.directions[i], self.view_length)
             observation.append(temp)
         #给予智能体当前位置
         observation.append(self.getX)

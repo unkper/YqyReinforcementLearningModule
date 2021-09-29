@@ -89,7 +89,7 @@ def test7(useEnv,envName):
                   decaying_epsilon=True,
                   epsilon_high=1.0,
                   epsilon_low=0.05,
-                  max_episode_num=2000,
+                  max_episode_num=5000,
                   explore_episodes_percent=0.6
                  )
     for i in range(agent.env.agent_count):
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     env = my_env.PedsMoveEnv(terrain=map_02, person_num=4, maxStep=1500)
     #test4(env, envName)
     test7(env, envName)
-    #test5(env, '2021_09_28_14_24_PedsMoveEnv', episode=10)
+    # test5(env, '2021_09_28_15_40_PedsMoveEnv', episode=5)
 
     # envName = "CartPole-v1"
     # env = gym.make(envName)

@@ -14,9 +14,10 @@ class MyContactListener(b2ContactListener):
             agent = infoA if infoA.type == ObjectType.Agent else infoB
             exit = infoA if infoA.type == ObjectType.Exit else infoB
             if agent.model.is_done == True:return
-            #将agent的is_done置为true并删除其刚体
-            agent.model.is_done = True
-            # print("One Agent{} has reached exit{}!!!".format(agent.ID, exit.ID))
+            #只有exit_type匹配时，才将agent的is_done置为true并删除其刚体
+            if agent.model.exit_type == exit.model.exit_type:
+                agent.model.is_done = True
+                # print("One Agent{} has reached exit{}!!!".format(agent.ID, exit.ID))
         elif (infoA.type == ObjectType.Agent and infoB.type == ObjectType.Agent):
             self.col_with_agent += 1
             infoA.model.collide_with_agent = True

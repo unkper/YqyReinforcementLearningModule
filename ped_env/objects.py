@@ -3,11 +3,9 @@ import math
 
 from Box2D import *
 from math import sin, cos
-from ped_env.utils.colors import ColorRed
+from ped_env.utils.colors import ColorRed, exit_type_to_color
 from ped_env.functions import transfer_to_render
 from ped_env.utils.misc import FixtureInfo, ObjectType
-
-SCALE = 10
 
 
 class Agent():
@@ -37,6 +35,7 @@ class Person(Agent):
                  env: b2World,
                  new_x,
                  new_y,
+                 exit_type,
                  color=ColorRed,
                  desired_velocity = 1.0,
                  max_velocity = 1.6,
@@ -51,12 +50,13 @@ class Person(Agent):
         '''
         super(Person, self).__init__()
         self.body = env.CreateDynamicBody(position=(new_x, new_y))
+        self.exit_type = exit_type
         self.reward_in_episode = 0.0
         self.is_done = False
         self.has_removed = False
 
         # Add a fixture to it
-        self.color = color
+        self.color = exit_type_to_color(self.exit_type)
         fixtureDef = b2FixtureDef()
         fixtureDef.shape = b2CircleShape(radius=self.radius)
         fixtureDef.density = self.mass / (math.pi * self.radius ** 2)
@@ -89,9 +89,9 @@ class Person(Agent):
             vec.Normalize()
             self.body.linearVelocity = vec * self.max_velocity
 
-    def setup(self, batch, extra_scale=1.0):
+    def setup(self, batch, render_scale):
         x, y = self.body.position.x, self.body.position.y
-        self.pic = pyglet.shapes.Circle(x * SCALE, y * SCALE, self.radius * SCALE * extra_scale, color=self.color, batch=batch)
+        self.pic = pyglet.shapes.Circle(x * render_scale, y * render_scale, self.radius * render_scale, color=self.color, batch=batch)
 
     def get_observation(self, world:b2World):
         observation = []
@@ -190,23 +190,20 @@ class BoxWall():
 
         self.type = ObjectType.Wall
 
-    def setup(self, batch, extra_scale = 1.0):
+    def setup(self, batch, render_scale):
         # pyglet以左下角那个点作为原点
         x, y, width, height = transfer_to_render(self.body.position.x, self.body.position.y, self.width, self.height,
-                                                 SCALE * extra_scale)
+                                                 render_scale)
         self.pic = pyglet.shapes.Rectangle(x, y, width, height, self.color, batch)
 
     def delete(self):
         del(self)
 
-    def __repr__(self):
-        x, y = self.body.position.x, self.body.position.y
-        return "x:{},y:{},height:{},width:{}".format(x, y, self.height * SCALE, self.width * SCALE)
-
 class Exit(BoxWall):
     counter = 0
 
-    def __init__(self, env: b2World, new_x, new_y, width, height, color=ColorRed):
+    def __init__(self, env: b2World, new_x, new_y, exit_type, width, height, color=ColorRed):
+        color = exit_type_to_color(exit_type)
         super(Exit, self).__init__(env, new_x, new_y, width, height, color)
         # And add a box fixture onto it
         fixtrueDef = b2FixtureDef()
@@ -218,3 +215,6 @@ class Exit(BoxWall):
         self.box = self.body.CreateFixture(fixtrueDef)
 
         self.type = ObjectType.Exit
+        self.exit_type = exit_type
+
+

@@ -9,7 +9,7 @@ sys.path.append(curPath)
 
 import ped_env.envs as my_env
 
-from ped_env.utils.maps import map_02, map_01, map_04
+from ped_env.utils.maps import map_05, map_06
 
 from uuid import uuid1
 from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
@@ -83,13 +83,13 @@ def test7(useEnv,envName):
     print(env.observation_space)
     print(env.action_space)
     agent = MATD3Agent(env,capacity=1e6,batch_size=1024,learning_rate=0.01
-                        ,update_frequent=50,debug_log_frequent=100,gamma=0.95,tau=0.01,
-                        env_name=envName)
+                        ,update_frequent=50,debug_log_frequent=100,gamma=0.99,tau=0.01,
+                        env_name=envName)#gamma=0.95
     data = agent.learning(
                   decaying_epsilon=True,
                   epsilon_high=1.0,
                   epsilon_low=0.05,
-                  max_episode_num=5000,
+                  max_episode_num=3000,
                   explore_episodes_percent=0.6
                  )
     for i in range(agent.env.agent_count):
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     # for item in envs:
     #     test4(item[0],item[1])
     envName = "PedsMoveEnv"
-    env = my_env.PedsMoveEnv(terrain=map_02, person_num=4, maxStep=1500)
+    env = my_env.PedsMoveEnv(terrain=map_05, person_num=4, maxStep=3000)
     #test4(env, envName)
     test7(env, envName)
     # test5(env, '2021_09_28_15_40_PedsMoveEnv', episode=5)

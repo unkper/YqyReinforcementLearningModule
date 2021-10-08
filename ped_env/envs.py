@@ -1,6 +1,7 @@
 import copy
 import random
-from math import inf
+from math import inf, sqrt, pow
+from numpy import fliplr, flipud
 
 import gym
 import pyglet
@@ -38,26 +39,26 @@ class PedsMoveEnvFactory():
     def __init__(self, world:b2World):
         self.world = world
 
-    def create_walls(self, start_nodes, width_height, same=True, Color = ColorWall, CreateClass = BoxWall):
-        if same:
+    def create_walls(self, start_nodes, width_height, Color = ColorWall, CreateClass = BoxWall):
+        if CreateClass is Exit:
             return [CreateClass(self.world, start_nodes[i][0],
-                              start_nodes[i][1], width_height[0],
-                              width_height[1], Color) for i in range(len(start_nodes))]
+                                start_nodes[i][1], start_nodes[i][2], width_height[0],
+                                width_height[1], Color) for i in range(len(start_nodes))]
         else:
             return [CreateClass(self.world, start_nodes[i][0],
-                         start_nodes[i][1], width_height[i][0],
-                         width_height[i][1], Color) for i in range(len(start_nodes))]
+                                start_nodes[i][1], width_height[0],
+                                width_height[1], Color) for i in range(len(start_nodes))]
 
-    def create_people(self, start_nodes):
+    def create_people(self, start_nodes, exit_type):
         return [Person(self.world, start_nodes[i][0],
-                            start_nodes[i][1]) for i in range(len(start_nodes))]
+                            start_nodes[i][1],exit_type) for i in range(len(start_nodes))]
 
-    def random_create_persons(self, start_nodes, radius, person_num):
+    def random_create_persons(self, start_nodes, radius, person_num, exit_type):
         start_pos = []
         for i in range(person_num):
             new_x, new_y = start_nodes[0] + radius * random.random(), start_nodes[1] + radius * random.random()
             start_pos.append((new_x, new_y))
-        return self.create_people(start_pos)
+        return self.create_people(start_pos, exit_type)
 
 
 class PedsMoveEnv(Model, gym.Env):
@@ -99,7 +100,7 @@ class PedsMoveEnv(Model, gym.Env):
         self.r_collision = r_collision
         # self.r_smooth = r_smooth
 
-    def start(self, maps:numpy.ndarray, person_num:List=[30,30], person_create_radius:float = 5):
+    def start(self, maps:numpy.ndarray, person_num_sum:int=60, person_create_radius:float = 5):
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.factory = PedsMoveEnvFactory(self.world)
         self.listener = MyContactListener(self)
@@ -110,22 +111,26 @@ class PedsMoveEnv(Model, gym.Env):
         start_nodes_obs = []
         start_nodes_wall = []
         start_nodes_exit = []
+        #对地图进行翻转操作
+        maps = flipud(maps)
+
         for i in range(maps.shape[0]):
             for j in range(maps.shape[1]):
                 if maps[j, i] == 1:
-                    start_nodes_obs.append((i+0.5,j+0.5))
+                    start_nodes_obs.append((i + 0.5, j + 0.5))
                 elif maps[j, i] == 2:
-                    start_nodes_wall.append((i+0.5,j+0.5))
-                elif maps[j, i] == 3:
-                    start_nodes_exit.append((i+0.5,j+0.5))
+                    start_nodes_wall.append((i + 0.5, j + 0.5))
+                elif maps[j, i] <= 9 and maps[j, i] >= 3:
+                    start_nodes_exit.append((i + 0.5, j + 0.5, maps[j, i]))
         obstacles = self.factory.create_walls(start_nodes_obs, (1, 1), Color=ColorBlue)
         exits = self.factory.create_walls(start_nodes_exit, (1, 1), Color=ColorRed, CreateClass=Exit)# 创建出口
         walls = self.factory.create_walls(start_nodes_wall, (1, 1))# 建造围墙
         # 随机初始化行人点
         self.peds = []
+        person_num = [person_num_sum // len(self.terrain.start_points) for _ in range(len(self.terrain.start_points))]
         for i,num in enumerate(person_num):
             self.peds.extend(self.factory.random_create_persons(self.terrain.start_points[i],
-                                person_create_radius, num))
+                                person_create_radius, num, i + 3)) #因为出口从3开始编号，依次给行人赋予出口编号值
         self.left_person_num = sum(person_num)
         self.render_peds = copy.copy(self.peds)
         self.elements = exits + obstacles + walls + self.render_peds
@@ -135,7 +140,7 @@ class PedsMoveEnv(Model, gym.Env):
 
     def setup_graphics(self):
         for ele in self.elements:
-            ele.setup(self.batch)
+            ele.setup(self.batch, self.terrain.get_render_scale())
 
     def delete_person(self, per: Person):
         self.world.DestroyBody(per.body)
@@ -157,17 +162,23 @@ class PedsMoveEnv(Model, gym.Env):
 
     def get_peds_distance_to_exit(self):
         for ped in self.peds:
-            min_dis = self.get_nearest_exit_dis((ped.getX, ped.getY))
-            self.distance_to_exit.append(min_dis)
+            #min_dis = self.get_nearest_exit_dis((ped.getX, ped.getY))
+            dis = self.get_exit_dis((ped.getX, ped.getY), ped.exit_type)
+            self.distance_to_exit.append(dis)
 
     def get_nearest_exit_dis(self, person_pos):
         x, y = person_pos
         min = 100
         for exit_point in self.terrain.exits:
             ex, ey = exit_point
-            dis = ((ex - x)**2 + (ey - y)**2)**0.5
+            dis = sqrt(pow(ex - x,2)+pow(ey - y,2))
             min = dis if min > dis else min
         return min
+
+    def get_exit_dis(self, person_pos, exit_type):
+        ex, ey = self.terrain.exits[exit_type - 3] #从3开始编号
+        x, y = person_pos
+        return sqrt(pow(ex - x,2)+pow(ey - y,2))
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -183,9 +194,9 @@ class PedsMoveEnv(Model, gym.Env):
         self.peds.clear()
         self.render_peds.clear()
         self.elements.clear()
-        self.start(self.terrain.map, person_num=[self.person_num//2, self.person_num//2]
+        self.start(self.terrain.map, person_num_sum=self.person_num
                    ,person_create_radius = self.terrain.create_radius)
-
+        #添加初始观察状态
         init_obs = []
         for per in self.peds:
             init_obs.append(per.get_observation(self.world))
@@ -195,7 +206,7 @@ class PedsMoveEnv(Model, gym.Env):
         rewards = []
         is_done = [False for _ in range(self.agent_count)]
         obs = []
-        if len(actions) != self.person_num: raise Exception("动作向量与智能体数量不匹配!")
+        if len(actions) != self.agent_count: raise Exception("动作向量与智能体数量不匹配!")
         if len(actions[0]) != ACTION_DIM: raise Exception("动作向量的长度不正确!")
 
         for i, ped in enumerate(self.peds):
@@ -206,14 +217,13 @@ class PedsMoveEnv(Model, gym.Env):
             # update box2d physical world
             self.world.Step(1 / TICKS_PER_SEC, vel_iters, pos_iters)
 
-        # 检查是否有行人到达出口要进行移除
+        # 检查是否有行人到达出口要进行移除，该环境中智能体是合作关系，因此使用统一奖励为好
+
         for i, per in enumerate(self.peds):
             reward = 0.0
             obs.append(per.get_observation(self.world))
-
             if per.collide_with_wall or per.collide_with_agent:  # 如果智能体与墙或者其他智能体相撞，奖励减一
                 reward += self.r_collision
-
             if per.is_done and not per.has_removed:
                 reward += self.r_arrival  # 智能体到达出口获得10的奖励
                 self.delete_person(per)
@@ -221,13 +231,14 @@ class PedsMoveEnv(Model, gym.Env):
                 pass
             else:
                 last_dis = self.distance_to_exit[i]
-                now_dis = self.get_nearest_exit_dis((per.getX, per.getY))
+                now_dis = self.get_exit_dis((per.getX, per.getY), per.exit_type)
                 if last_dis != now_dis:
                     reward += self.r_approach * (last_dis - now_dis)  # 给予(之前离出口距离-目前离出口距离)的差值
                     self.distance_to_exit[i] = now_dis
                 else:
                     reward += self.r_collision  # 给予停止不动的行人以碰撞惩罚
             rewards.append(reward)
+        #rewards.extend(reward for _ in range(self.agent_count))
 
         if self.left_person_num == 0:
             is_done = [True for _ in range(self.agent_count)]

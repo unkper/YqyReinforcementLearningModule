@@ -54,18 +54,17 @@ class DDPGAgent:
         Outputs:
             action (Pytorch Variable): Actions for this agent
         """
-        action = self.actor(obs)
-        if self.discrete:
-            action = torch.unsqueeze(action, dim=0)
-            if explore:
-                #  action = gumbel_softmax(action, hard=True)
-                action = onehot_from_int(random.randint(0, self.action_dim - 1), self.action_dim) #利用随机策略进行采样
-            else:
-                action = onehot_from_logits(action)
+        if explore and self.discrete:
+            action = onehot_from_int(random.randint(0, self.action_dim - 1), self.action_dim)  # 利用随机策略进行采样
+        elif explore and not self.discrete:
+            action = torch.Tensor(self.noise.sample()).to(self.device)
+            action = action.clamp(-1, 1)
+        elif not explore and self.discrete:
+            action = torch.unsqueeze(self.actor(obs), dim=0)
+            action = onehot_from_logits(action)
             action = torch.squeeze(action).to(self.device)
         else:
-            if explore:
-                action = torch.Tensor(self.noise.sample()).to(self.device)
+            action = self.actor(obs)
             action = action.clamp(-1, 1)
         self.count[torch.argmax(action).item()] += 1
         return action

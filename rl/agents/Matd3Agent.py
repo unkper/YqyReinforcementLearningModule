@@ -5,10 +5,8 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-from torch.autograd import Variable
 from gym import Env
 from gym.spaces import Discrete
-from torch import nn
 
 from rl.agents.Agent import Agent
 from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
@@ -28,23 +26,23 @@ class DDPGAgent:
         self.discrete = discrete
         self.device = device
         self.actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network == None else actor_network(state_dim, action_dim, hidden_dim)
+            if actor_network == None else actor_network(state_dim, action_dim, discrete, hidden_dim).to(self.device)
         self.target_actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network == None else actor_network(state_dim, action_dim, hidden_dim)
+            if actor_network == None else actor_network(state_dim, action_dim, discrete, hidden_dim).to(self.device)
         hard_update(self.target_actor, self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 learning_rate)
         self.critic = MADDPG_Critic(state_dims,action_dims).to(self.device)\
-            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
+            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
         self.target_critic = MADDPG_Critic(state_dims,action_dims).to(self.device)\
-            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
+            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  learning_rate)
         self.other_critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
-            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
+            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
         self.other_target_critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
-            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
+            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
         hard_update(self.other_target_critic, self.other_critic)
         self.other_critic_optimizer = torch.optim.Adam(self.other_critic.parameters(),
                                                        learning_rate)
@@ -67,11 +65,11 @@ class DDPGAgent:
             action = torch.Tensor(self.noise.sample()).to(self.device)
             action = action.clamp(-1, 1)
         elif not explore and self.discrete:
-            action = torch.unsqueeze(self.actor(obs), dim=0)
+            action = self.actor(torch.unsqueeze(obs, dim=0)) #统一以一批次的形式进行输入
             action = onehot_from_logits(action)
             action = torch.squeeze(action).to(self.device)
         else:
-            action = self.actor(obs)
+            action = self.actor(torch.unsqueeze(obs, dim=0))
             action = action.clamp(-1, 1)
         self.count[torch.argmax(action).item()] += 1
         return action
@@ -139,7 +137,7 @@ class MATD3Agent(Agent, SaveNetworkMixin):
         for i in range(self.env.agent_count):
             ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
                            self.learning_rate, self.discrete, self.device, self.state_dims,
-                           self.action_dims,actor_network,critic_network,hidden_dim)
+                           self.action_dims,actor_network,critic_network)
             self.agents.append(ag)
 
         def loss_callback(agent:MATD3Agent, loss):
@@ -151,7 +149,7 @@ class MATD3Agent(Agent, SaveNetworkMixin):
                       .format(np.mean(arr[-self.log_frequent:-1, 0]),np.mean(arr[-self.log_frequent:-1, 1])))
         self.loss_callback_ = loss_callback
         def save_callback(agent:MATD3Agent, episode_num:int):
-            if episode_num % 1000 == 0:
+            if episode_num % 500 == 0:
                 print("save network!......")
                 for i in range(agent.env.agent_count):
                     agent.save(agent.init_time_str + "_" + agent.env_name ,"Actor{}".format(i), agent.agents[i].actor)

@@ -14,30 +14,32 @@ from rl.agents.Agent import Agent
 from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience
-from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, onehot_from_int
+from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
+    onehot_from_int
 
 MSELoss = torch.nn.MSELoss()
+
 
 class DDPGAgent:
     def __init__(self, state_dim, action_dim,
                  learning_rate, discrete,
                  device, state_dims, action_dims,
-                 actor_network = None, critic_network = None, hidden_dim=64):
+                 actor_network=None, critic_network=None, hidden_dim=64):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
         self.device = device
         self.actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network == None else actor_network(state_dim, action_dim, hidden_dim)
+            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim)
         self.target_actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network == None else actor_network(state_dim, action_dim, hidden_dim)
+            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim)
         hard_update(self.target_actor, self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 learning_rate)
-        self.critic = MADDPG_Critic(state_dims,action_dims).to(self.device)\
-            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
-        self.target_critic = MADDPG_Critic(state_dims,action_dims).to(self.device)\
-            if critic_network == None else critic_network(state_dim, action_dim, hidden_dim)
+        self.critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
+            if critic_network is None else critic_network(state_dim, action_dim, hidden_dim)
+        self.target_critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
+            if critic_network is None else critic_network(state_dim, action_dim, hidden_dim)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  learning_rate)
@@ -60,14 +62,15 @@ class DDPGAgent:
             action = torch.Tensor(self.noise.sample()).to(self.device)
             action = action.clamp(-1, 1)
         elif not explore and self.discrete:
-            action = torch.unsqueeze(self.actor(obs), dim=0)
+            action = self.actor(torch.unsqueeze(obs, dim=0))  # 统一以一批次的形式进行输入
             action = onehot_from_logits(action)
             action = torch.squeeze(action).to(self.device)
         else:
-            action = self.actor(obs)
+            action = self.actor(torch.unsqueeze(obs, dim=0))
             action = action.clamp(-1, 1)
         self.count[torch.argmax(action).item()] += 1
         return action
+
 
 class MADDPGAgent(Agent, SaveNetworkMixin):
     loss_recoder = []
@@ -76,14 +79,14 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                  capacity=2e6,
                  batch_size=128,
                  learning_rate=0.001,
-                 update_frequent = 50,
-                 debug_log_frequent = 500,
-                 gamma = 0.95,
-                 tau = 0.01,
-                 actor_network = None,
-                 critic_network = None,
-                 hidden_dim = 64,
-                 env_name = "training_env"
+                 update_frequent=50,
+                 debug_log_frequent=500,
+                 gamma=0.95,
+                 tau=0.01,
+                 actor_network=None,
+                 critic_network=None,
+                 hidden_dim=64,
+                 env_name="training_env"
                  ):
         '''
         环境的输入有以下几点变化，设此时有N个智能体：
@@ -129,23 +132,26 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         for i in range(self.env.agent_count):
             ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
                            self.learning_rate, self.discrete, self.device, self.state_dims,
-                           self.action_dims,actor_network,critic_network,hidden_dim)
+                           self.action_dims, actor_network, critic_network, hidden_dim)
             self.agents.append(ag)
 
-        def loss_callback(agent:MADDPGAgent, loss):
+        def loss_callback(agent: MADDPGAgent, loss):
             self.loss_recoder.append(list(loss))
             if agent.total_episodes_in_train % self.log_frequent == 0 \
                     and len(self.loss_recoder) > 0:
                 arr = np.array(self.loss_recoder)
                 print("Critic mean Loss:{},Actor mean Loss:{}"
-                      .format(np.mean(arr[-self.log_frequent:-1, 0]),np.mean(arr[-self.log_frequent:-1, 1])))
+                      .format(np.mean(arr[-self.log_frequent:-1, 0]), np.mean(arr[-self.log_frequent:-1, 1])))
+
         self.loss_callback_ = loss_callback
-        def save_callback(agent:MADDPGAgent, episode_num:int):
-            if episode_num % 1000 == 0:
+
+        def save_callback(agent: MADDPGAgent, episode_num: int):
+            if episode_num % 500 == 0:
                 print("save network!......")
                 for i in range(agent.env.agent_count):
-                    agent.save(agent.init_time_str + "_" + agent.env_name ,"Actor{}".format(i), agent.agents[i].actor)
-                    agent.save(agent.init_time_str + "_" + agent.env_name ,"Critic{}".format(i), agent.agents[i].critic)
+                    agent.save(agent.init_time_str + "_" + agent.env_name, "Actor{}".format(i), agent.agents[i].actor)
+                    agent.save(agent.init_time_str + "_" + agent.env_name, "Critic{}".format(i), agent.agents[i].critic)
+
         self.save_callback_ = save_callback
         return
 
@@ -160,12 +166,13 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             s = flatten_data(state[i], self.state_dims[i], self.device)
             action = self.agents[i].step(s, False).detach().cpu().numpy()
             action_list.append(action)
-        action_list = np.array(action_list,dtype=object)
+        action_list = np.array(action_list, dtype=object)
         return action_list
 
     def get_exploration_action(self, state, epsilon=0.1):
         '''
         得到给定状态下根据演员网络计算出的带噪声的行为，模拟一定的探索
+        :param epsilon:
         :param state: numpy数组
         :return: action numpy数组
         '''
@@ -175,7 +182,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             s = flatten_data(state[i], self.state_dims[i], self.device)
             action = self.agents[i].step(s, True if value < epsilon else False).detach().cpu().numpy()
             action_list.append(action)
-        action_list = np.array(action_list,dtype=object)
+        action_list = np.array(action_list, dtype=object)
         return action_list
 
     def _learn_from_memory(self):
@@ -213,18 +220,19 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
 
         for i in range(self.env.agent_count):
             if self.discrete:
-                a1 = torch.cat([onehot_from_logits(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
-                                for j in range(self.env.agent_count)],dim=1)
+                a1 = torch.cat(
+                    [onehot_from_logits(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
+                     for j in range(self.env.agent_count)], dim=1)
             else:
                 a1 = torch.cat([self.agents[j].target_actor.forward(s1_temp_in[j]).detach()
-                                for j in range(self.env.agent_count)],dim=1)
+                                for j in range(self.env.agent_count)], dim=1)
             r1 = torch.tensor(r1).float().to(self.device)
             # detach()的作用是让梯度无法传导到target_critic,因为此时只有critic需要更新！
             next_val = torch.squeeze(
                 self.agents[i].target_critic.forward(s1_critic_in
                                                      , a1)).detach()
             # 优化评判家网络参数，优化的目标是使评判值与r + gamma * Q'(s1,a1)尽量接近
-            y_expected = r1[:,i] + self.gamma * next_val * torch.tensor(1 - is_done[:,i]).to(self.device)
+            y_expected = r1[:, i] + self.gamma * next_val * torch.tensor(1 - is_done[:, i]).to(self.device)
             y_predicted = torch.squeeze(self.agents[i].critic.forward(s0_critic_in, a0))  # 此时没有使用detach！
             loss_critic = MSELoss(y_predicted, y_expected).to(self.device)
             self.agents[i].critic_optimizer.zero_grad()
@@ -239,14 +247,15 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
             if self.discrete:
                 for j in range(self.env.agent_count):
                     pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
-                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0_temp_in[j])).to(self.device))
-                pred_a = torch.cat(pred_a,dim=1)
+                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0_temp_in[j])).to(
+                        self.device))
+                pred_a = torch.cat(pred_a, dim=1)
             else:
                 pred_a = torch.cat([self.agents[j].actor.forward(s0_temp_in[j])
-                                for j in range(self.env.agent_count)],dim=1)
+                                    for j in range(self.env.agent_count)], dim=1)
             # 反向梯度下降
             loss_actor = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
-            loss_actor += (curr_pol_out**2).mean() * 1e-3
+            loss_actor += (curr_pol_out ** 2).mean() * 1e-3
 
             self.agents[i].actor_optimizer.zero_grad()
             loss_actor.backward()
@@ -269,7 +278,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         is_done = [False]
         loss_critic, loss_actor = 0.0, 0.0
         s0 = self.state
-        #is_done此时已经为数组
+        # is_done此时已经为数组
         while not is_done[0]:
             if explore:
                 a0 = self.get_exploration_action(s0, epsilon)

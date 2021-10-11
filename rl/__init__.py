@@ -9,7 +9,7 @@ sys.path.append(curPath)
 
 import ped_env.envs as my_env
 
-from ped_env.utils.maps import map_05, map_06
+from ped_env.utils.maps import map_05, map_06, map_02
 
 from uuid import uuid1
 from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
@@ -26,16 +26,9 @@ from rl.agents.QAgents import Deep_DYNA_QAgent as DDQAgent
 from rl.agents.PDAgents import DDPGAgent
 from rl.agents.MaddpgAgent import MADDPGAgent
 from rl.agents.Matd3Agent import MATD3Agent
+from rl.utils.networks.maddpg_network import MaddpgLstmActor, MaddpgLstmCritic
 from rl.utils.miscellaneous import learning_curve
 from rl.utils.classes import OrnsteinUhlenbeckActionNoise
-
-def test3():
-    env = Continous_PuckWorldEnv()
-    print(env.observation_space)
-    print(env.action_space)
-    agent = DDPGAgent(env)
-    save_path = "../data/models/2021_08_04_05_30/PuckWorldEnv_Actor.pkl"
-    agent.play(save_path,episode=20)
 
 def test4(useEnv,envName):
     env = useEnv
@@ -57,9 +50,13 @@ def test4(useEnv,envName):
     learning_curve(data, 2, 1, title="MADDPGAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
 
-def test5(useEnv,fileName,episode=3,AgentType=MADDPGAgent):
+def test5(useEnv,fileName,episode=3, AgentType=MADDPGAgent,
+          actor_network=None, critic_network=None, hidden_dim=64):
     env = useEnv
-    agent = AgentType(env)
+    if not actor_network and not critic_network:
+        agent = AgentType(env)
+    else:
+        agent = AgentType(env,actor_network=actor_network,critic_network=critic_network,hidden_dim=hidden_dim)
     agent.play(os.path.join("../data/models/",fileName),episode=episode,waitSecond=0.05)
 
 def test6(env, envName, type=0):
@@ -77,14 +74,15 @@ def test6(env, envName, type=0):
         data.append(agent.loss_data)
         learning_curve(data,title="loss data",x_name="episodes", y_name="loss value")
 
-def test7(useEnv,envName):
+def test7(useEnv,envName,actor_network=None,critic_network=None,hidden_dim=64):
     env = useEnv
     id = uuid1()
     print(env.observation_space)
     print(env.action_space)
     agent = MATD3Agent(env,capacity=1e6,batch_size=1024,learning_rate=0.01
                         ,update_frequent=50,debug_log_frequent=100,gamma=0.99,tau=0.01,
-                        env_name=envName)#gamma=0.95
+                        env_name=envName,actor_network=actor_network,
+                        critic_network=critic_network,hidden_dim=hidden_dim)#gamma=0.95
     data = agent.learning(
                   decaying_epsilon=True,
                   epsilon_high=1.0,
@@ -102,31 +100,10 @@ if __name__ == '__main__':
     # for item in envs:
     #     test4(item[0],item[1])
     envName = "PedsMoveEnv"
-    env = my_env.PedsMoveEnv(terrain=map_05, person_num=4, maxStep=3000)
-    #test4(env, envName)
-    test7(env, envName)
-    # test5(env, '2021_09_28_15_40_PedsMoveEnv', episode=5)
-
-    # envName = "CartPole-v1"
-    # env = gym.make(envName)
-    # operation = input()
-    # if operation == "1":
-    #     test6(env, envName)
-    # elif operation == "0":
-    #     test5(env,"2021_09_22_15_55_CartPole-v1", episode=5, AgentType=DDQAgent)
-    # elif operation == "2" or operation == "4":
-    #     envName = "PedsMoveEnv"
-    #     env = my_env.PedsMoveEnv(person_num=4, maxStep=3000)
-    #     # envName = "SimpleSpread"
-    #     # env = SimpleSpread(maxStep=50)
-    #     if operation == "2":
-    #         test4(env, envName)
-    #     else:
-    #         test5(env, '2021_09_26_18_30_PedsMoveEnv')
-    # elif operation == "3":
-    #     envName = "SimpleSpread"
-    #     env = SimpleSpread()
-    #     test4(env, envName)
-    # else:
-    #     test6(env, envName, 1)
+    env = my_env.PedsMoveEnv(terrain=map_05, person_num=8, maxStep=6000)
+    # test4(env, envName)
+    # test7(env, envName)
+    # test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
+    # test5(env, '2021_10_08_17_41_PedsMoveEnv', episode=5)
+    test5(env, "2021_10_09_02_23_PedsMoveEnv", episode=10, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
 

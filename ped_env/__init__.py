@@ -4,33 +4,34 @@ import Box2D as b2d
 import pyglet
 
 from ped_env.envs import PedsMoveEnv as Env
-from ped_env.utils.maps import map_01,map_02,map_03,map_04,map_05,map_06
+from ped_env.utils.maps import map_05, map_06, map_07
 
 
 def HelloWorldProject():
     world = b2d.b2World()
     ground_body = world.CreateStaticBody(
-        position=(0,-10),
-        shapes=b2d.b2PolygonShape(box=(50,10)),
+        position=(0, -10),
+        shapes=b2d.b2PolygonShape(box=(50, 10)),
     )
-    body = world.CreateDynamicBody(position=(0,4))
+    body = world.CreateDynamicBody(position=(0, 4))
 
-    box = body.CreatePolygonFixture(box=(1,1),
+    box = body.CreatePolygonFixture(box=(1, 1),
                                     density=1,
                                     friction=0.3)
-    timeStep = 1.0 / 60 #时间步长，1/60秒
+    timeStep = 1.0 / 60  # 时间步长，1/60秒
     vel_iters, pos_iters = 6, 2
-    for i in range(600):#一共向前模拟60步，即总经过1秒
+    for i in range(600):  # 一共向前模拟60步，即总经过1秒
         world.Step(timeStep, vel_iters, pos_iters)
 
-        #清楚所有施加上的力，每次循环都是必须的
+        # 清楚所有施加上的力，每次循环都是必须的
         world.ClearForces()
 
-        #打印输出物体的位置和角度
+        # 打印输出物体的位置和角度
         print("Body Pos:{},Angle:{}".format(
             body.position,
             body.angle
         ))
+
 
 def test1():
     import pyglet
@@ -63,13 +64,15 @@ def test1():
     finally:
         window.close()
 
-#Hello World Project
+
+# Hello World Project
 if __name__ == '__main__':
     import time
     import numpy as np
+
     # test1()
     person_num = 8
-    env = Env(map_05, person_num, maxStep=10000)
+    env = Env(map_07, person_num, maxStep=10000)
     # print(obs)
     for epoch in range(100):
         starttime = time.time()
@@ -85,4 +88,4 @@ if __name__ == '__main__':
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.listener.col_with_agent, env.listener.col_with_wall))
-        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step,endtime - starttime,step/(endtime - starttime)))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))

@@ -25,7 +25,8 @@ TICKS_PER_SEC = 60
 vel_iters, pos_iters = 6, 2
 ACTION_DIM = 9
 
-class Model():
+
+class Model:
     def __init__(self):
         self.world = None
 
@@ -35,11 +36,12 @@ class Model():
     def pop_person_from_renderlist(self, person_id):
         raise NotImplemented
 
+
 class PedsMoveEnvFactory():
-    def __init__(self, world:b2World):
+    def __init__(self, world: b2World):
         self.world = world
 
-    def create_walls(self, start_nodes, width_height, Color = ColorWall, CreateClass = BoxWall):
+    def create_walls(self, start_nodes, width_height, Color=ColorWall, CreateClass=BoxWall):
         if CreateClass is Exit:
             return [CreateClass(self.world, start_nodes[i][0],
                                 start_nodes[i][1], start_nodes[i][2], width_height[0],
@@ -51,7 +53,7 @@ class PedsMoveEnvFactory():
 
     def create_people(self, start_nodes, exit_type):
         return [Person(self.world, start_nodes[i][0],
-                            start_nodes[i][1],exit_type) for i in range(len(start_nodes))]
+                       start_nodes[i][1], exit_type) for i in range(len(start_nodes))]
 
     def random_create_persons(self, start_nodes, radius, person_num, exit_type):
         start_pos = []
@@ -65,16 +67,17 @@ class PedsMoveEnv(Model, gym.Env):
     viewer = None
     peds = []
     render_peds = []
-    peds_exit_time= {}
+    peds_exit_time = {}
+
     def __init__(self,
-                 terrain:Map,
-                 person_num = 10,
-                 discrete = True,
-                 update_frequent = 30,
-                 maxStep = 3000,
-                 r_arrival = 15,
-                 r_approaching = 2.5,
-                 r_collision = -7.5):
+                 terrain: Map,
+                 person_num=10,
+                 discrete=True,
+                 update_frequent=30,
+                 maxStep=3000,
+                 r_arrival=15,
+                 r_approaching=2.5,
+                 r_collision=-7.5):
         super(PedsMoveEnv, self).__init__()
 
         self.left_person_num = 0
@@ -86,10 +89,10 @@ class PedsMoveEnv(Model, gym.Env):
         self.discrete = discrete
         self.maxStep = maxStep
 
-        #强化学习MDP定义区域
-        #定义观察空间为[智能体id,8个方向的传感器,智能体当前位置(x,y),智能体当前速度(dx,dy)]一共13个值
-        self.observation_space = [Box( -inf, inf, (13,)) for _ in range(self.person_num)]
-        #定义动作空间为[不动，向左，向右，向上，向下]施加1N的力
+        # 强化学习MDP定义区域
+        # 定义观察空间为[智能体id,8个方向的传感器,智能体当前位置(x,y),智能体当前速度(dx,dy)]一共13个值
+        self.observation_space = [Box(-inf, inf, (13,)) for _ in range(self.person_num)]
+        # 定义动作空间为[不动，向左，向右，向上，向下]施加1N的力
         self.action_space = [Discrete(ACTION_DIM) for _ in range(self.person_num)]
         self.agent_count = person_num
         self.distance_to_exit = []
@@ -100,7 +103,7 @@ class PedsMoveEnv(Model, gym.Env):
         self.r_collision = r_collision
         # self.r_smooth = r_smooth
 
-    def start(self, maps:numpy.ndarray, person_num_sum:int=60, person_create_radius:float = 5):
+    def start(self, maps: numpy.ndarray, person_num_sum: int = 60, person_create_radius: float = 5):
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.factory = PedsMoveEnvFactory(self.world)
         self.listener = MyContactListener(self)
@@ -111,8 +114,6 @@ class PedsMoveEnv(Model, gym.Env):
         start_nodes_obs = []
         start_nodes_wall = []
         start_nodes_exit = []
-        #对地图进行翻转操作
-        maps = flipud(maps)
 
         for i in range(maps.shape[0]):
             for j in range(maps.shape[1]):
@@ -120,21 +121,22 @@ class PedsMoveEnv(Model, gym.Env):
                     start_nodes_obs.append((i + 0.5, j + 0.5))
                 elif maps[j, i] == 2:
                     start_nodes_wall.append((i + 0.5, j + 0.5))
-                elif maps[j, i] <= 9 and maps[j, i] >= 3:
+                elif 9 >= maps[j, i] >= 3:
                     start_nodes_exit.append((i + 0.5, j + 0.5, maps[j, i]))
         obstacles = self.factory.create_walls(start_nodes_obs, (1, 1), Color=ColorBlue)
-        exits = self.factory.create_walls(start_nodes_exit, (1, 1), Color=ColorRed, CreateClass=Exit)# 创建出口
-        walls = self.factory.create_walls(start_nodes_wall, (1, 1))# 建造围墙
+        exits = self.factory.create_walls(start_nodes_exit, (1, 1), Color=ColorRed, CreateClass=Exit)  # 创建出口
+        walls = self.factory.create_walls(start_nodes_wall, (1, 1))  # 建造围墙
         # 随机初始化行人点
         self.peds = []
         person_num = [person_num_sum // len(self.terrain.start_points) for _ in range(len(self.terrain.start_points))]
-        for i,num in enumerate(person_num):
+        for i, num in enumerate(person_num):
             self.peds.extend(self.factory.random_create_persons(self.terrain.start_points[i],
-                                person_create_radius, num, i + 3)) #因为出口从3开始编号，依次给行人赋予出口编号值
+                                                                person_create_radius, num,
+                                                                i + 3))  # 因为出口从3开始编号，依次给行人赋予出口编号值
         self.left_person_num = sum(person_num)
         self.render_peds = copy.copy(self.peds)
         self.elements = exits + obstacles + walls + self.render_peds
-        #得到一开始各个智能体距离出口的距离
+        # 得到一开始各个智能体距离出口的距离
         self.distance_to_exit.clear()
         self.get_peds_distance_to_exit()
 
@@ -149,11 +151,11 @@ class PedsMoveEnv(Model, gym.Env):
         self.left_person_num -= 1
 
     def pop_person_from_renderlist(self, person_id):
-        '''
+        """
         将行人从渲染队列中移除
         :param person_id:
         :return:
-        '''
+        """
         for idx, per in enumerate(self.elements):
             if per.type == ObjectType.Agent and per.id == person_id:
                 self.elements.pop(idx)
@@ -162,7 +164,7 @@ class PedsMoveEnv(Model, gym.Env):
 
     def get_peds_distance_to_exit(self):
         for ped in self.peds:
-            #min_dis = self.get_nearest_exit_dis((ped.getX, ped.getY))
+            # min_dis = self.get_nearest_exit_dis((ped.getX, ped.getY))
             dis = self.get_exit_dis((ped.getX, ped.getY), ped.exit_type)
             self.distance_to_exit.append(dis)
 
@@ -171,32 +173,32 @@ class PedsMoveEnv(Model, gym.Env):
         min = 100
         for exit_point in self.terrain.exits:
             ex, ey = exit_point
-            dis = sqrt(pow(ex - x,2)+pow(ey - y,2))
+            dis = sqrt(pow(ex - x, 2) + pow(ey - y, 2))
             min = dis if min > dis else min
         return min
 
     def get_exit_dis(self, person_pos, exit_type):
-        ex, ey = self.terrain.exits[exit_type - 3] #从3开始编号
+        ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
         x, y = person_pos
-        return sqrt(pow(ex - x,2)+pow(ey - y,2))
+        return sqrt(pow(ex - x, 2) + pow(ey - y, 2))
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
     def reset(self):
-        #reset ped_env
+        # reset ped_env
         Person.counter = 0
         BoxWall.counter = 0
         Exit.counter = 0
-        self.step_in_env  = 0
+        self.step_in_env = 0
         self.peds_exit_time.clear()
         self.peds.clear()
         self.render_peds.clear()
         self.elements.clear()
         self.start(self.terrain.map, person_num_sum=self.person_num
-                   ,person_create_radius = self.terrain.create_radius)
-        #添加初始观察状态
+                   , person_create_radius=self.terrain.create_radius)
+        # 添加初始观察状态
         init_obs = []
         for per in self.peds:
             init_obs.append(per.get_observation(self.world))
@@ -238,7 +240,7 @@ class PedsMoveEnv(Model, gym.Env):
                 else:
                     reward += self.r_collision  # 给予停止不动的行人以碰撞惩罚
             rewards.append(reward)
-        #rewards.extend(reward for _ in range(self.agent_count))
+        # rewards.extend(reward for _ in range(self.agent_count))
 
         if self.left_person_num == 0:
             is_done = [True for _ in range(self.agent_count)]
@@ -247,10 +249,9 @@ class PedsMoveEnv(Model, gym.Env):
         if self.step_in_env > self.maxStep:  # 如果maxStep步都没有完全撤离，is_done直接为True
             is_done = [True for _ in range(self.agent_count)]
             # print("在{}步时强行重置环境!".format(self.maxStep))
-        return (obs, rewards, is_done, "PedMoveEnv")
+        return obs, rewards, is_done, "PedMoveEnv"
 
     def render(self, mode="human"):
         if self.viewer is None:  # 如果调用了 render, 而且没有 viewer, 就生成一个
             self.viewer = PedsMoveEnvViewer(self)
         self.viewer.render()  # 使用 Viewer 中的 render 功能
-

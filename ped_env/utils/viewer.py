@@ -1,7 +1,6 @@
 import sys
 
 import Box2D as b2d
-import pygame
 
 import pyglet
 

@@ -37,9 +37,10 @@ class Person(Agent):
                  new_y,
                  exit_type,
                  color=ColorRed,
-                 desired_velocity = 1.0,
+                 desired_velocity = 10.0,
                  max_velocity = 1.6,
-                 view_length = 5.0):
+                 view_length = 5.0,
+                 damping = 2.5):
         '''
         :param env:
         :param new_x:
@@ -69,7 +70,7 @@ class Person(Agent):
         self.view_length = view_length
         self.desired_velocity = desired_velocity
         self.max_velocity = max_velocity
-        self.damping = 0.2
+        self.damping = damping
 
         self.collide_with_wall = False
         self.collide_with_agent = False
@@ -121,13 +122,15 @@ class Person(Agent):
         #给行人施加自驱动力，力的大小为force * self.desired_velocity * self.mass / self.toi
         x, y = self.body.position.x, self.body.position.y
         applied_force = force * self.desired_velocity * self.mass
-        self.body.ApplyLinearImpulse(applied_force, (x, y), wake=True)
+        self.body.ApplyForce(applied_force, (x, y), wake=True)
+        #self.body.ApplyLinearImpulse(applied_force, (x, y), wake=True)
 
     def fraction_force(self):
         #给行人施加摩擦力，力的大小为-self.mass * velocity / self.toi
         x, y = self.body.position.x, self.body.position.y
         vec = self.body.linearVelocity
-        self.body.ApplyLinearImpulse(-self.mass * vec * self.damping, (x, y), wake=True)
+        self.body.ApplyForce(-self.mass * vec * self.damping, (x, y), wake=True)
+        #self.body.ApplyLinearImpulse(-self.mass * vec * self.damping, (x, y), wake=True)
 
     def raycast(self, world:b2World, direction: b2Vec2, length = 5.0):
         x, y = self.getX, self.getY

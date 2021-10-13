@@ -54,9 +54,9 @@ def parse_map_for_space(terrain: Map):
     """
     barriers = []
     maps = terrain.map
-    for i in range(maps.shape[0]):
-        for j in range(maps.shape[1]):
-            if maps[j, i] == 1 or maps[j, i] == 2:
+    for j in range(maps.shape[1]):
+        for i in range(maps.shape[0]):
+            if maps[i, j] == 1 or maps[i, j] == 2:
                 barriers.extend(create_square(i, j))
     space = socialforce.potentials.PedSpacePotential(barriers)
     return space

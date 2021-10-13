@@ -9,7 +9,7 @@ sys.path.append(curPath)
 
 import ped_env.envs as my_env
 
-from ped_env.utils.maps import map_05, map_06, map_02
+from ped_env.utils.maps import map_05, map_06
 
 from uuid import uuid1
 from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
@@ -100,10 +100,10 @@ if __name__ == '__main__':
     # for item in envs:
     #     test4(item[0],item[1])
     envName = "PedsMoveEnv"
-    env = my_env.PedsMoveEnv(terrain=map_05, person_num=8, maxStep=6000)
+    env = my_env.PedsMoveEnv(terrain=map_06, person_num=4, maxStep=3000)
     # test4(env, envName)
     # test7(env, envName)
-    # test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
+    test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=64)
     # test5(env, '2021_10_08_17_41_PedsMoveEnv', episode=5)
-    test5(env, "2021_10_09_02_23_PedsMoveEnv", episode=10, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
+    # test5(env, "2021_10_12_23_25_PedsMoveEnv", episode=10, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
 

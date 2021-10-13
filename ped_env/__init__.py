@@ -71,8 +71,8 @@ if __name__ == '__main__':
     import numpy as np
 
     # test1()
-    person_num = 8
-    env = Env(map_07, person_num, maxStep=10000)
+    person_num = 4
+    env = Env(map_05, person_num, maxStep=10000)
     # print(obs)
     for epoch in range(100):
         starttime = time.time()

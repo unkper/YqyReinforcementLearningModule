@@ -114,15 +114,15 @@ class PedsMoveEnv(Model, gym.Env):
         start_nodes_obs = []
         start_nodes_wall = []
         start_nodes_exit = []
-
-        for i in range(maps.shape[0]):
-            for j in range(maps.shape[1]):
-                if maps[j, i] == 1:
+        #按照从左往右，从上到下的遍历顺序
+        for j in range(maps.shape[1]):
+            for i in range(maps.shape[0]):
+                if maps[i, j] == 1:
                     start_nodes_obs.append((i + 0.5, j + 0.5))
-                elif maps[j, i] == 2:
+                elif maps[i, j] == 2:
                     start_nodes_wall.append((i + 0.5, j + 0.5))
-                elif 9 >= maps[j, i] >= 3:
-                    start_nodes_exit.append((i + 0.5, j + 0.5, maps[j, i]))
+                elif 9 >= maps[i, j] >= 3:
+                    start_nodes_exit.append((i + 0.5, j + 0.5, maps[i, j]))
         obstacles = self.factory.create_walls(start_nodes_obs, (1, 1), Color=ColorBlue)
         exits = self.factory.create_walls(start_nodes_exit, (1, 1), Color=ColorRed, CreateClass=Exit)  # 创建出口
         walls = self.factory.create_walls(start_nodes_wall, (1, 1))  # 建造围墙
@@ -218,6 +218,7 @@ class PedsMoveEnv(Model, gym.Env):
         for i in range(self.update_frequent):
             # update box2d physical world
             self.world.Step(1 / TICKS_PER_SEC, vel_iters, pos_iters)
+        self.world.ClearForces()
 
         # 检查是否有行人到达出口要进行移除，该环境中智能体是合作关系，因此使用统一奖励为好
 

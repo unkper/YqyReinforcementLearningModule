@@ -135,7 +135,7 @@ class AStar:
         return print_string
 
 if __name__ == '__main__':
-    m = map_07
+    m = map_05
     import time
     start_time = time.time()
     planner = AStar(m)

@@ -9,7 +9,7 @@ sys.path.append(curPath)
 
 import ped_env.envs as my_env
 
-from ped_env.utils.maps import map_05, map_06
+from ped_env.utils.maps import map_05, map_06, map_07
 
 from uuid import uuid1
 from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
@@ -87,8 +87,8 @@ def test7(useEnv,envName,actor_network=None,critic_network=None,hidden_dim=64):
                   decaying_epsilon=True,
                   epsilon_high=1.0,
                   epsilon_low=0.05,
-                  max_episode_num=3000,
-                  explore_episodes_percent=0.6
+                  max_episode_num=5000,
+                  explore_episodes_percent=0.9
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
@@ -100,10 +100,12 @@ if __name__ == '__main__':
     # for item in envs:
     #     test4(item[0],item[1])
     envName = "PedsMoveEnv"
-    env = my_env.PedsMoveEnv(terrain=map_06, person_num=4, maxStep=3000)
+    maps = [map_05, map_06, map_07]
+    for map in maps:
+        env = my_env.PedsMoveEnv(terrain=map_05, person_num=8, maxStep=3000)
+        test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
     # test4(env, envName)
     # test7(env, envName)
-    test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=64)
     # test5(env, '2021_10_08_17_41_PedsMoveEnv', episode=5)
-    # test5(env, "2021_10_12_23_25_PedsMoveEnv", episode=10, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
+    # test5(env, "2021_10_19_21_44_PedsMoveEnv", episode=10, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
 

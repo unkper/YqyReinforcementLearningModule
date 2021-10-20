@@ -4,7 +4,6 @@ from numpy import flipud
 
 class Map():
     def __init__(self, maps: np.ndarray, exits: list, start_points: list, name, radius=5):
-        assert len(exits) == len(start_points)
         # 对地图进行翻转操作
         maps = flipud(maps)
         self.map = maps.T
@@ -155,6 +154,23 @@ map7 = np.array([
     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
 ])
 
+exit_test_map = [(10, 3), (10, 7)]
+start_points_test_map = [(4, 7),(4, 1),(2, 7),(4.5, 7),(6, 7)]
+radius_test_map = 0
+test_map = np.array([
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+    [2, 0, 0, 1, 1, 1, 1, 0, 0, 3],
+    [2, 0, 0, 0, 0, 1, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+])
+
 map_05 = Map(map5, exit_map5, start_points_map5, "map_05", radius_map5)
 map_06 = Map(map6, exit_map6, start_points_map6, "map_06", radius_map6)
 map_07 = Map(map7, exit_map7, start_points_map7, "map_07", radius_map7)
+map_test = Map(test_map, exit_test_map, start_points_test_map, "map_test", radius_test_map)

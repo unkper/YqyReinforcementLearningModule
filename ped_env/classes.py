@@ -1,38 +1,83 @@
-import pyglet
-import socket
-import Box2D as b2d
+from math import inf
 
-from ped_env.utils.viewer import MyDrawer
-from pygame import Color
+import abc
 
-class SimuationPedEnvironment():
-    '''
-    作为社会力和强化学习算法的观察数据提供者和动作转发者，该对象能同时维护多个Env类，
-    在每一次step时，都会将所需信息提供给相应Env然后获得对应的力，其将所有力相加成一个
-    合力后返回给前端（通常是Unity,Unreal等游戏框架)，数据通信暂定为：
-    Tcp通信，绑定端口号12578，每个包包含消息头（调用消息类型，总消息长度）
-    1.reset方法，提示服务端重置环境并返回初始观察数据
-    2.close方法，提示服务端关闭环境
-    3.seed方法，包含种子数据用于随机
-    4.step方法，包含动作数据（给智能体应该施加的力向量），返回（观察信息，*奖励值，is_done,info）
-    5.get_position方法，返回当前所有智能体的位置信息
-    该类应该完成的：管理并调用各个智能体的控制Env，得到应该施加的力并将它们合成
-    '''
-    def __init__(self):
-        self.socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        self.socket.connect(('127.0.0.1',12578))
+from gym.spaces import Box, Discrete
+from ped_env.functions import parse_discrete_action
+from ped_env.objects import Person
 
-    def step(self, action):
+ACTION_DIM = 9
+
+class PedsHandlerInterface(abc.ABC):
+    def __init__(self, env):
         pass
 
-    def close(self):
+    @abc.abstractmethod
+    def get_observation(self, ped:Person):
         pass
 
-    def reset(self):
+    @abc.abstractmethod
+    def set_action(self, ped:Person, action):
         pass
 
-    def seed(self, seed=None):
+    @abc.abstractmethod
+    def get_reward(self, ped:Person, ped_index:int):
         pass
 
-    def render(self, mode='human'):
-        pass
+class PedsRLHandler(PedsHandlerInterface):
+    def __init__(self, env):
+        super().__init__(env)
+        self.env = env
+        # 强化学习MDP定义区域
+        # 定义观察空间为[智能体id,8个方向的传感器,智能体当前位置(x,y),智能体当前速度(dx,dy)]一共13个值
+        self.observation_space = [Box(-inf, inf, (13,)) for _ in range(self.env.person_num)]
+        # 定义动作空间为[不动，向左，向右，向上，向下]施加1N的力
+        self.action_space = [Discrete(ACTION_DIM) for _ in range(self.env.person_num)]
+        self.agent_count = self.env.person_num
+
+    def get_observation(self, ped:Person):
+        observation = []
+        if ped.is_done:
+            #根据论文中方法，给予一个零向量加智能体的id
+            observation.append(ped.id)
+            observation.extend([0.0 for _ in range(8)]) #5个方向上此时都不应该有障碍物
+            observation.extend([0.0, 0.0]) #将智能体在出口的位置赋予
+            observation.extend([0.0, 0.0]) #智能体的速度设置为0
+            return observation
+        observation.append(ped.id)
+        #依次得到8个方向上的障碍物,在回调函数中体现，每次调用该函数都会给observation数组中添加值，分别代表该方向上最近的障碍物有多远（5米代表不存在）
+        for i in range(8):
+            temp = ped.raycast(self.env.world, ped.directions[i], ped.view_length)
+            observation.append(temp)
+        #给予智能体当前位置
+        observation.append(ped.getX)
+        observation.append(ped.getY)
+        #给予智能体当前速度
+        vec = ped.body.linearVelocity
+        observation.append(vec.x)
+        observation.append(vec.y)
+        return observation
+
+    def set_action(self, ped:Person, action):
+        ped.self_driven_force(parse_discrete_action(action))
+        ped.fraction_force()
+        ped.fij_force(self.env.world)
+        ped.fiw_force(self.env.world)
+
+    def get_reward(self, ped:Person, ped_index:int):
+        reward = 0.0
+        if ped.collide_with_agent:  # 如果智能体其他智能体相撞，奖励减一
+            reward += self.env.r_collision
+        if ped.is_done and not ped.has_removed:
+            reward += self.env.r_arrival  # 智能体到达出口获得10的奖励
+        elif ped.is_done:
+            pass
+        else:
+            last_dis = self.env.distance_to_exit[ped_index]
+            now_dis = self.env.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
+            if last_dis != now_dis:
+                reward += self.env.r_approach * (last_dis - now_dis)  # 给予(之前离出口距离-目前离出口距离)的差值
+                self.env.distance_to_exit[ped_index] = now_dis
+            # else:
+            #     reward += self.env.r_collision  # 给予停止不动的行人以碰撞惩罚
+        return reward

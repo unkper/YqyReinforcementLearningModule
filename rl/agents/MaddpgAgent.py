@@ -15,7 +15,7 @@ from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience
 from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
-    onehot_from_int
+    onehot_from_int, save_callback, process_maddpg_experience_data
 
 MSELoss = torch.nn.MSELoss()
 
@@ -30,16 +30,16 @@ class DDPGAgent:
         self.discrete = discrete
         self.device = device
         self.actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim)
+            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim).to(self.device)
         self.target_actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim)
+            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim).to(self.device)
         hard_update(self.target_actor, self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 learning_rate)
         self.critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
-            if critic_network is None else critic_network(state_dim, action_dim, hidden_dim)
+            if critic_network is None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
         self.target_critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
-            if critic_network is None else critic_network(state_dim, action_dim, hidden_dim)
+            if critic_network is None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  learning_rate)
@@ -78,7 +78,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
     def __init__(self, env: Env = None,
                  capacity=2e6,
                  batch_size=128,
-                 learning_rate=0.001,
+                 learning_rate=1e-4,
                  update_frequent=50,
                  debug_log_frequent=500,
                  gamma=0.95,
@@ -129,6 +129,7 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         self.agents = []
         self.experience = Experience(capacity)
         self.env_name = env_name
+        self.hidden_dim = hidden_dim
         for i in range(self.env.agent_count):
             ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
                            self.learning_rate, self.discrete, self.device, self.state_dims,
@@ -144,16 +145,11 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
                       .format(np.mean(arr[-self.log_frequent:-1, 0]), np.mean(arr[-self.log_frequent:-1, 1])))
 
         self.loss_callback_ = loss_callback
-
-        def save_callback(agent: MADDPGAgent, episode_num: int):
-            if episode_num % 500 == 0:
-                print("save network!......")
-                for i in range(agent.env.agent_count):
-                    agent.save(agent.init_time_str + "_" + agent.env_name, "Actor{}".format(i), agent.agents[i].actor)
-                    agent.save(agent.init_time_str + "_" + agent.env_name, "Critic{}".format(i), agent.agents[i].critic)
-
         self.save_callback_ = save_callback
         return
+
+    def __str__(self):
+        return "Maddpg"
 
     def get_exploitation_action(self, state):
         """
@@ -195,37 +191,16 @@ class MADDPGAgent(Agent, SaveNetworkMixin):
         total_loss_actor = 0.0
 
         trans_pieces = self.experience.sample(self.batch_size)
-
-        s0 = np.array([x.s0 for x in trans_pieces])
-        a0 = np.array([x.a0 for x in trans_pieces])
-        r1 = np.array([x.reward for x in trans_pieces])
-        is_done = np.array([x.is_done for x in trans_pieces])
-        s1 = np.array([x.s1 for x in trans_pieces])
-
-        s0 = [np.stack(s0[:, j], axis=0) for j in range(self.env.agent_count)]
-        s1 = [np.stack(s1[:, j], axis=0) for j in range(self.env.agent_count)]
-
-        s0_temp_in = [flatten_data(s0[j], self.state_dims[j], self.device, ifBatch=True)
-                      for j in range(self.env.agent_count)]
-
-        s1_temp_in = [flatten_data(s1[j], self.state_dims[j], self.device, ifBatch=True)
-                      for j in range(self.env.agent_count)]
-
-        s0_critic_in = torch.cat([s0_temp_in[j] for j in range(self.env.agent_count)], dim=1)
-        s1_critic_in = torch.cat([s1_temp_in[j] for j in range(self.env.agent_count)], dim=1)
-
-        a0 = torch.from_numpy(
-            np.stack([np.concatenate(a0[j, :]) for j in range(a0.shape[0])], axis=0).astype(float)) \
-            .float().to(self.device)
+        s0, a0, r1, is_done, s1, s0_temp_in, s1_temp_in, s0_critic_in, s1_critic_in = \
+            process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
 
         for i in range(self.env.agent_count):
             if self.discrete:
-                a1 = torch.cat(
-                    [onehot_from_logits(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
-                     for j in range(self.env.agent_count)], dim=1)
+                a1 = torch.cat([onehot_from_logits(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
+                                for j in range(self.env.agent_count)],dim=1)
             else:
                 a1 = torch.cat([self.agents[j].target_actor.forward(s1_temp_in[j]).detach()
-                                for j in range(self.env.agent_count)], dim=1)
+                                for j in range(self.env.agent_count)],dim=1)
             r1 = torch.tensor(r1).float().to(self.device)
             # detach()的作用是让梯度无法传导到target_critic,因为此时只有critic需要更新！
             next_val = torch.squeeze(

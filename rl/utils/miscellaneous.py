@@ -1,4 +1,7 @@
 import uuid
+import os
+import datetime
+import numpy as np
 
 import matplotlib.pyplot as plt
 
@@ -16,6 +19,12 @@ def str_key(*args):
             else:
                 new_arg.append(str(arg))
     return "_".join(new_arg)
+
+def learning_curve_drop_outliers(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
+                                   x_name = "", y_name = "",
+                                   y1_legend = "", y2_legend="", saveName = "picture",
+                                   save=True, show=False):
+    pass
 
 def learning_curve(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
                    x_name = "", y_name = "",
@@ -49,9 +58,20 @@ def learning_curve(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
     #plt.text(60, .025, r'$\mu=100,\ \sigma=15$')
     #plt.axis([40, 160, 0, 0.03])
     #plt.grid(True)
-    import os
-    import datetime
+
     if save:
         plt.savefig(os.path.join("./","curve_{}.png".format(saveName)))
+        np.savetxt(os.path.join("./","data_{}.txt".format(saveName)), data[y1_index], delimiter=",")
     if show:
         plt.show()
+
+
+
+# while batch_size > 0:
+#     index = int(random.random() * self.len)
+#     episode_len = self.episodes[index].len
+#     count = int(round(random.random() * episode_len))
+#     count = min(count, batch_size, episode_len)
+#     sample_trans += self.episodes[index].sample(count)
+#     batch_size -= count
+#return sample_trans

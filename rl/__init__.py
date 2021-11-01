@@ -1,10 +1,11 @@
+import copy
 import datetime
 import os
 import sys
 import gym
 
 #为了Google colab挂载而加
-curPath = os.path.abspath("./" + os.path.curdir)
+curPath = os.path.abspath("../" + os.path.curdir)
 sys.path.append(curPath)
 
 import ped_env.envs as my_env
@@ -12,7 +13,6 @@ import ped_env.envs as my_env
 from ped_env.utils.maps import map_05, map_06, map_07
 
 from uuid import uuid1
-from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
 from rl.env.puckworld import PuckWorldEnv
 from rl.env.puckworld_continous import PuckWorldEnv as Continous_PuckWorldEnv
 from rl.env.gymEnvs import Pendulum
@@ -24,26 +24,56 @@ from rl.env.findTreasure import FindTreasureWrapper
 from rl.agents.QAgents import DQNAgent,QAgent
 from rl.agents.QAgents import Deep_DYNA_QAgent as DDQAgent
 from rl.agents.PDAgents import DDPGAgent
+from rl.agents.G_MaddpgAgent import G_MADDPGAgent
 from rl.agents.MaddpgAgent import MADDPGAgent
 from rl.agents.Matd3Agent import MATD3Agent
-from rl.utils.networks.maddpg_network import MaddpgLstmActor, MaddpgLstmCritic
+from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
+from rl.utils.networks.maddpg_network import MaddpgLstmActor, MaddpgLstmCritic, G_MaddpgLstmModelNetwork
 from rl.utils.miscellaneous import learning_curve
 from rl.utils.classes import OrnsteinUhlenbeckActionNoise
+from rl.utils.planners import AStarPlanner
 
-def test4(useEnv,envName):
+
+def test3(useEnv,envName,actor_network=None,critic_network=None,model_network=None,hidden_dim=64):
     env = useEnv
     id = uuid1()
     print(env.observation_space)
     print(env.action_space)
-    agent = MADDPGAgent(env,capacity=1e6,batch_size=1024,learning_rate=0.01
-                        ,update_frequent=200,debug_log_frequent=100,gamma=0.95,tau=0.01,
-                        env_name=envName)
+    planner_env = copy.deepcopy(useEnv)
+    planner = AStarPlanner(planner_env)
+    agent = G_MADDPGAgent(env,capacity=1e6,planner=planner,batch_size=1024,learning_rate=1e-4
+                        ,update_frequent=200,debug_log_frequent=100,gamma=0.99,tau=0.01,
+                        env_name=envName,actor_network=actor_network,critic_network=critic_network,
+                        model_network=model_network,hidden_dim=hidden_dim)
+    agent.opt_init(1500)
+    print("opt_init finished!")
+    data = agent.learning(
+                  decaying_epsilon=True,
+                  epsilon_high=0.6,
+                  epsilon_low=0.05,
+                  max_episode_num=1500,
+                  explore_episodes_percent=0.85
+                 )
+    for i in range(agent.env.agent_count):
+        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
+    learning_curve(data, 2, 1, title="G_MADDPGAgent performance on {}".format(envName),
+                   x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
+
+def test4(useEnv,envName,actor_network=None,critic_network=None,hidden_dim=64):
+    env = useEnv
+    id = uuid1()
+    print(env.observation_space)
+    print(env.action_space)
+    agent = MADDPGAgent(env,capacity=1e6,batch_size=1024,learning_rate=1e-4
+                        ,update_frequent=200,debug_log_frequent=100,gamma=0.999,tau=0.01,
+                        env_name=envName,actor_network=actor_network,
+                        critic_network=critic_network,hidden_dim=hidden_dim)
     data = agent.learning(
                   decaying_epsilon=True,
                   epsilon_high=1.0,
-                  epsilon_low=0.1,
-                  max_episode_num=10000,
-                  explore_episodes_percent=0.6
+                  epsilon_low=0.01,
+                  max_episode_num=3000,
+                  explore_episodes_percent=0.85
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
@@ -51,10 +81,12 @@ def test4(useEnv,envName):
                    x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
 
 def test5(useEnv,fileName,episode=3, AgentType=MADDPGAgent,
-          actor_network=None, critic_network=None, hidden_dim=64):
+          actor_network=None, critic_network=None, model_network=None, hidden_dim=64):
     env = useEnv
     if not actor_network and not critic_network:
         agent = AgentType(env)
+    elif model_network != None:
+        agent = AgentType(env,actor_network=actor_network,critic_network=critic_network,model_network=model_network,hidden_dim=hidden_dim)
     else:
         agent = AgentType(env,actor_network=actor_network,critic_network=critic_network,hidden_dim=hidden_dim)
     agent.play(os.path.join("../data/models/",fileName),episode=episode,waitSecond=0.05)
@@ -80,15 +112,15 @@ def test7(useEnv,envName,actor_network=None,critic_network=None,hidden_dim=64):
     print(env.observation_space)
     print(env.action_space)
     agent = MATD3Agent(env,capacity=1e6,batch_size=1024,learning_rate=0.01
-                        ,update_frequent=50,debug_log_frequent=100,gamma=0.99,tau=0.01,
+                        ,update_frequent=50,debug_log_frequent=200,gamma=0.99,tau=0.01,
                         env_name=envName,actor_network=actor_network,
                         critic_network=critic_network,hidden_dim=hidden_dim)#gamma=0.95
     data = agent.learning(
                   decaying_epsilon=True,
                   epsilon_high=1.0,
-                  epsilon_low=0.05,
-                  max_episode_num=5000,
-                  explore_episodes_percent=0.9
+                  epsilon_low=0.01,
+                  max_episode_num=3000,
+                  explore_episodes_percent=0.85
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
@@ -96,16 +128,34 @@ def test7(useEnv,envName,actor_network=None,critic_network=None,hidden_dim=64):
                    x_name="episodes", y_name="rewards of episode", saveName=id.__str__())
 
 if __name__ == '__main__':
-    # envs = [(SimpleTag(),"SimpleTag"),(SimpleCrypto(),"SimpleCrypto"),(SimpleReference(),"SimpleReference")]
+    # envs = [(SimpleWorldComm(maxStep=250),"SimpleWorldComm"),(SimpleCrypto(),"SimpleCrypto"),(SimpleReference(),"SimpleReference")]
+    # for env in envs:
+    #     test7(env[0], env[1], actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
+    # save_file_names = ['2021_10_31_20_21_SimpleWorldComm', '2021_10_31_21_30_SimpleCrypto',
+    #                        '2021_10_31_21_53_SimpleReference']
+    # for i in range(len(envs)):
+    #     test5(envs[i][0], save_file_names[i], episode=5, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
     # for item in envs:
     #     test4(item[0],item[1])
     envName = "PedsMoveEnv"
     maps = [map_05, map_06, map_07]
-    for map in maps:
-        env = my_env.PedsMoveEnv(terrain=map_05, person_num=8, maxStep=3000)
-        test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
-    # test4(env, envName)
-    # test7(env, envName)
-    # test5(env, '2021_10_08_17_41_PedsMoveEnv', episode=5)
-    # test5(env, "2021_10_19_21_44_PedsMoveEnv", episode=10, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
+
+    env = my_env.PedsMoveEnv(terrain=map_05, person_num=12, group_size=(1,6), maxStep=30000)
+    # test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
+    # test4(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
+
+    # test3(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic,model_network=G_MaddpgLstmModelNetwork, hidden_dim=128)
+
+    test5(env, '2021_11_01_10_53_PedsMoveEnv', episode=5, AgentType=MATD3Agent, actor_network=MaddpgLstmActor,critic_network=MaddpgLstmCritic) #model_network=G_MaddpgLstmModelNetwork)
+
+    # for map in maps:
+    #     env = my_env.PedsMoveEnv(terrain=map, person_num=8, group_size=(1,1), maxStep=10000)
+    #     test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
+
+    # save_file_names = ['2021_10_31_23_36_PedsMoveEnv', '2021_11_01_01_10_PedsMoveEnv',
+    #                        '2021_11_01_03_32_PedsMoveEnv']
+    # for map,save_name in zip(maps,save_file_names):
+    #     env = my_env.PedsMoveEnv(terrain=map, person_num=8, group_size=(1,1), maxStep=3000)
+    #     test5(env, save_name, episode=5, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
+
 

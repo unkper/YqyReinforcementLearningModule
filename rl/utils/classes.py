@@ -1,8 +1,6 @@
 import datetime
 import os
 import pickle
-import math
-from queue import Queue
 
 import gym
 import random
@@ -11,6 +9,9 @@ import torch
 
 from typing import List
 from torch import nn
+
+from ped_env.envs import PedsMoveEnv
+
 
 class State():
     def __init__(self, name):
@@ -116,6 +117,7 @@ class Experience():
     def __init__(self, capacity: int = 20000):
         self.capacity = capacity  # 容量：指的是trans总数量
         self.episodes = []  # episode列表
+        self.transitions = []
         self.next_id = 0  # 下一个episode的Id
         self.total_trans = 0  # 总的状态转换数量
 
@@ -141,6 +143,8 @@ class Experience():
         if self.len > 0:
             episode = self.episodes[index]
             self.episodes.remove(episode)
+            trans_set = set(episode.trans_list)
+            self.transitions = [x for x in self.transitions if x not in trans_set]
             self.total_trans -= episode.len
             return episode
         else:
@@ -162,6 +166,7 @@ class Experience():
             self.episodes.append(curEpisode)
         else:
             curEpisode = self.episodes[self.len-1]
+        self.transitions.append(trans)
         return curEpisode.push(trans)
 
     def sample(self, batch_size=1): # sample transition
@@ -172,15 +177,7 @@ class Experience():
         return:
             list of Transition.
         '''
-        sample_trans = []
-        while batch_size > 0:
-            index = int(random.random() * self.len)
-            episode_len = self.episodes[index].len
-            count = int(round(random.random() * episode_len))
-            count = min(count, batch_size, episode_len)
-            sample_trans += self.episodes[index].sample(count)
-            batch_size -= count
-        return sample_trans
+        return random.sample(self.transitions, batch_size)
 
     def sample_episode(self, episode_num = 1):  # sample episode
         '''随机获取一定数量完整的Episode
@@ -227,12 +224,24 @@ class OrnsteinUhlenbeckActionNoise():
 
 class SaveNetworkMixin():
 
-    def save(self,save_file_name:str,name:str,network:nn.Module):
-        p = os.path.join("./",save_file_name)
+    def save(self,sname:str,name:str,network:nn.Module):
+        p = os.path.join("./",sname)
         if not os.path.exists(p):
             os.mkdir(p)
-        save_name = os.path.join("./",save_file_name,"./{}.pkl".format(name))
+        save_name = os.path.join("./",sname,"./{}.pkl".format(name))
         torch.save(network.state_dict(),save_name)
+        desc_txt_file = open(os.path.join(sname, "desc.txt"),"w+")
+        desc_txt_file.write("algorithm:" + str(self) + "\n")
+        desc_txt_file.write("batch_size:" + str(self.batch_size) + "\n")
+        desc_txt_file.write("update_freq:" + str(self.update_frequent) + "\n")
+        desc_txt_file.write("lr:" + str(self.learning_rate) + "\n")
+        desc_txt_file.write("gamma:" + str(self.gamma) + "\n")
+        desc_txt_file.write("envName:" + str(self.env_name) + "\n")
+        desc_txt_file.write("agent_count:" + str(self.env.agent_count) + "\n")
+        desc_txt_file.write("hidden_dim:" + str(self.hidden_dim) + "\n")
+        if isinstance(self.env, PedsMoveEnv):
+            desc_txt_file.write("person_num:" + str(self.env.person_num) + "\n")
+            desc_txt_file.write("group_size:" + str(self.env.group_size) + "\n")
         return save_name
 
     def load(self,savePath,network:nn.Module):

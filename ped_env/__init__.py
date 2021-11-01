@@ -1,7 +1,4 @@
-import time
-
 import Box2D as b2d
-import pyglet
 
 from ped_env.envs import PedsMoveEnv as Env
 from ped_env.utils.maps import map_05, map_06, map_07, map_test
@@ -72,26 +69,28 @@ if __name__ == '__main__':
 
     debug = False
     # test1()
-    person_num = 5
-    env = Env(map_05, person_num, maxStep=10000, test_mode=debug)
+    person_num = 8
+    env = Env(map_05, person_num, group_size=(1, 3), maxStep=30000, test_mode=debug)
+    leader_num = env.agent_count
     # print(obs)
-    for epoch in range(100):
+    for epoch in range(2):
         starttime = time.time()
         step = 0
         obs = env.reset()
         is_done = [False]
         while not is_done[0]:
             if not debug:
-                action = np.random.random([person_num, 9])
+                action = np.random.random([leader_num, 9])
             else:
-                action = np.zeros([person_num, 9])
+                action = np.zeros([leader_num, 9])
                 action[:, 0] = 1
             obs, reward, is_done, info = env.step(action)
-            if debug:env.debug_step()
-            step += 1
-            env.render()
+            if debug:
+                env.debug_step()
+            step += env.frame_skipping
+            # env.render()
             # print(obs, reward, is_done)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.listener.col_with_agent, env.listener.col_with_wall))
+              .format(env.col_with_agent, env.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))

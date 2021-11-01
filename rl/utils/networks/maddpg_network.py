@@ -1,4 +1,5 @@
 import math
+from typing import List
 
 import numpy as np
 import torch
@@ -60,6 +61,34 @@ class MaddpgLstmActor(nn.Module):
         x = self.no_linear(x)
         action = self.out_fc(self.fc3(x))
         return action
+
+class G_MaddpgLstmModelNetwork(nn.Module):
+    def __init__(self, state_dims:List[int], action_dims:List[int], hidden_dim):
+        super(G_MaddpgLstmModelNetwork, self).__init__()
+        agent_count = len(state_dims)
+        vfs_in_dim = sum(state_dims)
+        vfa_in_dim = sum(action_dims)
+        self.layer_s2h = nn.Linear(vfs_in_dim, hidden_dim)
+        self.layer_a2h = nn.Linear(vfa_in_dim, hidden_dim)
+        #将两个向量拼接在一起
+        self.layer_h2h2 = nn.LSTM(hidden_dim * 2, hidden_dim, batch_first=True)
+        self.layer_h22s1 = nn.Linear(hidden_dim, vfs_in_dim)
+        self.layer_h22r = nn.Linear(hidden_dim, agent_count)
+        self.layer_h22i = nn.Linear(hidden_dim, agent_count)
+
+    def forward(self, s, a):
+        h_s = self.layer_s2h(s)
+        h_a = self.layer_a2h(a)
+        h = F.relu(torch.cat([h_s, h_a], dim=1))
+        h = torch.unsqueeze(h, dim=1)
+        h2, _ = self.layer_h2h2(h)
+        h2 = F.relu(torch.squeeze(h2, dim=1))
+
+        state_1 = self.layer_h22s1(h2)
+        reward = self.layer_h22r(h2)
+        is_done = self.layer_h22i(h2)
+
+        return state_1, reward, is_done
 
 if __name__ == '__main__':
     class Network(nn.Module):

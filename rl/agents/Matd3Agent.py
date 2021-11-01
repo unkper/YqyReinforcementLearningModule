@@ -12,7 +12,8 @@ from rl.agents.Agent import Agent
 from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience
-from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, onehot_from_int
+from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
+    onehot_from_int, save_callback, process_maddpg_experience_data
 
 MSELoss = torch.nn.MSELoss()
 
@@ -80,7 +81,7 @@ class MATD3Agent(Agent, SaveNetworkMixin):
     def __init__(self, env: Env = None,
                  capacity=2e6,
                  batch_size=128,
-                 learning_rate=0.001,
+                 learning_rate=1e-4,
                  update_frequent = 50,
                  debug_log_frequent = 500,
                  gamma = 0.95,
@@ -126,6 +127,7 @@ class MATD3Agent(Agent, SaveNetworkMixin):
         self.update_frequent = update_frequent
         self.log_frequent = debug_log_frequent
         self.learning_rate = learning_rate
+        self.hidden_dim = hidden_dim
         self.gamma = gamma
         self.tau = tau
         self.train_update_count = 0
@@ -148,14 +150,11 @@ class MATD3Agent(Agent, SaveNetworkMixin):
                 print("Critic mean Loss:{},Actor mean Loss:{}"
                       .format(np.mean(arr[-self.log_frequent:-1, 0]),np.mean(arr[-self.log_frequent:-1, 1])))
         self.loss_callback_ = loss_callback
-        def save_callback(agent:MATD3Agent, episode_num:int):
-            if episode_num % 500 == 0:
-                print("save network!......")
-                for i in range(agent.env.agent_count):
-                    agent.save(agent.init_time_str + "_" + agent.env_name ,"Actor{}".format(i), agent.agents[i].actor)
-                    agent.save(agent.init_time_str + "_" + agent.env_name ,"Critic{}".format(i), agent.agents[i].critic)
         self.save_callback_ = save_callback
         return
+
+    def __str__(self):
+        return "Matd3"
 
     def get_exploitation_action(self, state):
         """
@@ -197,27 +196,8 @@ class MATD3Agent(Agent, SaveNetworkMixin):
 
         trans_pieces = self.experience.sample(self.batch_size)
 
-        s0 = np.array([x.s0 for x in trans_pieces])
-        a0 = np.array([x.a0 for x in trans_pieces])
-        r1 = np.array([x.reward for x in trans_pieces])
-        is_done = np.array([x.is_done for x in trans_pieces])
-        s1 = np.array([x.s1 for x in trans_pieces])
-
-        s0 = [np.stack(s0[:, j], axis=0) for j in range(self.env.agent_count)]
-        s1 = [np.stack(s1[:, j], axis=0) for j in range(self.env.agent_count)]
-
-        s0_temp_in = [flatten_data(s0[j], self.state_dims[j], self.device, ifBatch=True)
-                      for j in range(self.env.agent_count)]
-
-        s1_temp_in = [flatten_data(s1[j], self.state_dims[j], self.device, ifBatch=True)
-                      for j in range(self.env.agent_count)]
-
-        s0_critic_in = torch.cat([s0_temp_in[j] for j in range(self.env.agent_count)], dim=1)
-        s1_critic_in = torch.cat([s1_temp_in[j] for j in range(self.env.agent_count)], dim=1)
-
-        a0 = torch.from_numpy(
-            np.stack([np.concatenate(a0[i, :]) for i in range(a0.shape[0])], axis=0).astype(float)) \
-            .float().to(self.device)
+        s0, a0, r1, is_done, s1, s0_temp_in, s1_temp_in, s0_critic_in, s1_critic_in = \
+            process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
 
         for i in range(self.env.agent_count):
             if self.discrete:

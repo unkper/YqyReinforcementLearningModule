@@ -134,8 +134,8 @@ class Agent():
 
     def learning(self,
                  epsilon_high = 1.0,
-                 epsilon_low = 0.05,
-                 p = 1.2,
+                 epsilon_low = 0.1,
+                 p = 0.8,
                  decaying_epsilon = True,
                  explore_episodes_percent = 0.4,
                  max_episode_num = 800,

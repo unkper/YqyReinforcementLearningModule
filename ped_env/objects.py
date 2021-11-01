@@ -1,10 +1,13 @@
+from typing import List
+
 import pyglet
 import math
+import numpy as np
 
 from Box2D import *
 from math import sin, cos
-from ped_env.utils.colors import ColorRed, exit_type_to_color
-from ped_env.functions import transfer_to_render
+from ped_env.utils.colors import ColorRed, exit_type_to_color, ColorYellow
+from ped_env.functions import transfer_to_render, normalized
 from ped_env.utils.misc import FixtureInfo, ObjectType
 
 class Agent():
@@ -36,20 +39,28 @@ class Person(Agent):
                  exit_type,
                  display_level,
                  debug_level,
-                 desired_velocity = 10.0,
-                 A = 30,
+                 desired_velocity = 3.0,
+                 A = 2000,
                  B = -0.08,
                  max_velocity = 1.6,
                  view_length = 5.0,
                  tau = 0.5):
         '''
-        :param env:
-        :param new_x:
-        :param new_y:
-        :param color:
-        社会力模型的两个参数A,B
+
         暂定观察空间为8个方向的射线传感器（只探测墙壁）与8个方向的射线传感器（只探测其他行人）与导航力的方向以及与终点的距离，类型为Box(-inf,inf,(18,))，
         动作空间当为离散空间时为类型为Discrete(5)代表不移动，向左，向右，向上，向下走，奖励的设置为碰到墙壁
+        :param env:
+        :param new_x: 生成位置x
+        :param new_y: 生成位置y
+        :param exit_type: 去往的出口编号
+        :param display_level: pyglet显示的画面层
+        :param debug_level: pyglet显示的画面层
+        :param desired_velocity: 社会力模型中自驱动力相关的参数
+        :param A: 社会力模型的参数A
+        :param B: 社会力模型的参数B
+        :param max_velocity:
+        :param view_length: 智能体最远能观察到的距离
+        :param tau: 社会力模型中关于地面摩擦和自驱动力的参数
         '''
         super(Person, self).__init__()
         self.body = env.CreateDynamicBody(position=(new_x, new_y))
@@ -82,12 +93,23 @@ class Person(Agent):
         self.collide_with_wall = False
         self.collide_with_agent = False
 
+        self.is_leader = False
+
+        #利用以空间换时间的方法，x,y每step更新一次
+        self.x = self.body.position.x
+        self.y = self.body.position.y
+
+        self.aabb_callback = AABBCallBack(self)
+        self.raycast_callback = RaycastCallBack(self)
+
         # 通过射线得到8个方向上的其他行人与障碍物
+        # 修复bug:未按照弧度值进行旋转
         identity = b2Vec2(1, 0)
         self.directions = []
         for angle in range(0, 360, int(360 / 8)):
-            mat = b2Mat22(cos(angle), -sin(angle),
-                          sin(angle), cos(angle))
+            theta = np.radians(angle)
+            mat = b2Mat22(cos(theta), -sin(theta),
+                          sin(theta), cos(theta))
             vec = b2Mul(mat, identity)
             self.directions.append(vec)
 
@@ -98,7 +120,7 @@ class Person(Agent):
             self.body.linearVelocity = vec * self.max_velocity
 
     def setup(self, batch, render_scale, test_mode=True):
-        x, y = self.body.position.x, self.body.position.y
+        x, y = self.getX, self.getY
         if test_mode:
             # self.name_pic = pyglet.text.Label(str(self.id),
             #                                   font_name='Times New Roman',
@@ -113,42 +135,151 @@ class Person(Agent):
                                         self.radius * render_scale,
                                         color=self.color,
                                         batch=batch, group=self.display_level)
+        if self.is_leader:
+            self.leader_pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
+                                        self.radius * 0.3 * render_scale,
+                                        color=ColorYellow if self.color != ColorYellow else ColorRed,
+                                        batch=batch, group=self.debug_level)
 
     def self_driven_force(self, force):
         #给行人施加自驱动力，力的大小为force * self.desired_velocity * self.mass / self.tau
-        x, y = self.body.position.x, self.body.position.y
         applied_force = force * self.desired_velocity * self.mass / self.tau
-        self.body.ApplyForce(applied_force, (x, y), wake=True)
+        self.body.ApplyForceToCenter(applied_force, wake=True)
         #self.body.ApplyLinearImpulse(applied_force, (x, y), wake=True)
 
     def fraction_force(self):
         #给行人施加摩擦力，力的大小为-self.mass * velocity / self.tau
-        x, y = self.body.position.x, self.body.position.y
         vec = self.body.linearVelocity
-        self.body.ApplyForce(-self.mass * vec / self.tau, (x, y), wake=True)
+        self.body.ApplyForceToCenter(-self.mass * vec / self.tau, wake=True)
         #self.body.ApplyLinearImpulse(-self.mass * vec * self.damping, (x, y), wake=True)
 
-    def fij_force(self, world):
-        detect_persons = self.aabb_query(world, 1 + self.radius * 2) # 如果两个行人距离超过1m，之间的作用力可以忽略不计
+    def fij_force(self, peds, dic):
+        def exam_if_self(a, b):
+            return a.id != b.id
+        detect_persons = self.objects_query(peds, 1 + self.radius * 2, exam_if_self)
+        #detect_persons = self.aabb_query(world, 1 + self.radius * 2) # 如果两个行人距离超过1m，之间的作用力可以忽略不计
+        if self.is_leader:
+            for ped in detect_persons:
+                if not ped.is_leader and dic[ped] == self:
+                    continue
+                else:
+                    self.collide_with_agent = True
+                    break
         total_force = b2Vec2(0, 0)
         for ped in detect_persons:
             pos, next_pos = (self.getX, self.getY), (ped.getX, ped.getY)
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             fij = self.A * math.exp((dis - self.radius - ped.radius)/self.B)
             total_force += b2Vec2(fij * (pos[0] - next_pos[0]), fij * (pos[1] - next_pos[1]))
-        x, y = self.body.position.x, self.body.position.y
-        self.body.ApplyForce(total_force, (x, y), wake=True)
+        self.body.ApplyForceToCenter(total_force, wake=True)
 
-    def fiw_force(self, world):
-        detect_obstacles = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Obstacle) # 如果行人与墙间的距离超过1m，之间的作用力可以忽略不计
+    def fiw_force(self, obj):
+        # detect_obstacles = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Obstacle)
+        # detect_walls = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Wall)
+        # detect_exits = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Exit)
+        def exam_self_exit(a, b):
+            if b.type != ObjectType.Exit:return True
+            return b.exit_type != a.exit_type
+        detect_things = self.objects_query(obj, 1 + self.radius * 2, exam_self_exit)
+        #detect_obstacles = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Obstacle) # 如果行人与墙间的距离超过1m，之间的作用力可以忽略不计
+        self.collide_with_wall = True if len(detect_things) != 0 else False
         total_force = b2Vec2(0, 0)
-        for obs in detect_obstacles:
+        for obs in detect_things:
             pos, next_pos = (self.getX, self.getY), (obs.getX, obs.getY)
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             fiw = self.A * math.exp((dis - self.radius - 0.5) / self.B) #因为每块墙的大小都为1*1m
             total_force += b2Vec2(fiw * (pos[0] - next_pos[0]), fiw * (pos[1] - next_pos[1]))
-        x, y = self.body.position.x, self.body.position.y
-        self.body.ApplyForce(total_force, (x, y), wake=True)
+        self.body.ApplyForceToCenter(total_force, wake=True)
+
+    SLOW_DOWN_DISTANCE = 0.6
+    def arrive_force(self, target):
+        now_point = np.array([self.getX, self.getY])
+        target_point = np.array(target)
+        now_vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
+
+        to_target = target_point - now_point
+        distance = np.linalg.norm(to_target)
+        if distance > self.SLOW_DOWN_DISTANCE:
+            vec = normalized(to_target) * self.desired_velocity
+            applied_force = vec - now_vec
+        else:
+            vec = to_target - now_vec
+            applied_force = vec - now_vec
+        applied_force = applied_force * self.desired_velocity * self.mass / self.tau
+        self.body.ApplyForceToCenter(applied_force, wake=True)
+
+    def seek_force(self, target):
+        now_point = np.array([self.getX, self.getY])
+        target_point = np.array(target)
+        now_vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
+
+        vec = np.linalg.norm(target_point - now_point)
+        applied_force = vec - now_vec
+        applied_force = applied_force * self.desired_velocity * self.mass / self.tau
+        self.body.ApplyForceToCenter(applied_force, wake=True)
+
+    LEADER_BEHIND_DIST = 0.25
+    def leader_follow_force(self, leader_body:b2Body):
+        #计算目标点，并驱使arrive_force到达该点
+        leader_vec = np.array([leader_body.linearVelocity.x, leader_body.linearVelocity.y])
+        leader_pos = np.array([leader_body.position.x, leader_body.position.y])
+
+        target = leader_pos + self.LEADER_BEHIND_DIST * normalized(-leader_vec)
+        self.arrive_force(target)
+        #  else:
+        #     target = self.leader_last_pos
+        #     self.seek_force(target)
+
+    def evade_force(self, target_body:b2Body):
+        now_point = np.array([self.getX, self.getY])
+        vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
+        target_vec = np.array([target_body.linearVelocity.x, target_body.linearVelocity.y])
+        target_point = np.array([target_body.position.x, target_body.position.y])
+        to_target = target_point - now_point
+        #计算向前预测的时间
+        lookahead_time = np.linalg.norm(to_target) / (self.desired_velocity + np.linalg.norm(target_vec))
+        #计算预期速度
+        applied_force = normalized(now_point - (target_point + target_vec * lookahead_time)) - vec
+        applied_force = applied_force * self.desired_velocity * self.mass / self.tau
+        self.body.ApplyForceToCenter(applied_force, wake=True)
+
+    def evade_controller(self, leader:b2Body, evade_distance=0.5):
+        '''
+
+        :param leader:
+        :param evade_distance_sqr: 躲避距离的平方值
+        :return:
+        '''
+        #计算领队前方的一个点
+        leader_pos = np.array([leader.position.x, leader.position.y])
+        leader_vec = np.array([leader.linearVelocity.x, leader.linearVelocity.y])
+        pos = np.array([self.getX, self.getY])
+        leader_ahead = leader_pos + normalized(leader_vec) * self.LEADER_BEHIND_DIST
+        #计算角色当前位置与领队前方某点的位置，如果小于某个值，就需要躲避
+        dist = pos - leader_ahead
+        if np.linalg.norm(dist) < evade_distance:
+            self.evade_force(leader)
+
+    leader_last_pos = None
+    timer = 0
+    def exam_leader_moved(self, leader:b2Body):
+        moved = False
+        if self.timer > 0:
+            self.timer -= 1
+            return moved
+        if self.leader_last_pos is None:
+            self.leader_last_pos = np.array([leader.position.x, leader.position.y])
+            self.timer = 2
+        else:
+            now_pos = np.array([leader.position.x, leader.position.y])
+            diff = 0.01
+            if self.leader_last_pos[0] - diff < now_pos[0] < self.leader_last_pos[1] + diff \
+                and self.leader_last_pos[1] - diff < now_pos[1] < self.leader_last_pos[1] + diff:
+                self.timer = 2
+            else:
+                moved = True
+            #if not is_done: self.leader_last_pos = now_pos
+        return moved
 
     def aabb_query(self, world, size, detect_type:ObjectType = ObjectType.Agent, test_mode=False):
         '''
@@ -158,27 +289,11 @@ class Person(Agent):
         :return:
         '''
         x, y = self.getX, self.getY
-        class CallBack(b2QueryCallback):
-            def __init__(self, pos, agent_id, radius, d_type):
-                super(CallBack, self).__init__()
-                self.pos = pos
-                self.id = agent_id
-                self.d_type = d_type
-                self.radius = radius #只检测距离智能体中心为size的其他智能体和障碍物
-                self.detect_objects = []
 
-            def ReportFixture(self, fixture: b2Fixture):
-                if test_mode:
-                    print(fixture.userData.type)
-                if (self.d_type == ObjectType.Agent and fixture.userData.id != self.id and fixture.userData.type == ObjectType.Agent) or \
-                    (self.d_type == ObjectType.Obstacle and fixture.userData.type == ObjectType.Obstacle): #当
-                    pos = self.pos
-                    next_pos = (fixture.userData.model.getX, fixture.userData.model.getY)
-                    dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
-                    if dis <= self.radius:
-                        self.detect_objects.append(fixture.userData.model)
-                return True
-        callback = CallBack((x, y), self.id, size, detect_type)
+        callback = self.aabb_callback
+        callback.radius = size
+        callback.d_type = detect_type
+        callback.detect_objects = []
 
         aabb = b2AABB()
         aabb.lowerBound = b2Vec2(x - size/2,y - size/2) #左上角坐标
@@ -186,25 +301,23 @@ class Person(Agent):
         world.QueryAABB(callback, aabb)
         return callback.detect_objects
 
+    def objects_query(self, objects:List, size, conditionFunc = lambda self, obj:True):
+        pos = (self.getX, self.getY)
+        detect_objects = []
+        for obj in objects:
+            next_pos = (obj.getX, obj.getY)
+            dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
+            if dis <= size and conditionFunc(self, obj):
+                detect_objects.append(obj)
+        return detect_objects
+
     def raycast(self, world:b2World, direction: b2Vec2, length = 5.0, test_mode=False):
         x, y = self.getX, self.getY
         start_point = b2Vec2(x, y)
         end_point = start_point + direction * length
-        class CallBack(b2RayCastCallback):
-            def __init__(self, pos):
-                super().__init__()
-                self.obs = 5.0
-                self.pos = pos
 
-            def ReportFixture(self, fixture: b2Fixture, point, normal, fraction) -> float:
-                if fixture.userData.type == ObjectType.Exit: #不对类型为Exit的物体进行检测
-                    return fraction
-                obs = ((point[0] - self.pos[0]) ** 2 + (point[1] - self.pos[1]) ** 2) ** 0.5
-                self.obs = min(5.0, self.obs, obs)
-                if test_mode:
-                    print(fixture.userData,"###", obs)
-                return fraction
-        callback = CallBack((x, y))
+        callback = self.raycast_callback
+        callback.obs = length
 
         world.RayCast(callback, start_point, end_point)
         return callback.obs
@@ -213,20 +326,60 @@ class Person(Agent):
         if self.pic != None:
             self.pic.delete()
             del (self.pic)
+            if self.is_leader:
+                self.leader_pic.delete()
+                del (self.leader_pic)
         self.has_removed = True
         del(self)
 
     def __str__(self):
-        x, y = self.body.position.x, self.body.position.y
+        x, y = self.getX, self.getY
         return "x:{},y:{}".format(x, y)
 
     @property
     def getX(self):
-        return self.body.position.x
+        return self.x
 
     @property
     def getY(self):
-        return self.body.position.y
+        return self.y
+
+class AABBCallBack(b2QueryCallback):
+    def __init__(self, agent:Person):
+        super(AABBCallBack, self).__init__()
+        self.agent = agent
+        self.d_type = None
+        self.radius = None  # 只检测距离智能体中心为size的其他智能体和障碍物
+        self.detect_objects = []
+
+    def ReportFixture(self, fixture: b2Fixture):
+        query_agent = (self.d_type == ObjectType.Agent and fixture.userData.id != self.agent.id and fixture.userData.type == ObjectType.Agent)
+        query_obstacle = (self.d_type == ObjectType.Obstacle and fixture.userData.type == ObjectType.Obstacle)
+        query_wall = (self.d_type == ObjectType.Wall and fixture.userData.type == ObjectType.Wall)
+        query_exit = ((self.d_type == ObjectType.Exit and fixture.userData.type == ObjectType.Exit
+                       and self.agent.exit_type != fixture.userData.model.exit_type)) #当出口不是自己的才有排斥力
+        if query_agent or query_obstacle or query_wall or query_exit:  # 当
+            pos = (self.agent.getX, self.agent.getY)
+            next_pos = (fixture.userData.model.getX, fixture.userData.model.getY)
+            dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
+            if dis <= self.radius:
+                self.detect_objects.append(fixture.userData.model)
+        return True
+
+
+class RaycastCallBack(b2RayCastCallback):
+    def __init__(self, agent:Person):
+        super().__init__()
+        self.obs = None
+        self.agent = agent
+
+    def ReportFixture(self, fixture: b2Fixture, point, normal, fraction) -> float:
+        if fixture.userData.type == ObjectType.Exit:  # 不对类型为Exit的物体进行检测
+            return fraction
+        pos = (self.agent.getX, self.agent.getY)
+        obs = ((point[0] - pos[0]) ** 2 + (point[1] - pos[1]) ** 2) ** 0.5
+        self.obs = min(5.0, self.obs, obs)
+        return fraction
 
 class BoxWall():
     body = None
@@ -240,6 +393,8 @@ class BoxWall():
                  color=ColorRed):
         # new_x,new_y代表的是矩形墙的中心坐标
         self.body = env.CreateStaticBody(position=(new_x, new_y))
+        self.x = self.body.position.x
+        self.y = self.body.position.y
         self.width = new_width
         self.height = new_height
         self.color = color
@@ -254,7 +409,7 @@ class BoxWall():
 
     def setup(self, batch, render_scale):
         # pyglet以左下角那个点作为原点
-        x, y, width, height = transfer_to_render(self.body.position.x, self.body.position.y, self.width, self.height,
+        x, y, width, height = transfer_to_render(self.getX, self.getY, self.width, self.height,
                                                  render_scale)
         self.pic = pyglet.shapes.Rectangle(x, y, width, height, self.color, batch, group=self.display_level)
 
@@ -263,11 +418,11 @@ class BoxWall():
 
     @property
     def getX(self):
-        return self.body.position.x
+        return self.x
 
     @property
     def getY(self):
-        return self.body.position.y
+        return self.y
 
 class Exit(BoxWall):
     counter = 0

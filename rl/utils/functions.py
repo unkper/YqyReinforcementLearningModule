@@ -12,6 +12,7 @@ from gym.spaces import Discrete, Box
 from .classes import Experience
 from .miscellaneous import str_key
 
+
 def set_dict(target_dict, value, *args):
     if target_dict is None:
         return
@@ -159,6 +160,30 @@ def process_experience_data(trans_pieces, to_tensor = False, device = None):
         is_done = torch.from_numpy(is_done)
     return states_0,actions_0,reward_1,is_done,states_1
 
+def process_maddpg_experience_data(trans_pieces, state_dims, agent_count, device = None):
+    s0 = np.array([x.s0 for x in trans_pieces])
+    a0 = np.array([x.a0 for x in trans_pieces])
+    r1 = np.array([x.reward for x in trans_pieces])
+    is_done = np.array([x.is_done for x in trans_pieces])
+    s1 = np.array([x.s1 for x in trans_pieces])
+
+    s0 = [np.stack(s0[:, j], axis=0) for j in range(agent_count)]
+    s1 = [np.stack(s1[:, j], axis=0) for j in range(agent_count)]
+
+    s0_temp_in = [flatten_data(s0[j], state_dims[j], device, ifBatch=True)
+                  for j in range(agent_count)]
+
+    s1_temp_in = [flatten_data(s1[j], state_dims[j], device, ifBatch=True)
+                  for j in range(agent_count)]
+
+    s0_critic_in = torch.cat([s0_temp_in[j] for j in range(agent_count)], dim=1)
+    s1_critic_in = torch.cat([s1_temp_in[j] for j in range(agent_count)], dim=1)
+
+    a0 = torch.from_numpy(
+        np.stack([np.concatenate(a0[j, :]) for j in range(a0.shape[0])], axis=0).astype(float)) \
+        .float().to(device)
+    return s0,a0,r1,is_done,s1,s0_temp_in,s1_temp_in,s0_critic_in,s1_critic_in
+
 def print_train_string(experience:Experience, episodes=500):
     rewards = []
     last_episodes = experience.last_n_episode(episodes if episodes > experience.len else experience.len)
@@ -169,5 +194,10 @@ def print_train_string(experience:Experience, episodes=500):
     print("average rewards in last {} episodes:{}".format(episodes, rewards))
     print("{}".format(experience.__str__()))
 
-
-
+def save_callback(agent, episode_num: int):
+    sname = agent.init_time_str + "_" + agent.env_name
+    if episode_num % 500 == 0:
+        print("save network!......")
+        for i in range(agent.env.agent_count):
+            agent.save(sname, "Actor{}".format(i), agent.agents[i].actor)
+            agent.save(sname, "Critic{}".format(i), agent.agents[i].critic)

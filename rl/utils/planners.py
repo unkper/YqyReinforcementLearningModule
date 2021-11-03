@@ -40,9 +40,9 @@ class AStarPlanner:
         self.experience = pickle.load(file)
 
 if __name__ == "__main__":
-    env = PedsMoveEnv(map_05, person_num=30, group_size=(1, 6), maxStep=500)
+    env = PedsMoveEnv(map_05, person_num=30, group_size=(1, 6), maxStep=1000)
     planner = AStarPlanner(env)
-    # planner.planning(5)
-    # planner.save_experience()
-    planner.load_experience("./data/2021_11_01_11_48_exp281.pkl")
-    print(planner.experience.sample(5))
+    planner.planning(3000)
+    planner.save_experience()
+    # planner.load_experience("./data/2021_11_01_11_48_exp281.pkl")
+    # print(planner.experience.sample(5))

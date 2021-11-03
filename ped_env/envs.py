@@ -4,17 +4,16 @@ from math import inf, sqrt, pow
 
 import gym
 import pyglet
-import numpy
+import numpy as np
 
 from Box2D import (b2World, b2Vec2)
 from typing import List, Tuple, Dict
 
 from gym.utils import seeding
 
-from ped_env.classes import PedsRLHandler, ACTION_DIM, PedsRLHandlerWithCooper
-from ped_env.objects import BoxWall, Person, Exit
+from ped_env.classes import ACTION_DIM, PedsRLHandlerWithCooper, SubprocEnv
+from ped_env.objects import BoxWall, Person, Exit, Group
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
-from ped_env.event_listeners import MyContactListener
 from ped_env.utils.misc import ObjectType
 from ped_env.utils.maps import Map
 from ped_env.utils.viewer import PedsMoveEnvViewer
@@ -69,8 +68,10 @@ class PedsMoveEnvFactory():
 
     def set_group_process(self, group, leader_dic, persons):
         leader = random.sample(group, 1)[0]  # 随机选取一人作为leader
-        leader.is_leader = True
-        leader_dic.update({per: leader for per in group if per != leader})  # 将leader和follow的映射关系添加
+        followers = copy.copy(group)
+        followers.remove(leader)
+        group_obj = Group(leader, followers)
+        leader_dic.update({per : group_obj for per in group})  # 将leader和follow的映射关系添加
         persons.extend(group)
 
     def create_group_persons_in_radius(self, start_node, radius, person_num, leader_dic:Dict, group_size, exit_type, test_mode=False):
@@ -144,7 +145,7 @@ class PedsMoveEnv(Model, gym.Env):
         self.frame_skipping = frame_skipping
 
         self.group_size = group_size
-        self.leader_follower_dic = {}
+        self.group_dic = dict()
 
         self.person_handler = PersonHandler(self)
         # 由PersonHandler类提供的属性代替，从而使用策略模式来加强灵活性
@@ -161,7 +162,7 @@ class PedsMoveEnv(Model, gym.Env):
         self.test_mode = test_mode
         self.vec = [0.0 for _ in range(self.agent_count)]
 
-    def start(self, maps: numpy.ndarray, person_num_sum: int = 60, person_create_radius: float = 5):
+    def start(self, maps: np.ndarray, person_num_sum: int = 60, person_create_radius: float = 5):
         self.world = b2World(gravity=(0, 0), doSleep=True)
         # self.listener = MyContactListener(self) #现在使用aabb_query的方式来判定
         #self.world.contactListener = self.listener
@@ -198,18 +199,14 @@ class PedsMoveEnv(Model, gym.Env):
         for i, num in enumerate(person_num):
             exit_type = i % len(self.terrain.exits)
             if not self.test_mode and not self.planning_mode:
-                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain.start_points[i],
-                                                                             person_create_radius,
-                                                                             num,
-                                                                             self.leader_follower_dic,
-                                                                             self.group_size,
-                                                                             exit_type + 3,
-                                                                             self.test_mode))  # 因为出口从3开始编号，依次给行人赋予出口编号值
+                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain.start_points[i], person_create_radius, num, self.group_dic, self.group_size, exit_type + 3, self.test_mode))  # 因为出口从3开始编号，依次给行人赋予出口编号值
             elif not self.test_mode and self.planning_mode:
-                self.peds.extend(self.factory.random_create_persons(self.terrain, num, self.leader_follower_dic, self.group_size, exit_type + 3, self.test_mode))
+                self.peds.extend(self.factory.random_create_persons(self.terrain, num, self.group_dic, self.group_size, exit_type + 3, self.test_mode))
             else:
-                self.peds.extend(self.factory.random_create_persons(self.terrain, num, self.leader_follower_dic, self.group_size, exit_type + 3, self.test_mode))
-                #self.peds.extend(self.factory.create_people(self.terrain.start_points[i], exit_type + 3, self.test_mode))
+                #self.peds.extend(self.factory.random_create_persons(self.terrain, num, self.group_dic, self.group_size, exit_type + 3, self.test_mode))
+                group = self.factory.create_people(self.terrain.start_points, exit_type + 3, self.test_mode)
+                self.factory.set_group_process(group, self.group_dic, self.peds)
+                self.peds.extend(group)
         self.left_person_num = sum(person_num)
         self.left_leader_num = self.agent_count
         self.not_arrived_peds = copy.copy(self.peds)
@@ -225,8 +222,9 @@ class PedsMoveEnv(Model, gym.Env):
     def delete_person(self, per: Person):
         self.world.DestroyBody(per.body)
         self.pop_ped_from_not_arrived(per.id)
-        per.delete()
         self.left_person_num -= 1
+        self.not_arrived_peds.remove(per)
+        per.delete(self.world)
         if per.is_leader: self.left_leader_num -= 1
 
     def pop_ped_from_not_arrived(self, person_id):
@@ -276,13 +274,13 @@ class PedsMoveEnv(Model, gym.Env):
         Person.counter = 0
         BoxWall.counter = 0
         Exit.counter = 0
+        Group.counter = 0
         self.step_in_env = 0
         self.peds_exit_time.clear()
         self.peds.clear()
         self.not_arrived_peds.clear()
         self.elements.clear()
-        self.start(self.terrain.map, person_num_sum=self.person_num
-                   , person_create_radius=self.terrain.create_radius)
+        self.start(self.terrain.map, person_num_sum=self.person_num, person_create_radius=self.terrain.create_radius)
         # 添加初始观察状态
         init_obs = []
         for per in self.peds:
@@ -298,33 +296,37 @@ class PedsMoveEnv(Model, gym.Env):
 
         for i in range(self.frame_skipping):
             # update box2d physical world
-            leader_index = 0
-            for ped in self.peds:
-                if (ped.is_done and not ped.has_removed) \
-                    or (not ped.is_leader and not ped.has_removed
-                    and self.leader_follower_dic[ped].is_done):  # 移除到达出口的leader和follower
+            for ped in self.not_arrived_peds:
+                if ped.is_done and ped.has_removed:
+                    continue
+                belong_group = self.group_dic[ped]
+                if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
                     self.delete_person(ped)
+                    continue
                 if ped.is_leader:
                     #是leader用强化学习算法来控制
-                    self.person_handler.set_action(ped, actions[leader_index])
-                    leader_index += 1
+                    self.person_handler.set_action(ped, actions[belong_group.id])
                 else:
-                    leader = self.leader_follower_dic.get(ped)
-                    #是follower用操纵力加社会力模型来控制
-                    if ped.exam_leader_moved(leader.body):
-                        ped.leader_follow_force(leader.body)
-                        ped.fij_force(self.not_arrived_peds, self.leader_follower_dic)
-                    ped.fraction_force()
-                    ped.fiw_force(self.walls + self.obstacles + self.exits)
-                    ped.evade_controller(leader.body)
+                    # 是follower用社会力模型来控制
+                    self.person_handler.set_follower_action(ped,
+                                                            actions[belong_group.id],
+                                                            belong_group,
+                                                            self.terrain.exits[ped.exit_type - 3])
+                #施加合力给行人
+                ped.body.ApplyForceToCenter(b2Vec2(ped.total_force), wake=True)
+                ped.total_force = np.zeros([2])
             self.world.Step(1 / TICKS_PER_SEC, vel_iters, pos_iters)
             self.world.ClearForces()
             for ped in self.peds:
                 if ped.is_done and ped.has_removed:
                     ped.x, ped.y = 0, 0
+                    ped.pos = np.array([0, 0])
+                    ped.vec = np.array([0, 0])
                     continue
                 # 首先更新目前每个ped的坐标
                 ped.x, ped.y = ped.body.position.x, ped.body.position.y
+                ped.pos = np.array([ped.getX, ped.getY])
+                ped.vec = np.array([ped.body.linearVelocity.x, ped.body.linearVelocity.y])
                 #清空上一步的碰撞状态
                 if ped.collide_with_agent:
                     self.col_with_agent += 1
@@ -363,3 +365,14 @@ class PedsMoveEnv(Model, gym.Env):
         if self.viewer is None:  # 如果调用了 render, 而且没有 viewer, 就生成一个
             self.viewer = PedsMoveEnvViewer(self)
         self.viewer.render()  # 使用 Viewer 中的 render 功能
+
+def make_parallel_env(ped_env, n_rollout_threads):
+    def get_env_fn(rank):
+        def init_env():
+            env = copy.deepcopy(ped_env)
+            return env
+        return init_env
+    if n_rollout_threads == 1:
+        return get_env_fn(0)
+    else:
+        return SubprocEnv([get_env_fn(i) for i in range(n_rollout_threads)])

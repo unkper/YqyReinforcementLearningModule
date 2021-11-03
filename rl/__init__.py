@@ -140,17 +140,17 @@ if __name__ == '__main__':
     envName = "PedsMoveEnv"
     maps = [map_05, map_06, map_07]
 
-    env = my_env.PedsMoveEnv(terrain=map_05, person_num=12, group_size=(1,6), maxStep=30000)
+    # env = my_env.PedsMoveEnv(terrain=map_05, person_num=12, group_size=(1,6), maxStep=30000)
     # test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
     # test4(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
 
     # test3(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic,model_network=G_MaddpgLstmModelNetwork, hidden_dim=128)
 
-    test5(env, '2021_11_01_10_53_PedsMoveEnv', episode=5, AgentType=MATD3Agent, actor_network=MaddpgLstmActor,critic_network=MaddpgLstmCritic) #model_network=G_MaddpgLstmModelNetwork)
+    # test5(env, '2021_11_01_10_53_PedsMoveEnv', episode=5, AgentType=MATD3Agent, actor_network=MaddpgLstmActor,critic_network=MaddpgLstmCritic) #model_network=G_MaddpgLstmModelNetwork)
 
-    # for map in maps:
-    #     env = my_env.PedsMoveEnv(terrain=map, person_num=8, group_size=(1,1), maxStep=10000)
-    #     test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
+    for map in maps:
+        env = my_env.PedsMoveEnv(terrain=map, person_num=30, group_size=(1,6), maxStep=20000)
+        test7(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
 
     # save_file_names = ['2021_10_31_23_36_PedsMoveEnv', '2021_11_01_01_10_PedsMoveEnv',
     #                        '2021_11_01_03_32_PedsMoveEnv']

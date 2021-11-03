@@ -1,6 +1,7 @@
 import datetime
 import os
 import pickle
+import time
 
 import gym
 import random
@@ -11,6 +12,8 @@ from typing import List
 from torch import nn
 
 from ped_env.envs import PedsMoveEnv
+from rl.utils.functions import flatten_data
+from rl.utils.updates import hard_update
 
 
 class State():
@@ -257,6 +260,89 @@ class SaveDictMixin():
     def load_obj(self,savePath):
         with open(savePath , 'rb') as f:
             return pickle.load(f)
+
+class MAAgentMixin():
+    def get_exploitation_action(self, state):
+        """
+        得到给定状态下依据目标演员网络计算出的行为，不探索
+        :param state: numpy数组
+        :return: 动作 numpy数组
+        """
+        action_list = []
+        for i in range(self.env.agent_count):
+            s = flatten_data(state[i], self.state_dims[i], self.device)
+            action = self.agents[i].step(s, False).detach().cpu().numpy()
+            action_list.append(action)
+        action_list = np.array(action_list,dtype=object)
+        return action_list
+
+    def get_exploration_action(self, state, epsilon=0.1):
+        '''
+        得到给定状态下根据演员网络计算出的带噪声的行为，模拟一定的探索
+        :param state: numpy数组
+        :return: action numpy数组
+        '''
+        action_list = []
+        value = random.random()
+        for i in range(self.env.agent_count):
+            s = flatten_data(state[i], self.state_dims[i], self.device)
+            action = self.agents[i].step(s, True if value < epsilon else False).detach().cpu().numpy()
+            action_list.append(action)
+        action_list = np.array(action_list,dtype=object)
+        return action_list
+
+    def play_init(self, savePath, s0):
+        import os
+        for i in range(self.env.agent_count):
+            saPath = os.path.join(savePath, "Actor{}.pkl".format(i))
+            self.load(saPath, self.agents[i].actor)
+            hard_update(self.agents[i].target_actor, self.agents[i].actor)
+        return self.get_exploitation_action(s0)
+
+    def play_step(self, savePath, s0):
+        return self.get_exploitation_action(s0)
+
+    def learning_method(self, epsilon=0.2, explore=True, display=False,
+                        wait=False, waitSecond: float = 0.01):
+        self.state = self.env.reset()
+        time_in_episode, total_reward = 0, 0
+        is_done = [False]
+        loss_critic, loss_actor = 0.0, 0.0
+        s0 = self.state
+        #is_done此时已经为数组
+        while not is_done[0]:
+            if explore:
+                a0 = self.get_exploration_action(s0, epsilon)
+            else:
+                a0 = self.get_exploitation_action(s0)
+            s1, r1, is_done, info, total_reward = self.act(a0)
+            if display:
+                self.env.render()
+            if self.total_trans > self.batch_size and self.total_trans_in_train % self.update_frequent == 0:
+                loss_c, loss_a = self._learn_from_memory()
+                loss_critic += loss_c
+                loss_actor += loss_a
+            time_in_episode += 1
+            self.total_trans_in_train += 1
+            s0 = s1
+            if wait:
+                time.sleep(waitSecond)
+
+        loss_critic /= time_in_episode
+        loss_actor /= time_in_episode
+
+        if self.total_episodes_in_train > 0 \
+                and self.total_episodes_in_train % self.log_frequent == 0:
+            rewards = []
+            last_episodes = self.experience.last_n_episode(self.log_frequent)
+            for i in range(self.env.agent_count):
+                rewards.append(np.mean([x.total_reward[i] for x in last_episodes]))
+            print("average rewards in last {} episodes:{}".format(self.log_frequent, rewards))
+            print("{}".format(self.experience.__str__()))
+            for i, agent in enumerate(self.agents):
+                print("Agent{}:{}".format(i, agent.count))
+                agent.count = [0 for _ in range(agent.action_dim)]
+        return time_in_episode, total_reward, [loss_critic, loss_actor]
 
 if __name__ == "__main__":
     noise = OrnsteinUhlenbeckActionNoise(2)

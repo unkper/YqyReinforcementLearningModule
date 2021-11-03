@@ -1,3 +1,5 @@
+import random
+import math
 from typing import List
 
 import pyglet
@@ -26,8 +28,15 @@ class Agent():
 class Person(Agent):
     body = None
     box = None
-    radius = 0.5 / 2  # 设置所有行人直径为0.5米
-    mass = 80 # 设置所有行人的质量为80kg
+
+    radius = 0.4 / 2  # 设置所有行人直径为0.4米
+    mass = 64 # 设置所有行人的质量为64kg
+    alpha = 0.5
+    A = 2000
+    B = -0.08
+    tau = 0.5
+    Af = 0.01610612736
+    Bf = 3.93216
 
     counter = 0  # 用于记录智能体编号
     pic = None
@@ -39,12 +48,8 @@ class Person(Agent):
                  exit_type,
                  display_level,
                  debug_level,
-                 desired_velocity = 3.0,
-                 A = 2000,
-                 B = -0.08,
-                 max_velocity = 1.6,
-                 view_length = 5.0,
-                 tau = 0.5):
+                 desired_velocity = 2.4,
+                 view_length = 5.0):
         '''
 
         暂定观察空间为8个方向的射线传感器（只探测墙壁）与8个方向的射线传感器（只探测其他行人）与导航力的方向以及与终点的距离，类型为Box(-inf,inf,(18,))，
@@ -82,10 +87,6 @@ class Person(Agent):
         self.type = ObjectType.Agent
         self.view_length = view_length
         self.desired_velocity = desired_velocity
-        self.A = A
-        self.B = B
-        self.max_velocity = max_velocity
-        self.tau = tau
 
         self.display_level = display_level
         self.debug_level = debug_level
@@ -98,9 +99,13 @@ class Person(Agent):
         #利用以空间换时间的方法，x,y每step更新一次
         self.x = self.body.position.x
         self.y = self.body.position.y
+        self.pos = np.array([self.getX, self.getY])
+        self.vec = np.array([0, 0])
 
         self.aabb_callback = AABBCallBack(self)
         self.raycast_callback = RaycastCallBack(self)
+
+        self.total_force = np.zeros([2])
 
         # 通过射线得到8个方向上的其他行人与障碍物
         # 修复bug:未按照弧度值进行旋转
@@ -112,12 +117,6 @@ class Person(Agent):
                           sin(theta), cos(theta))
             vec = b2Mul(mat, identity)
             self.directions.append(vec)
-
-    def clamp_velocity(self):
-        vec = self.body.linearVelocity
-        if vec.length > self.max_velocity:
-            vec.Normalize()
-            self.body.linearVelocity = vec * self.max_velocity
 
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
@@ -141,17 +140,12 @@ class Person(Agent):
                                         color=ColorYellow if self.color != ColorYellow else ColorRed,
                                         batch=batch, group=self.debug_level)
 
-    def self_driven_force(self, force):
+    def self_driven_force(self, direction):
         #给行人施加自驱动力，力的大小为force * self.desired_velocity * self.mass / self.tau
-        applied_force = force * self.desired_velocity * self.mass / self.tau
-        self.body.ApplyForceToCenter(applied_force, wake=True)
-        #self.body.ApplyLinearImpulse(applied_force, (x, y), wake=True)
-
-    def fraction_force(self):
-        #给行人施加摩擦力，力的大小为-self.mass * velocity / self.tau
-        vec = self.body.linearVelocity
-        self.body.ApplyForceToCenter(-self.mass * vec / self.tau, wake=True)
-        #self.body.ApplyLinearImpulse(-self.mass * vec * self.damping, (x, y), wake=True)
+        d_v = direction * self.desired_velocity
+        applied_force = (d_v - self.vec) * self.mass / self.tau
+        self.total_force += applied_force
+        #self.body.ApplyForceToCenter(applied_force, wake=True)
 
     def fij_force(self, peds, dic):
         def exam_if_self(a, b):
@@ -171,7 +165,8 @@ class Person(Agent):
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             fij = self.A * math.exp((dis - self.radius - ped.radius)/self.B)
             total_force += b2Vec2(fij * (pos[0] - next_pos[0]), fij * (pos[1] - next_pos[1]))
-        self.body.ApplyForceToCenter(total_force, wake=True)
+        self.total_force += total_force
+        #self.body.ApplyForceToCenter(total_force, wake=True)
 
     def fiw_force(self, obj):
         # detect_obstacles = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Obstacle)
@@ -189,7 +184,30 @@ class Person(Agent):
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             fiw = self.A * math.exp((dis - self.radius - 0.5) / self.B) #因为每块墙的大小都为1*1m
             total_force += b2Vec2(fiw * (pos[0] - next_pos[0]), fiw * (pos[1] - next_pos[1]))
-        self.body.ApplyForceToCenter(total_force, wake=True)
+        self.total_force += total_force
+        #self.body.ApplyForceToCenter(total_force, wake=True)
+
+    def ij_group_force(self, group):
+        x = group.followers
+        x.append(group.leader)
+        total_ij_group_f = np.zeros([2])
+        for target_ped in x:
+            target = target_ped.pos
+            now_point = self.pos
+            dis = ((now_point[0] - target[0]) ** 2 + (now_point[1] - target[1]) ** 2) ** 0.5
+            if target_ped == self or dis < 0.375 or dis > 1.5:
+                continue
+            nij = normalized(target - now_point)
+            ij_group_f = nij * (self.Af / (math.pow(dis, 12)) - self.Bf / (math.pow(dis, 12)))
+            total_ij_group_f += ij_group_f
+        self.total_force += total_ij_group_f
+        #self.body.ApplyForceToCenter(ij_group_f, wake=True)
+
+    def fraction_force(self):
+        #给行人施加摩擦力，力的大小为-self.mass * velocity / self.tau
+        vec = self.body.linearVelocity
+        self.total_force += (-self.mass * vec / self.tau)
+        #self.body.ApplyForceToCenter(-self.mass * vec / self.tau, wake=True)
 
     SLOW_DOWN_DISTANCE = 0.6
     def arrive_force(self, target):
@@ -206,7 +224,8 @@ class Person(Agent):
             vec = to_target - now_vec
             applied_force = vec - now_vec
         applied_force = applied_force * self.desired_velocity * self.mass / self.tau
-        self.body.ApplyForceToCenter(applied_force, wake=True)
+        self.total_force += applied_force
+        #self.body.ApplyForceToCenter(applied_force, wake=True)
 
     def seek_force(self, target):
         now_point = np.array([self.getX, self.getY])
@@ -216,7 +235,8 @@ class Person(Agent):
         vec = np.linalg.norm(target_point - now_point)
         applied_force = vec - now_vec
         applied_force = applied_force * self.desired_velocity * self.mass / self.tau
-        self.body.ApplyForceToCenter(applied_force, wake=True)
+        self.total_force += applied_force
+        #self.body.ApplyForceToCenter(applied_force, wake=True)
 
     LEADER_BEHIND_DIST = 0.25
     def leader_follow_force(self, leader_body:b2Body):
@@ -241,11 +261,11 @@ class Person(Agent):
         #计算预期速度
         applied_force = normalized(now_point - (target_point + target_vec * lookahead_time)) - vec
         applied_force = applied_force * self.desired_velocity * self.mass / self.tau
-        self.body.ApplyForceToCenter(applied_force, wake=True)
+        self.total_force += applied_force
+        #self.body.ApplyForceToCenter(applied_force, wake=True)
 
     def evade_controller(self, leader:b2Body, evade_distance=0.5):
         '''
-
         :param leader:
         :param evade_distance_sqr: 躲避距离的平方值
         :return:
@@ -322,19 +342,20 @@ class Person(Agent):
         world.RayCast(callback, start_point, end_point)
         return callback.obs
 
-    def delete(self):
+    def delete(self, env:b2World):
         if self.pic != None:
             self.pic.delete()
             del (self.pic)
             if self.is_leader:
                 self.leader_pic.delete()
                 del (self.leader_pic)
+        env.DestroyBody(self.body)
         self.has_removed = True
         del(self)
 
     def __str__(self):
         x, y = self.getX, self.getY
-        return "x:{},y:{}".format(x, y)
+        return "id:{},x:{},y:{}".format(self.id, x, y)
 
     @property
     def getX(self):
@@ -365,7 +386,6 @@ class AABBCallBack(b2QueryCallback):
             if dis <= self.radius:
                 self.detect_objects.append(fixture.userData.model)
         return True
-
 
 class RaycastCallBack(b2RayCastCallback):
     def __init__(self, agent:Person):
@@ -440,5 +460,31 @@ class Exit(BoxWall):
         self.box = self.body.CreateFixture(fixtrueDef)
 
         self.exit_type = exit_type
+
+class Group():
+    counter = 0
+    def __init__(self, leader:Person, followers:List[Person]):
+        self.id = Group.counter
+        Group.counter += 1
+        self.leader = leader
+        leader.is_leader = True
+        self.followers = followers
+
+    def is_done(self):
+        is_done = True and self.leader.is_done
+        for ped in self.followers:
+            is_done = is_done and ped.is_done
+        return is_done
+
+    def change_leader(self):
+        last_leader = self.leader
+        new_leader = random.sample(self.followers, 1)[0]
+        self.leader = new_leader
+        self.followers.remove(new_leader)
+        new_leader.is_leader = True
+        self.followers.append(last_leader)
+        last_leader.is_leader = False
+
+
 
 

@@ -9,8 +9,7 @@ import numpy as np
 from torch.autograd import Variable
 from gym.spaces import Discrete, Box
 
-from .classes import Experience
-from .miscellaneous import str_key
+from rl.utils.miscellaneous import str_key
 
 
 def set_dict(target_dict, value, *args):
@@ -184,7 +183,7 @@ def process_maddpg_experience_data(trans_pieces, state_dims, agent_count, device
         .float().to(device)
     return s0,a0,r1,is_done,s1,s0_temp_in,s1_temp_in,s0_critic_in,s1_critic_in
 
-def print_train_string(experience:Experience, episodes=500):
+def print_train_string(experience, episodes=500):
     rewards = []
     last_episodes = experience.last_n_episode(episodes if episodes > experience.len else experience.len)
     if last_episodes is None:

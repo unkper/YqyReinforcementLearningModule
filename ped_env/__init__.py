@@ -29,7 +29,6 @@ def HelloWorldProject():
             body.angle
         ))
 
-
 def test1():
     import pyglet
 
@@ -69,11 +68,11 @@ if __name__ == '__main__':
 
     debug = False
     # test1()
-    person_num = 8
-    env = Env(map_05, person_num, group_size=(1, 3), maxStep=30000, test_mode=debug)
+    person_num = 30
+    env = Env(map_05, person_num, group_size=(1, 5), maxStep=30000, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
-    for epoch in range(2):
+    for epoch in range(1):
         starttime = time.time()
         step = 0
         obs = env.reset()
@@ -85,10 +84,11 @@ if __name__ == '__main__':
                 action = np.zeros([leader_num, 9])
                 action[:, 0] = 1
             obs, reward, is_done, info = env.step(action)
+            #print(obs[0][9:11])
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            # env.render()
+            env.render()
             # print(obs, reward, is_done)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"

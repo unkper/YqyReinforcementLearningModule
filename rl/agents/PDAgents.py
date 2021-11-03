@@ -81,7 +81,7 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         value = random.random()
         if self.discrete:
             if value < epsilon:
-                action = onehot_from_int(random.sample(range(0,self.action_dim),1),self.action_dim).to(self.device)
+                action = onehot_from_int(random.sample(range(0,self.action_dim),1), self.action_dim).to(self.device)
         else:
             if value < epsilon:
                 action += torch.tensor(self.noise.sample()).to(self.device)

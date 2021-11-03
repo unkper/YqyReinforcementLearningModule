@@ -13,7 +13,7 @@ from rl.agents.Agent import Agent
 from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
 from rl.utils.planners import AStarPlanner
 from rl.utils.updates import soft_update, hard_update
-from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience
+from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience, MAAgentMixin
 from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
     onehot_from_int, process_maddpg_experience_data, save_callback
 
@@ -72,7 +72,7 @@ class DDPGAgent:
         return action
 
 
-class G_MADDPGAgent(Agent, SaveNetworkMixin):
+class G_MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
     loss_recoder = []
 
     def __init__(self, env: Env = None,
@@ -158,36 +158,6 @@ class G_MADDPGAgent(Agent, SaveNetworkMixin):
 
     def __str__(self):
         return "G_Maddpg"
-
-    def get_exploitation_action(self, state):
-        """
-        得到给定状态下依据目标演员网络计算出的行为，不探索
-        :param state: numpy数组
-        :return: 动作 numpy数组
-        """
-        action_list = []
-        for i in range(self.env.agent_count):
-            s = flatten_data(state[i], self.state_dims[i], self.device)
-            action = self.agents[i].step(s, False).detach().cpu().numpy()
-            action_list.append(action)
-        action_list = np.array(action_list, dtype=object)
-        return action_list
-
-    def get_exploration_action(self, state, epsilon=0.1):
-        '''
-        得到给定状态下根据演员网络计算出的带噪声的行为，模拟一定的探索
-        :param epsilon:
-        :param state: numpy数组
-        :return: action numpy数组
-        '''
-        action_list = []
-        value = random.random()
-        for i in range(self.env.agent_count):
-            s = flatten_data(state[i], self.state_dims[i], self.device)
-            action = self.agents[i].step(s, True if value < epsilon else False).detach().cpu().numpy()
-            action_list.append(action)
-        action_list = np.array(action_list, dtype=object)
-        return action_list
 
     def opt_init(self, max_init_episodes, loss_callback=None):
         for i in tqdm(range(max_init_episodes)):
@@ -333,14 +303,3 @@ class G_MADDPGAgent(Agent, SaveNetworkMixin):
                 print("Agent{}:{}".format(i, agent.count))
                 agent.count = [0 for _ in range(agent.action_dim)]
         return time_in_episode, total_reward, [loss_critic, loss_actor]
-
-    def play_init(self, savePath, s0):
-        import os
-        for i in range(self.env.agent_count):
-            saPath = os.path.join(savePath, "Actor{}.pkl".format(i))
-            self.load(saPath, self.agents[i].actor)
-            hard_update(self.agents[i].target_actor, self.agents[i].actor)
-        return self.get_exploitation_action(s0)
-
-    def play_step(self, savePath, s0):
-        return self.get_exploitation_action(s0)

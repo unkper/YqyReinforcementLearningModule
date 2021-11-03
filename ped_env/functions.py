@@ -29,6 +29,11 @@ for angle in range(0, 360, int(360/ACTION_DIM)):#逆时针旋转angle的角度�
     vec = np.squeeze((mat.dot(identity)).tolist())
     actions.append(np.array(vec))
 
+def calculate_nij(i, j):
+    pos_i = i.pos
+    pos_j = j.pos
+    return normalized(pos_i - pos_j)
+
 def parse_discrete_action(type:np.ndarray):
     global actions
     return actions[np.argmax(type).item()]
@@ -72,8 +77,27 @@ def random_pick(some_list, probabilities):
                break
     return item
 
+def ij_power(r, A = 0.01610612736, B = 3.93216):
+    ij_group_f =  (A / (pow(r, 12)) - B / (pow(r, 6)))
+    return ij_group_f
+
 if __name__ == '__main__':
-    elements = []
-    for i in range(10000):
-        elements.append(random_pick(['a','b','c'],[0.1,0.6,0.3]))
-    print(elements)
+    Af, Bf = 0.4, 240
+    A = 4 * pow(Af, 12) * Bf
+    B = 4 * pow(Af, 6) * Bf
+    sigma = pow(A / B, 1/6)
+    mu = pow(B, 2)/(4*A)
+    print("Af={},Bf={},A={},B={},mu={},sigma={}".format(Af, Bf, A, B, mu, sigma))
+
+    # delta, counter = 0.01, 0
+    # start = 0.375
+    # x, y = [], []
+    # while counter <= 150:
+    #     counter += 1
+    #     r = (delta * counter) + start
+    #     force = ij_power(r)
+    #     x.append(counter / 100 + start)
+    #     y.append(force)
+    # import matplotlib.pyplot as plt
+    # plt.plot(x, y)
+    # plt.show()

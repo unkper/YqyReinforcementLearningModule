@@ -193,7 +193,7 @@ class AStarController():
             endtime = time.time()
             #print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
             #      .format(self.env.listener.col_with_agent, self.env.listener.col_with_wall))
-            #print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+            print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 def recoder_for_debug(*obj):
     pass
@@ -213,4 +213,3 @@ if __name__ == '__main__':
     env = PedsMoveEnv(map_05, person_num=30, group_size=(1,6), frame_skipping=8, maxStep=2000, planning_mode=True)
     controller = AStarController(env, recorder=recoder_for_debug)
     controller.play(100, False)
-    #test_func01()

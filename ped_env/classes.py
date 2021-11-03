@@ -1,13 +1,16 @@
-from math import inf
 
 import abc
-from typing import List
+import numpy as np
 
-from Box2D import b2QueryCallback, b2Fixture, b2RayCastCallback
+
+
+from math import inf
+from typing import List
+from multiprocessing import Process, Pipe
+
 from gym.spaces import Box, Discrete
-from ped_env.functions import parse_discrete_action
-from ped_env.objects import Person
-from ped_env.utils.misc import ObjectType
+from ped_env.functions import parse_discrete_action, calculate_nij, normalized
+from ped_env.objects import Person, Group
 
 ACTION_DIM = 9
 
@@ -25,6 +28,10 @@ class PedsHandlerInterface(abc.ABC):
 
     @abc.abstractmethod
     def set_action(self, ped:Person, action):
+        pass
+
+    @abc.abstractmethod
+    def set_follower_action(self, ped:Person, action, group:Group, exit_pos):
         pass
 
     @abc.abstractmethod
@@ -94,9 +101,7 @@ class PedsRLHandler(PedsHandlerInterface):
 
     def set_action(self, ped:Person, action):
         ped.self_driven_force(parse_discrete_action(action))
-        ped.fraction_force()
-        if not ped.exam_leader_moved(ped.body):
-            ped.fij_force(self.env.not_arrived_peds, self.env.leader_follower_dic)
+        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
 
     def get_reward(self, ped:Person, ped_index:int):
@@ -217,10 +222,31 @@ class PedsRLHandlerWithCooper(PedsHandlerInterface):
 
     def set_action(self, ped:Person, action):
         ped.self_driven_force(parse_discrete_action(action))
-        ped.fraction_force()
-        if not ped.exam_leader_moved(ped.body):
-            ped.fij_force(self.env.not_arrived_peds, self.env.leader_follower_dic)
+        # if not ped.exam_leader_moved(ped.body):
+        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
+
+    def set_follower_action(self, ped:Person, action, group:Group, exit_pos):
+        if not group.leader.is_done:
+            control_dir = parse_discrete_action(action)
+            leader_dir = calculate_nij(group.leader, ped)
+            mix_dir = ped.alpha * control_dir + (1 - ped.alpha) * leader_dir
+        else:
+            pos_i = exit_pos
+            pos_j = ped.pos
+            mix_dir = normalized(pos_i - pos_j)
+        ped.self_driven_force(mix_dir) #跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
+        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
+        ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
+        #ped.ij_group_force(group)
+
+        # 是follower用操纵力加社会力模型来控制
+        # if ped.exam_leader_moved(leader.body):
+        #     ped.leader_follow_force(leader.body)
+        #     ped.fij_force(self.not_arrived_peds, self.leader_follower_dic)
+        # #ped.fraction_force()
+        # ped.fiw_force(self.walls + self.obstacles + self.exits)
+        # ped.evade_controller(leader.body)
 
     def get_reward(self, ped:Person, ped_index:int):
         gr, lr = 0.0, 0.0
@@ -243,4 +269,94 @@ class PedsRLHandlerWithCooper(PedsHandlerInterface):
                 else:
                     lr += self.r_wait  # 给予停止不动的行人以惩罚
         return gr, lr
+
+def worker(remote, parent_remote, env_fn_wrapper):
+    parent_remote.close()
+    env = env_fn_wrapper.x()
+    while True:
+        cmd, data = remote.recv()
+        if cmd == 'step':
+            ob, reward, done, info = env.step(data)
+            if all(done):
+                ob = env.reset()
+            remote.send((ob, reward, done, info))
+        elif cmd == 'reset':
+            ob = env.reset()
+            remote.send(ob)
+        elif cmd == 'reset_task':
+            ob = env.reset_task()
+            remote.send(ob)
+        elif cmd == 'close':
+            remote.close()
+            break
+        elif cmd == 'get_spaces':
+            remote.send((env.observation_space, env.action_space))
+        elif cmd == 'get_agent_types':
+            if all([hasattr(a, 'adversary') for a in env.agents]):
+                remote.send(['adversary' if a.adversary else 'agent' for a in
+                             env.agents])
+            else:
+                remote.send(['agent' for _ in env.agents])
+        else:
+            raise NotImplementedError
+
+#https://github.com/shariqiqbal2810/maddpg-pytorch
+class SubprocEnv():
+    def __init__(self, env_fns, spaces=None):
+        """
+        env_fns: list of gym environments to run in subprocesses
+        """
+        self.waiting = False
+        self.closed = False
+        nenvs = len(env_fns)
+        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
+        self.ps = [Process(target=worker, args=(work_remote, remote, env_fn))
+            for (work_remote, remote, env_fn) in zip(self.work_remotes, self.remotes, env_fns)]
+        for p in self.ps:
+            p.daemon = True # if the main process crashes, we should not cause things to hang
+            p.start()
+        for remote in self.work_remotes:
+            remote.close()
+
+        self.remotes[0].send(('get_spaces', None))
+        observation_space, action_space = self.remotes[0].recv()
+        self.remotes[0].send(('get_agent_types', None))
+        self.agent_types = self.remotes[0].recv()
+
+    def step_async(self, actions):
+        for remote, action in zip(self.remotes, actions):
+            remote.send(('step', action))
+        self.waiting = True
+
+    def step_wait(self):
+        results = [remote.recv() for remote in self.remotes]
+        self.waiting = False
+        obs, rews, dones, infos = zip(*results)
+        return np.stack(obs), np.stack(rews), np.stack(dones), infos
+
+    def reset(self):
+        for remote in self.remotes:
+            remote.send(('reset', None))
+        return np.stack([remote.recv() for remote in self.remotes])
+
+    def reset_task(self):
+        for remote in self.remotes:
+            remote.send(('reset_task', None))
+        return np.stack([remote.recv() for remote in self.remotes])
+
+    def close(self):
+        if self.closed:
+            return
+        if self.waiting:
+            for remote in self.remotes:
+                remote.recv()
+        for remote in self.remotes:
+            remote.send(('close', None))
+        for p in self.ps:
+            p.join()
+        self.closed = True
+
+
+
+
 

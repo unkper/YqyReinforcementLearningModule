@@ -116,7 +116,7 @@ map7 = np.array([
 ])
 
 exit_test_map = [(10, 3), (10, 7)]
-start_points_test_map = [(4, 7),(4, 1),(2, 7),(4.5, 7),(6, 7)]
+start_points_test_map = [(4, 7),(4.5, 1),(2.125, 7),(4.5, 7),(6.0125, 7)]
 radius_test_map = 0
 test_map = np.array([
     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],

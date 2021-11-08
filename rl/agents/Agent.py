@@ -9,20 +9,25 @@ from random import random,choice
 from tqdm import tqdm
 
 from rl.utils.classes import Experience,Transition
-from rl.utils.policys import greedy_policy
+from rl.utils.classes import make_parallel_env
 
 class Agent():
     '''
     个体基类，没有学习能力
     '''
-    def __init__(self,env: Env = None,capacity = 10000,
+    def __init__(self,
+                 env: Env = None,
+                 capacity = 10000,
                  lambda_=0.9,
                  gamma=0.9,
                  alpha=0.5,
+                 n_rol_threads = -1,
                  ):
         #保存一些Agent可以观测到的环境信息以及已经学到的经验
-        self.env = env
+        self.env = env if n_rol_threads == 1 else make_parallel_env(env, n_rol_threads)
         self.name = "Agent"
+        assert n_rol_threads > 0 ,"not properly initialized n_rol_threads!"
+        self.n_rol_threads = n_rol_threads
         if type(env) is list:
             self.obs_space = env[0].observation_space
             self.action_space = env[0].action_space
@@ -59,6 +64,7 @@ class Agent():
         self.total_trans_in_train = 0
         self.total_episodes_in_train = 0
 
+
     def policy(self,A ,s = None,Q = None, epsilon = None):
         '''
         智能体遵循的行动策略\n
@@ -90,10 +96,15 @@ class Agent():
         s0 = self.state
         s1, r1, is_done, info = self.env.step(a0)
 
-        trans = Transition(s0, a0, r1, is_done, s1)
-        total_reward = self.experience.push(trans)
+        if self.n_rol_threads == 1:
+            trans = Transition(s0, a0, r1, is_done, s1)
+            self.experience.push(trans)
+        else:
+            for i in range(self.n_rol_threads):
+                trans = Transition(s0[i], a0[i], r1[i], is_done[i], s1[i])
+                self.experience.push(trans)
         self.state = s1
-        return s1, r1, is_done, info, total_reward
+        return s1, r1, is_done, info
 
     def learning_method(self,
                         epsilon = 0.2,
@@ -120,7 +131,8 @@ class Agent():
         time_in_episode, total_reward = 0, 0
         is_done = False
         while not is_done:
-            s1, r1, is_done, info, total_reward = self.act(a0)
+            s1, r1, is_done, info, reward = self.act(a0)
+            total_reward += np.mean(reward)
             if display:
                 self.env.render()
             a1 = self.perform_policy(s1,epsilon)
@@ -129,7 +141,7 @@ class Agent():
             self.total_trans_in_train += 1
             if wait:
                 time.sleep(waitSecond)
-        print(self.experience.last_episode)
+        print("reward in last episode:{}".format(total_reward))
         return time_in_episode, total_reward, 0.0
 
     def learning(self,
@@ -162,12 +174,13 @@ class Agent():
             display = False
             wait = False
         total_time, episode_reward, num_episode = 0,0,0
-        total_times,episode_rewards,num_episodes = [],[],[]
+        total_times,self.episode_rewards,num_episodes = [],[],[]
         max_explore_num = int(max_episode_num * explore_episodes_percent)
-        for i in tqdm(range(max_episode_num)):
+        for i in tqdm(range(0, max_episode_num, self.n_rol_threads)):
             #用于ε-贪心算法中ε随着经历的递增而逐级减少
             if decaying_epsilon:
-                epsilon = epsilon_low +(epsilon_high - epsilon_low) * np.power(np.e,-4/p*i/max_explore_num) if i < max_explore_num else 0
+                epsilon = epsilon_low + (epsilon_high - epsilon_low) * ((max_explore_num - i) / max_explore_num) if i < max_explore_num else 0
+                #epsilon = epsilon_low +(epsilon_high - epsilon_low) * np.power(np.e,-4/p*i/max_explore_num) if i < max_explore_num else 0
             else:
                 epsilon = epsilon_high
             time_in_episode,episode_reward,loss = self.learning_method(
@@ -175,19 +188,21 @@ class Agent():
                 display = display,wait = wait,
                 waitSecond = waitSecond)
             total_time += time_in_episode
-            num_episode += 1
-            self.total_episodes_in_train += 1
+            num_episode += self.n_rol_threads
+            self.total_episodes_in_train += self.n_rol_threads
             if display_in_episode > 0 and num_episode >= display_in_episode:
                 display = True
                 wait = True
             total_times.append(total_time)
-            episode_rewards.append(episode_reward)
+            self.episode_rewards.append(episode_reward)
             num_episodes.append(num_episode)
             if self.loss_callback_ and loss:
                 self.loss_callback_(self, loss)
             if self.save_callback_:
                 self.save_callback_(self, num_episode)
-        return total_times,episode_rewards,num_episodes
+        #在训练完成后关闭训练环境
+        self.env.close()
+        return total_times,self.episode_rewards,num_episodes
 
     def play(self,savePath:str = None,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):
         ep = 0
@@ -197,11 +212,12 @@ class Agent():
             if display:
                 self.env.render()
             a0 = self.play_init(savePath, s0)
-            time_in_episode, total_reward = 0, 0
+            time_in_episode = 0
+
             is_done = [False]
             ep += 1
             while not is_done[0]:
-                s1, r1, is_done, info, total_reward = self.act(a0)
+                s1, r1, is_done, info = self.act(a0)
                 if type(is_done) is bool:is_done = [is_done]
                 if display:
                     self.env.render()
@@ -210,8 +226,6 @@ class Agent():
                 time_in_episode += 1
                 if wait:
                     time.sleep(waitSecond)
-            if display:
-                print(self.experience.last_episode)
         self.env.close()
 
     def play_init(self,savePath,s0):
@@ -234,6 +248,9 @@ class Agent():
 
     def sample(self,batch_size = 64):
         return self.experience.sample(batch_size)
+
+    def __del__(self):
+        self.env.close()
 
     @property
     def total_trans(self) -> int:

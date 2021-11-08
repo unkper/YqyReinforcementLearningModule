@@ -1,8 +1,10 @@
 import Box2D as b2d
 
 from ped_env.envs import PedsMoveEnv as Env
+from ped_env.envs import PedsMoveEnvFactory
 from ped_env.utils.maps import map_05, map_06, map_07, map_test
-
+from rl.utils.classes import make_parallel_env
+from ped_env.objects import Person, Group
 
 def HelloWorldProject():
     world = b2d.b2World()
@@ -60,16 +62,14 @@ def test1():
     finally:
         window.close()
 
-
-# Hello World Project
-if __name__ == '__main__':
+def test2():
     import time
     import numpy as np
 
     debug = False
     # test1()
-    person_num = 30
-    env = Env(map_05, person_num, group_size=(1, 5), maxStep=30000, test_mode=debug)
+    person_num = 50
+    env = Env(map_07, person_num, group_size=(3, 5), maxStep=30000, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
     for epoch in range(1):
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                 action = np.zeros([leader_num, 9])
                 action[:, 0] = 1
             obs, reward, is_done, info = env.step(action)
-            #print(obs[0][9:11])
+            # print(obs[0][9:11])
             if debug:
                 env.debug_step()
             step += env.frame_skipping
@@ -94,3 +94,37 @@ if __name__ == '__main__':
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.col_with_agent, env.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+
+def test3():
+    import time
+    import numpy as np
+
+    debug = False
+    # test1()
+    person_num = 8
+    n_rol_counts = 4
+    total_epochs = 4
+    _env = Env(map_05, person_num, group_size=(1, 1), maxStep=500, test_mode=debug)
+    parallel_envs = make_parallel_env(_env, n_rol_counts)
+    leader_num = parallel_envs.agent_count
+    for epoch in range(total_epochs):
+        starttime = time.time()
+        step = 0
+        obs = parallel_envs.reset()
+        is_done = np.array([[False]])
+        while not is_done[0, 0]:
+            if not debug:
+                action = np.random.random([n_rol_counts, leader_num, 9])
+            else:
+                action = np.zeros([n_rol_counts, leader_num, 9])
+                action[:, :, 0] = 1
+            obs, reward, is_done, info = parallel_envs.step(action)
+            step += _env.frame_skipping
+            # parallel_envs.render()
+            # print(obs, reward, is_done)
+        endtime = time.time()
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+
+# Hello World Project
+if __name__ == '__main__':
+    test2()

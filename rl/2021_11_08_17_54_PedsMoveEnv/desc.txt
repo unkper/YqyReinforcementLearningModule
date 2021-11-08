@@ -4,7 +4,5 @@ update_freq:50
 lr:0.01
 gamma:0.99
 envName:PedsMoveEnv
-agent_count:4
+agent_count:6
 hidden_dim:128
-person_num:12
-group_size:(1, 6)

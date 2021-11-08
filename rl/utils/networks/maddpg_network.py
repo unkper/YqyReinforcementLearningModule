@@ -5,9 +5,61 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.functional import Tensor
 
 from rl.utils.networks.pd_network import EPS
+
+class MLPNetwork_MACritic(nn.Module):
+    def __init__(self, state_dims, action_dims, hidden_dim=64):
+        super(MLPNetwork_MACritic, self).__init__()
+        input_dim = sum(state_dims) + sum(action_dims)
+
+        self.layer1 = nn.Linear(input_dim, 64)
+        self.layer2 = nn.Linear(64, 64)
+        self.out_layer = nn.Linear(64, 1)
+        self.no_linear = F.relu
+
+    def forward(self, state, action):
+        temp = torch.cat([state, action],dim=1)
+        h1 = self.no_linear(self.layer1(temp))
+        h2 = self.no_linear(self.layer2(h1))
+        h3 = self.out_layer(h2)
+        return h3
+
+class MLPNetworkActor(nn.Module):
+    def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64, norm_in = True):
+        '''
+        构建一个演员模型
+        :param state_dim: 状态的特征数量 (int)
+        :param action_dim: 行为作为输入的特征数量 (int)
+        :param action_lim: 行为值的限定范围 [-action_lim, action_lim]
+        '''
+        super(MLPNetworkActor, self).__init__()
+
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.discrete = discrete
+
+        self.fc1 = nn.Linear(self.state_dim, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, self.action_dim)
+        self.no_linear = F.relu
+        if self.discrete:
+            print("离散动作,采用softmax作为输出!")
+            self.out_fc = lambda x:x
+        else:
+            self.fc2.weight.data.uniform_(-EPS, EPS)
+            self.out_fc = torch.tanh
+
+    def forward(self,state):
+        '''
+        前向运算，根据状态的特征表示得到具体的行为值
+        :param state: 状态的特征表示 Tensor [n,state_dim]
+        :return: 行为的特征表示 Tensor [n,action_dim]
+        '''
+        x = self.no_linear(self.fc1(state))
+        x = self.no_linear(self.fc2(x))
+        action = self.out_fc(self.fc3(x))
+        return action
 
 class MaddpgLstmCritic(nn.Module):
     def __init__(self, state_dims, action_dims, hidden_dim=64):
@@ -48,7 +100,7 @@ class MaddpgLstmActor(nn.Module):
             self.fc2.weight.data.uniform_(-EPS, EPS)
             self.out_fc = torch.tanh
 
-    def forward(self,state) -> Tensor:
+    def forward(self,state):
         '''
         前向运算，根据状态的特征表示得到具体的行为值
         :param state: 状态的特征表示 Tensor [n,state_dim]

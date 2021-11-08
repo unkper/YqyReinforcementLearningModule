@@ -56,16 +56,16 @@ def calculate_each_group_num(group_size, person_num):
     '''
     group_avg = int(sum(group_size) / 2)
     leader_num = int(person_num / group_avg)
-    while True:
-        left_num = person_num
+    if leader_num == 0:
+       raise Exception("Person_num must be bigger than group_avg_num!")
+    else:
         group_num = []
-        for i in range(0, leader_num - 1):
+        left_num = person_num
+        for i in range(0, leader_num):
             num_in_one_group = random.randint(group_size[0], group_size[1])
             group_num.append(num_in_one_group)
             left_num -= num_in_one_group
-        group_num.append(left_num)
-        if min(group_num) >= group_size[0] and max(group_num) <= group_size[1]:
-            break
+        group_num[-1] += left_num
     return group_num
 
 def random_pick(some_list, probabilities):
@@ -82,22 +82,27 @@ def ij_power(r, A = 0.01610612736, B = 3.93216):
     return ij_group_f
 
 if __name__ == '__main__':
-    Af, Bf = 0.4, 240
-    A = 4 * pow(Af, 12) * Bf
-    B = 4 * pow(Af, 6) * Bf
-    sigma = pow(A / B, 1/6)
-    mu = pow(B, 2)/(4*A)
-    print("Af={},Bf={},A={},B={},mu={},sigma={}".format(Af, Bf, A, B, mu, sigma))
+    # for i in range(10):
+    #     group_size = (5, 5)
+    #     person_num = 10
+    #     ret = calculate_each_group_num(group_size, person_num)
+    #     print(ret)
+    # Af, Bf = 0.4, 240
+    # A = 4 * pow(Af, 12) * Bf
+    # B = 4 * pow(Af, 6) * Bf
+    # sigma = pow(A / B, 1/6)
+    # mu = pow(B, 2)/(4*A)
+    # print("Af={},Bf={},A={},B={},mu={},sigma={}".format(Af, Bf, A, B, mu, sigma))
 
-    # delta, counter = 0.01, 0
-    # start = 0.375
-    # x, y = [], []
-    # while counter <= 150:
-    #     counter += 1
-    #     r = (delta * counter) + start
-    #     force = ij_power(r)
-    #     x.append(counter / 100 + start)
-    #     y.append(force)
-    # import matplotlib.pyplot as plt
-    # plt.plot(x, y)
-    # plt.show()
+    delta, counter = 0.01, 0
+    start = 0.37
+    x, y = [], []
+    while counter <= 150:
+        counter += 1
+        r = (delta * counter) + start
+        force = ij_power(r)
+        x.append(counter / 100 + start)
+        y.append(force)
+    import matplotlib.pyplot as plt
+    plt.plot(x, y)
+    plt.show()

@@ -20,15 +20,9 @@ def str_key(*args):
                 new_arg.append(str(arg))
     return "_".join(new_arg)
 
-def learning_curve_drop_outliers(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
-                                   x_name = "", y_name = "",
-                                   y1_legend = "", y2_legend="", saveName = "picture",
-                                   save=True, show=False):
-    pass
-
-def learning_curve(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
+def learning_curve(data, x_index = 0, y1_index = 1, y1_func = None, step_index = None, title = "",
                    x_name = "", y_name = "",
-                   y1_legend = "", y2_legend="", saveName = "picture",
+                   y1_legend = "", saveName = "picture",
                    save=True, show=False):
     '''根据统计数据绘制学习曲线，
     Args:
@@ -44,28 +38,42 @@ def learning_curve(data, x_index = 0, y1_index = 1, y2_index = None, title = "",
         None 绘制曲线图
     '''
     fig, ax = plt.subplots()
-    x = data[x_index]
-    y1 = data[y1_index]
-    ax.plot(x, y1, label = y1_legend)
-    if y2_index is not None:
-        ax.plot(x, data[y2_index], label = y2_legend)
+    x = np.array(data[x_index])
+    y1 = np.array(data[y1_index])
+    if y1_func != None:
+        temp_y = np.zeros(y1.shape[0])
+        for i in range(y1.shape[0]):
+            temp_y[i] = y1_func(y1[i, :])
+        y1 = temp_y
+    if step_index != None:
+        step = np.array(data[step_index])
+        print("输出经过步数平均后的值!")
+        for i in range(len(y1)):
+            y1[i] = y1[i] / (step[i] if i == 0 else step[i] - step[i-1])
+    ax.plot(x.data, y1.data, label = y1_legend)
     ax.grid(True, linestyle='-.')
     ax.tick_params(labelcolor='black', labelsize='medium', width=1)
     ax.set_xlabel(x_name)
     ax.set_ylabel(y_name)
     ax.set_title(title)
     ax.legend("rewards")
-    #plt.text(60, .025, r'$\mu=100,\ \sigma=15$')
-    #plt.axis([40, 160, 0, 0.03])
-    #plt.grid(True)
 
     if save:
         plt.savefig(os.path.join("./","curve_{}.png".format(saveName)))
-        np.savetxt(os.path.join("./","data_{}.txt".format(saveName)), data[y1_index], delimiter=",")
+        np.savetxt(os.path.join("./","rewards_{}.txt".format(saveName)), data[y1_index], delimiter=",")
+        np.savetxt(os.path.join("./","step_{}.txt".format(saveName)), data[step_index], delimiter=",")
     if show:
         plt.show()
 
+def load_data_and_draw(reward_txt, step_txt):
+    y = np.loadtxt(reward_txt, delimiter=",")
+    x = np.arange(0, len(y))
+    step = np.loadtxt(step_txt, delimiter=",")
+    learning_curve([x, y, step], y1_func=None, step_index=None, title="Test curve", save=False, show=True)
 
+if __name__ == '__main__':
+    load_data_and_draw("../../data/models/2021_11_07_00_04_PedsMoveEnv/rewards_3098d6e2-3f1b-11ec-b18b-000ec66ad5e7.txt",
+                       "../../data/models/2021_11_07_00_04_PedsMoveEnv/step_3098d6e2-3f1b-11ec-b18b-000ec66ad5e7.txt")
 
 # while batch_size > 0:
 #     index = int(random.random() * self.len)

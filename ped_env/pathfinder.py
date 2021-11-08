@@ -160,8 +160,8 @@ class AStarController():
 
     def step(self, obs):
         actions = []
-        for ob in obs:
-            ped = self.env.peds[ob[0]]
+        for idx in range(len(obs)):
+            ped = self.env.leaders[idx]
             pos_integer = [int(ped.getX), int(ped.getY)]
             exit = self.env.terrain.exits[ped.exit_type - 3] #根据智能体的id得到智能体要去的出口,3是因为出口从3开始编号
             dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
@@ -212,4 +212,4 @@ def test_func01():
 if __name__ == '__main__':
     env = PedsMoveEnv(map_05, person_num=30, group_size=(1,6), frame_skipping=8, maxStep=2000, planning_mode=True)
     controller = AStarController(env, recorder=recoder_for_debug)
-    controller.play(100, False)
+    controller.play(5, True)

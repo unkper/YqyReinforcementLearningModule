@@ -311,9 +311,9 @@ class SimpleCritic(nn.Module):
         x = self.fc3(x)
         return x
 
-class MADDPG_Critic(nn.Module):
+class MLPNetwork_MACritic(nn.Module):
     def __init__(self,state_dims:list,action_dims:list):
-        super(MADDPG_Critic, self).__init__()
+        super(MLPNetwork_MACritic, self).__init__()
         input_dim = sum(state_dims) + sum(action_dims)
 
         self.layer1 = nn.Linear(input_dim, 64)
@@ -328,7 +328,7 @@ class MADDPG_Critic(nn.Module):
         h3 = self.out_layer(h2)
         return h3
 
-class SimpleActor(nn.Module):
+class MLPNetworkActor(nn.Module):
     def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64,norm_in = True):
         '''
         构建一个演员模型
@@ -336,7 +336,7 @@ class SimpleActor(nn.Module):
         :param action_dim: 行为作为输入的特征数量 (int)
         :param action_lim: 行为值的限定范围 [-action_lim, action_lim]
         '''
-        super(SimpleActor, self).__init__()
+        super(MLPNetworkActor, self).__init__()
 
         self.state_dim = state_dim
         self.action_dim = action_dim

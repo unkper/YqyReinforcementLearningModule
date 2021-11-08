@@ -11,7 +11,7 @@ from gym.spaces import Discrete
 from torch import nn
 
 from rl.agents.Agent import Agent
-from rl.utils.networks.pd_network import SimpleActor, MADDPG_Critic
+from rl.utils.networks.pd_network import MLPNetworkActor, MLPNetwork_MACritic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience, MAAgentMixin
 from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
@@ -29,16 +29,16 @@ class DDPGAgent:
         self.action_dim = action_dim
         self.discrete = discrete
         self.device = device
-        self.actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
+        self.actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
             if actor_network is None else actor_network(state_dim, action_dim, hidden_dim).to(self.device)
-        self.target_actor = SimpleActor(state_dim, action_dim, discrete).to(self.device) \
+        self.target_actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
             if actor_network is None else actor_network(state_dim, action_dim, hidden_dim).to(self.device)
         hard_update(self.target_actor, self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 learning_rate)
-        self.critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
+        self.critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device) \
             if critic_network is None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
-        self.target_critic = MADDPG_Critic(state_dims, action_dims).to(self.device) \
+        self.target_critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device) \
             if critic_network is None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
@@ -77,6 +77,7 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
 
     def __init__(self, env: Env = None,
                  capacity=2e6,
+                 n_rol_threads=1,
                  batch_size=128,
                  learning_rate=1e-4,
                  update_frequent=50,
@@ -119,6 +120,7 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
                 self.action_dims.append(action.n)
             else:
                 self.action_dims.append(back_specified_dimension(action))
+        self.n_rol_threads = n_rol_threads
         self.batch_size = batch_size
         self.update_frequent = update_frequent
         self.log_frequent = debug_log_frequent

@@ -1,5 +1,7 @@
+import copy
 import random
 import math
+from collections import defaultdict
 from typing import List
 
 import pyglet
@@ -9,7 +11,7 @@ import numpy as np
 from Box2D import *
 from math import sin, cos
 from ped_env.utils.colors import ColorRed, exit_type_to_color, ColorYellow
-from ped_env.functions import transfer_to_render, normalized
+from ped_env.functions import transfer_to_render, normalized, ij_power
 from ped_env.utils.misc import FixtureInfo, ObjectType
 
 class Agent():
@@ -118,6 +120,33 @@ class Person(Agent):
             vec = b2Mul(mat, identity)
             self.directions.append(vec)
 
+    def update(self, exits):
+        if self.is_done and self.has_removed:
+            self.x, self.y = 0, 0
+            self.pos = np.array([0, 0])
+            self.vec = np.array([0, 0])
+            return -1
+        # 首先更新目前每个ped的坐标
+        self.x, self.y = self.body.position.x, self.body.position.y
+        self.pos = np.array([self.getX, self.getY])
+        self.vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
+        c_agent, c_wall = False, False
+        # 清空上一步的碰撞状态
+        if self.collide_with_agent:
+            c_agent = True
+        if self.collide_with_wall:
+            c_wall = True
+        self.collide_with_wall = self.collide_with_agent = False
+
+        # 检查是否有行人到达出口要进行移除
+        def exam_self_exit(a, b):
+            return b.exit_type == a.exit_type
+
+        es = self.objects_query(exits, 1 + self.radius, exam_self_exit)
+        if len(es) != 0:
+            self.is_done = True
+        return c_agent, c_wall
+
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
         if test_mode:
@@ -185,29 +214,24 @@ class Person(Agent):
             fiw = self.A * math.exp((dis - self.radius - 0.5) / self.B) #因为每块墙的大小都为1*1m
             total_force += b2Vec2(fiw * (pos[0] - next_pos[0]), fiw * (pos[1] - next_pos[1]))
         self.total_force += total_force
-        #self.body.ApplyForceToCenter(total_force, wake=True)
 
     def ij_group_force(self, group):
         x = group.followers
         x.append(group.leader)
         total_ij_group_f = np.zeros([2])
         for target_ped in x:
-            target = target_ped.pos
-            now_point = self.pos
-            dis = ((now_point[0] - target[0]) ** 2 + (now_point[1] - target[1]) ** 2) ** 0.5
-            if target_ped == self or dis < 0.375 or dis > 1.5:
+            if target_ped == self:continue
+            dis = group.dir_force_dic[self][target_ped][1]
+            if dis < 0.37 or dis > 1.5:
                 continue
-            nij = normalized(target - now_point)
-            ij_group_f = nij * (self.Af / (math.pow(dis, 12)) - self.Bf / (math.pow(dis, 12)))
+            ij_group_f = group.dir_force_dic[self][target_ped][0]
             total_ij_group_f += ij_group_f
         self.total_force += total_ij_group_f
-        #self.body.ApplyForceToCenter(ij_group_f, wake=True)
 
     def fraction_force(self):
         #给行人施加摩擦力，力的大小为-self.mass * velocity / self.tau
         vec = self.body.linearVelocity
         self.total_force += (-self.mass * vec / self.tau)
-        #self.body.ApplyForceToCenter(-self.mass * vec / self.tau, wake=True)
 
     SLOW_DOWN_DISTANCE = 0.6
     def arrive_force(self, target):
@@ -246,9 +270,6 @@ class Person(Agent):
 
         target = leader_pos + self.LEADER_BEHIND_DIST * normalized(-leader_vec)
         self.arrive_force(target)
-        #  else:
-        #     target = self.leader_last_pos
-        #     self.seek_force(target)
 
     def evade_force(self, target_body:b2Body):
         now_point = np.array([self.getX, self.getY])
@@ -463,12 +484,23 @@ class Exit(BoxWall):
 
 class Group():
     counter = 0
+    group_force_magnitude_dic = defaultdict(float)
     def __init__(self, leader:Person, followers:List[Person]):
         self.id = Group.counter
         Group.counter += 1
+        Group.get_gp_magnitude()
         self.leader = leader
         leader.is_leader = True
         self.followers = followers
+        self.dir_force_dic = defaultdict(lambda : defaultdict(float))
+        self._get_dir_force_between_groupers()
+
+    @classmethod
+    def get_gp_magnitude(cls):
+        if len(Group.group_force_magnitude_dic) > 0:
+            return
+        for r in np.arange(0.37, 1.5, 0.01):
+            Group.group_force_magnitude_dic[r] = ij_power(r)
 
     def is_done(self):
         is_done = True and self.leader.is_done
@@ -484,6 +516,51 @@ class Group():
         new_leader.is_leader = True
         self.followers.append(last_leader)
         last_leader.is_leader = False
+
+    def __get_distance(self, a, b):
+        ax, ay = a.getX, a.getY
+        bx, by = b.getX, b.getY
+        return ((ax - bx)**2 + (ay - by)**2)**0.5
+
+    def __get_group_center(self):
+        center_x, center_y = self.leader.getX, self.leader.getY
+        for ped in self.followers:
+            center_x += ped.getX
+            center_y += ped.getY
+        center_x /= (len(self.followers) + 1)
+        center_y /= (len(self.followers) + 1)
+        return (center_x, center_y)
+
+    def __get_nij(self, target, now):
+        return normalized(target.pos - now.pos)
+
+    def _get_dir_force_between_groupers(self):
+        #先计算leader与各个follower的间距
+        for follower in self.followers:
+            dis = self.__get_distance(self.leader, follower)
+            self.dir_force_dic[follower][self.leader] = [dis * self.__get_nij(self.leader, follower), dis]
+        #按顺序计算各个follower的间距
+        for i in range(len(self.followers)):
+            fa = self.followers[i]
+            for j in range(i + 1, len(self.followers)):
+                fb = self.followers[j]
+                dis = self.__get_distance(fa, fb)
+                self.dir_force_dic[fa][fb] = [dis * self.__get_nij(fb, fa), dis]
+                self.dir_force_dic[fb][fa] = [dis * self.__get_nij(fa, fb), dis]
+
+    def update(self):
+        #self._get_dir_force_between_groupers()
+        self.__get_group_center()
+
+    def get_group_force(self, pedA:Person, pedB:Person):
+        key = (pedA, pedB)
+        dis = round(self.dir_force_dic[key], 2)
+        dis = max(min(dis, 0.37), 1.5)
+        return Group.group_force_magnitude_dic[dis]
+
+
+
+
 
 
 

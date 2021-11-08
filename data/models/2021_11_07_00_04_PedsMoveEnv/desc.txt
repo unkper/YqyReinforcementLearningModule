@@ -1,0 +1,8 @@
+algorithm:Matd3
+batch_size:1024
+update_freq:50
+lr:0.01
+gamma:0.99
+envName:PedsMoveEnv
+agent_count:6
+hidden_dim:128

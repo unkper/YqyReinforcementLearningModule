@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 
 def func4():
     epsilon_high = 1.0
-    epsilon_low = 0.15
-    p = 0.8
+    epsilon_low = 0.1
+    p = 2
     max_episode_num = 100
     x = [x for x in range(max_episode_num)]
     y = []

@@ -173,7 +173,7 @@ class G_MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
         save_callback(self,0)
 
     def _learn_simulate_world(self, trans_pieces):
-        s0, a0, r1, is_done, s1, s0_temp_in, s1_temp_in, s0_critic_in, s1_critic_in = \
+        s0, a0, r1, is_done, s1, s0_critic_in, s1_critic_in = \
             process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
 
         r1 = torch.tensor(r1).float().to(self.device)
@@ -203,16 +203,16 @@ class G_MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
         total_loss_critic = 0.0
         total_loss_actor = 0.0
 
-        s0, a0, r1, is_done, s1, s0_temp_in, s1_temp_in, s0_critic_in, s1_critic_in = \
+        s0, a0, r1, is_done, s1, s0_critic_in, s1_critic_in = \
             process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
 
         for i in range(self.env.agent_count):
             if self.discrete:
                 a1 = torch.cat(
-                    [onehot_from_logits(self.agents[j].target_actor.forward(s1_temp_in[j]).detach()).to(self.device)
+                    [onehot_from_logits(self.agents[j].target_actor.forward(s1[j]).detach()).to(self.device)
                      for j in range(self.env.agent_count)], dim=1)
             else:
-                a1 = torch.cat([self.agents[j].target_actor.forward(s1_temp_in[j]).detach()
+                a1 = torch.cat([self.agents[j].target_actor.forward(s1[j]).detach()
                                 for j in range(self.env.agent_count)], dim=1)
             r1 = torch.tensor(r1).float().to(self.device)
             # detach()的作用是让梯度无法传导到target_critic,因为此时只有critic需要更新！
@@ -230,16 +230,16 @@ class G_MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
             total_loss_critic += loss_critic.item()
 
             # 优化演员网络参数，优化的目标是使得Q增大
-            curr_pol_out = self.agents[i].actor.forward(s0_temp_in[i])
+            curr_pol_out = self.agents[i].actor.forward(s0[i])
             pred_a = []
             if self.discrete:
                 for j in range(self.env.agent_count):
                     pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
-                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0_temp_in[j])).to(
+                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0[j])).to(
                         self.device))
                 pred_a = torch.cat(pred_a, dim=1)
             else:
-                pred_a = torch.cat([self.agents[j].actor.forward(s0_temp_in[j])
+                pred_a = torch.cat([self.agents[j].actor.forward(s0[j])
                                     for j in range(self.env.agent_count)], dim=1)
             # 反向梯度下降
             loss_actor = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()

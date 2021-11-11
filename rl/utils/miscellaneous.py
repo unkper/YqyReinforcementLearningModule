@@ -23,7 +23,7 @@ def str_key(*args):
 def learning_curve(data, x_index = 0, y1_index = 1, y1_func = None, step_index = None, title = "",
                    x_name = "", y_name = "",
                    y1_legend = "", saveName = "picture",
-                   save=True, show=False):
+                   save=True, save_dir="./", show=False):
     '''根据统计数据绘制学习曲线，
     Args:
         statistics: 数据元组，每一个元素是一个列表，各列表长度一致 ([], [], [])
@@ -59,9 +59,9 @@ def learning_curve(data, x_index = 0, y1_index = 1, y1_func = None, step_index =
     ax.legend("rewards")
 
     if save:
-        plt.savefig(os.path.join("./","curve_{}.png".format(saveName)))
-        np.savetxt(os.path.join("./","rewards_{}.txt".format(saveName)), data[y1_index], delimiter=",")
-        np.savetxt(os.path.join("./","step_{}.txt".format(saveName)), data[step_index], delimiter=",")
+        plt.savefig(os.path.join(save_dir,"curve_{}.png".format(saveName)))
+        np.savetxt(os.path.join(save_dir,"rewards_{}.txt".format(saveName)), data[y1_index], delimiter=",")
+        np.savetxt(os.path.join(save_dir,"step_{}.txt".format(saveName)), data[step_index], delimiter=",")
     if show:
         plt.show()
 
@@ -69,11 +69,11 @@ def load_data_and_draw(reward_txt, step_txt):
     y = np.loadtxt(reward_txt, delimiter=",")
     x = np.arange(0, len(y))
     step = np.loadtxt(step_txt, delimiter=",")
-    learning_curve([x, y, step], y1_func=None, step_index=None, title="Test curve", save=False, show=True)
+    learning_curve([x, y, step], y1_func=np.mean, step_index=None, title="Test curve", save=False, show=True)
 
 if __name__ == '__main__':
-    load_data_and_draw("../../data/models/2021_11_07_00_04_PedsMoveEnv/rewards_3098d6e2-3f1b-11ec-b18b-000ec66ad5e7.txt",
-                       "../../data/models/2021_11_07_00_04_PedsMoveEnv/step_3098d6e2-3f1b-11ec-b18b-000ec66ad5e7.txt")
+    load_data_and_draw("../../data/models/2021_11_11_00_12_PedsMoveEnv/rewards_f81f8533-4240-11ec-84e7-3cecef04b81e.txt",
+                       "../../data/models/2021_11_11_00_12_PedsMoveEnv/step_f81f8533-4240-11ec-84e7-3cecef04b81e.txt")
 
 # while batch_size > 0:
 #     index = int(random.random() * self.len)

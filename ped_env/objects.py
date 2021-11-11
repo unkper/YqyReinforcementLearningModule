@@ -399,13 +399,13 @@ class AABBCallBack(b2QueryCallback):
         query_obstacle = (self.d_type == ObjectType.Obstacle and fixture.userData.type == ObjectType.Obstacle)
         query_wall = (self.d_type == ObjectType.Wall and fixture.userData.type == ObjectType.Wall)
         query_exit = ((self.d_type == ObjectType.Exit and fixture.userData.type == ObjectType.Exit
-                       and self.agent.exit_type != fixture.userData.model.exit_type)) #当出口不是自己的才有排斥力
+                       and self.agent.exit_type != fixture.userData.env.exit_type)) #当出口不是自己的才有排斥力
         if query_agent or query_obstacle or query_wall or query_exit:  # 当
             pos = (self.agent.getX, self.agent.getY)
-            next_pos = (fixture.userData.model.getX, fixture.userData.model.getY)
+            next_pos = (fixture.userData.env.getX, fixture.userData.env.getY)
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             if dis <= self.radius:
-                self.detect_objects.append(fixture.userData.model)
+                self.detect_objects.append(fixture.userData.env)
         return True
 
 class RaycastCallBack(b2RayCastCallback):

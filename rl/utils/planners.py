@@ -3,7 +3,7 @@ import datetime
 import os
 import pickle
 
-from ped_env import map_05, map_06, map_07
+from ped_env.utils.maps import *
 from ped_env.envs import PedsMoveEnv
 from ped_env.pathfinder import AStarController
 from rl.utils.classes import Experience, Transition

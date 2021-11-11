@@ -1,12 +1,10 @@
 Box2D==2.3.10
 gym==0.19.0
-ipython==7.28.0
 matplotlib==3.3.4
 numpy==1.19.5
 pyglet==1.5.19
 pettingzoo==1.11.1
 pettingzoo[mpe]
 pettingzoo[sisl]
-socialforce==0.2.1
 torch==1.9.0+cu102
 tqdm==4.62.1

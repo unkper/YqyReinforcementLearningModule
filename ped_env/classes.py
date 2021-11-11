@@ -41,7 +41,7 @@ class PedsHandlerInterface(abc.ABC):
     def get_reward(self, ped:Person, ped_index:int, time):
         pass
 
-class PedsRLHandlerWithCooper01(PedsHandlerInterface):
+class PedsRLHandler(PedsHandlerInterface):
     '''
     合作的奖励机制
     '''
@@ -61,8 +61,12 @@ class PedsRLHandlerWithCooper01(PedsHandlerInterface):
         # 强化学习MDP定义区域
         # 定义观察空间为[智能体当前位置(x,y),智能体当前速度(dx,dy),相对目标的位置(rx,ry),其他跟随者的位置(不存在为(0,0))*5]一共16个值
         self.observation_space = [Box(-inf, inf, (16,)) for _ in range(self.agent_count)]
-        # 定义动作空间为[不动，向左，向右，向上，向下]施加1N的力
-        self.action_space = [Discrete(ACTION_DIM) for _ in range(self.agent_count)]
+        if self.env.discrete:
+            # 定义动作空间为[不动，向左，左上，向上，...]施加相应方向的力
+            self.action_space = [Discrete(ACTION_DIM) for _ in range(self.agent_count)]
+        else:
+            #定义连续动作空间为[分量x，分量y]施加相应方向的力
+            self.action_space = [Box(-1, 1, (2,)) for _ in range(self.agent_count)]
 
         self.r_arrival = r_arrival
         self.r_collision = r_collision
@@ -116,13 +120,13 @@ class PedsRLHandlerWithCooper01(PedsHandlerInterface):
         return observation
 
     def set_action(self, ped:Person, action):
-        ped.self_driven_force(parse_discrete_action(action))
+        ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
         ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
 
     def set_follower_action(self, ped:Person, action, group:Group, exit_pos):
         if not group.leader.is_done:
-            control_dir = parse_discrete_action(action)
+            control_dir = parse_discrete_action(action) if self.env.discrete else action
             leader_dir = calculate_nij(group.leader, ped)
             mix_dir = ped.alpha * control_dir + (1 - ped.alpha) * leader_dir
         else:
@@ -170,9 +174,6 @@ class ObjectQueryMap():
     def object_query(self, objects, center, radius, add_condition):
         x, y = center
         obj = objects[0] #得到第一个物体做判断
-
-
-
 
 # class PedsRLHandler(PedsHandlerInterface):
 #     '''

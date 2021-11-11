@@ -7,7 +7,7 @@ from rl.utils.functions import get_dict, set_dict
 from rl.utils.policys import epsilon_greedy_policy, greedy_policy
 from rl.utils.classes import SaveDictMixin
 
-class SarsaAgent(Agent,SaveDictMixin):
+class SarsaAgent(Agent, SaveDictMixin):
     def __init__(self,env:Env,capacity:int = 20000):
         super(SarsaAgent, self).__init__(env,capacity)
         self.Q = {} #增加Q字典存储行为价值
@@ -56,7 +56,7 @@ class SarsaAgent(Agent,SaveDictMixin):
     def play_step(self,savePath,s0):
         return int(greedy_policy(self.A,s0,self.Q))
 
-class SarsaLambdaAgent(Agent,SaveDictMixin):
+class SarsaLambdaAgent(Agent, SaveDictMixin):
     def __init__(self,env:Env,capacity:int = 20000):
         super(SarsaLambdaAgent, self).__init__(env,capacity)
         self.Q = {}

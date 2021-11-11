@@ -11,7 +11,7 @@ from typing import List, Tuple, Dict
 
 from gym.utils import seeding
 
-from ped_env.classes import ACTION_DIM, PedsRLHandlerWithCooper01
+from ped_env.classes import ACTION_DIM, PedsRLHandler
 from ped_env.objects import BoxWall, Person, Exit, Group
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
 from ped_env.utils.misc import ObjectType
@@ -111,7 +111,7 @@ class PedsMoveEnv(Model, gym.Env):
                  discrete=True,
                  frame_skipping=8,
                  maxStep=3000,
-                 PersonHandler=PedsRLHandlerWithCooper01,
+                 PersonHandler=PedsRLHandler,
                  planning_mode:bool=False,
                  test_mode:bool=False):
         '''
@@ -121,8 +121,8 @@ class PedsMoveEnv(Model, gym.Env):
         分别代表[不动,水平向右,斜向上,...]施加力，奖励为[r1,r2,...,rN],是否结束为[is_done1,...,is_doneN]
         :param terrain: 地图类，其中包含地形ndarray，出口，行人生成点和生成半径
         :param person_num: 要生成的行人总数
-        :param discrete: 动作空间是否离散（目前必须）
-        :param frame_skipping: 一次step跳过的帧数，等于一次step环境经过frame_skipping*1/TICKS_PER_SEC秒
+        :param discrete: 动作空间是否离散，连续时针对每一个智能体必须输入一个二维单位方向向量（注意！）
+        :param frame_skipping: 一次step跳过的帧数，等于一次step环境经过frame_skipping * 1 / TICKS_PER_SEC秒
         :param maxStep: 经过多少次step后就强行结束环境，所有行人到达终点时也会结束环境
         :param PersonHandler: 用于处理有关于行人状态空间，动作与返回奖励的类
         :param planning_mode:用于planner的规划时使用，主要区别是在全场随机生成智能体
@@ -296,7 +296,10 @@ class PedsMoveEnv(Model, gym.Env):
     def step(self, actions):
         is_done = [False for _ in range(self.agent_count)]
         if len(actions) != self.agent_count: raise Exception("动作向量与智能体数量不匹配!")
-        if len(actions[0]) != ACTION_DIM: raise Exception("动作向量的长度不正确!")
+        if self.discrete:
+            if len(actions[0]) != ACTION_DIM: raise Exception("动作向量的长度不正确!")
+        else:
+            if len(actions[0]) != 2: raise Exception("动作向量的长度不正确!")
         #清空上一步的碰撞状态
 
         for i in range(self.frame_skipping):
@@ -334,7 +337,7 @@ class PedsMoveEnv(Model, gym.Env):
             #     group.update()
         # 该环境中智能体是合作关系，因此使用统一奖励为好
         obs, rewards = self.person_handler.step(self.peds, self.group_dic, int(self.step_in_env / self.frame_skipping))
-        if self.left_leader_num == 0:
+        if self.left_person_num == 0:
             is_done = [True for _ in range(self.agent_count)]
             # print("所有行人都已到达出口，重置环境!")
         self.step_in_env += self.frame_skipping

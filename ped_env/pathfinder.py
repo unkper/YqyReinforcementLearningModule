@@ -3,7 +3,7 @@ import numpy as np
 
 from typing import List
 
-from ped_env.utils.maps import Map, map_05, map_06, map_07
+from ped_env.utils.maps import Map, map_05, map_06, map_hard_obj
 from ped_env.functions import parse_discrete_action
 from ped_env.envs import PedsMoveEnv, ACTION_DIM
 

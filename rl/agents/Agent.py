@@ -1,4 +1,5 @@
 import datetime
+import os
 import time
 import gym
 import random
@@ -7,6 +8,7 @@ import numpy as np
 from gym import Env
 from random import random,choice
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 from rl.utils.classes import Experience,Transition
 from rl.utils.classes import make_parallel_env
@@ -18,13 +20,16 @@ class Agent():
     def __init__(self,
                  env: Env = None,
                  capacity = 10000,
+                 env_name=None,
                  lambda_=0.9,
                  gamma=0.9,
                  alpha=0.5,
                  n_rol_threads = -1,
+                 log_dir = "./"
                  ):
         #保存一些Agent可以观测到的环境信息以及已经学到的经验
         self.env = env if n_rol_threads == 1 else make_parallel_env(env, n_rol_threads)
+        self.env_name = env_name
         self.name = "Agent"
         assert n_rol_threads > 0 ,"not properly initialized n_rol_threads!"
         self.n_rol_threads = n_rol_threads
@@ -56,12 +61,24 @@ class Agent():
         #记录当前agent的状态
         self.state = None
 
+        #为了保存方便而使用
+        self.init_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
+        log_dir = os.path.join(log_dir, self.init_time_str + "_" + self.env_name)
+        self.log_dir = log_dir
+        self.model_dir = os.path.join(log_dir, 'model')
+        self.summary_dir = os.path.join(log_dir, 'summary')
+        if not os.path.exists(self.log_dir):
+            os.makedirs(self.log_dir)
+        if not os.path.exists(self.model_dir):
+            os.makedirs(self.model_dir)
+        if not os.path.exists(self.summary_dir):
+            os.makedirs(self.summary_dir)
+        self.writer = SummaryWriter(log_dir=self.summary_dir)
+
         self.loss_callback_ = None
         self.save_callback_ = None
 
-        #为了保存方便而使用
-        self.init_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
-        self.total_trans_in_train = 0
+        self.total_steps_in_train = 0
         self.total_episodes_in_train = 0
 
 
@@ -146,14 +163,14 @@ class Agent():
 
     def learning(self,
                  epsilon_high = 1.0,
-                 epsilon_low = 0.1,
-                 p = 0.8,
+                 epsilon_low = 0.01,
+                 p = 0.99,
                  decaying_epsilon = True,
-                 explore_episodes_percent = 0.4,
+                 explore_episodes_percent = 1.0,
                  max_episode_num = 800,
                  display = False,
-                 display_in_episode = 0
-                 ,wait = False,
+                 display_in_episode = 0,
+                 wait = False,
                  waitSecond = 0.01)->tuple:
         '''
         agent的主要循环在该方法内，用于整个学习过程，通过设置相应超参数，其会调用自己的learning_method进行学习
@@ -179,8 +196,8 @@ class Agent():
         for i in tqdm(range(0, max_episode_num, self.n_rol_threads)):
             #用于ε-贪心算法中ε随着经历的递增而逐级减少
             if decaying_epsilon:
-                epsilon = epsilon_low + (epsilon_high - epsilon_low) * ((max_explore_num - i) / max_explore_num) if i < max_explore_num else 0
-                #epsilon = epsilon_low +(epsilon_high - epsilon_low) * np.power(np.e,-4/p*i/max_explore_num) if i < max_explore_num else 0
+                #epsilon = epsilon_low + (epsilon_high - epsilon_low) * ((max_explore_num - i) / max_explore_num) if i < max_explore_num else 0
+                epsilon = epsilon_low +(epsilon_high - epsilon_low) * np.power(np.e, -4/p*i/max_explore_num) if i < max_explore_num else 0
             else:
                 epsilon = epsilon_high
             time_in_episode,episode_reward,loss = self.learning_method(
@@ -202,6 +219,7 @@ class Agent():
                 self.save_callback_(self, num_episode)
         #在训练完成后关闭训练环境
         self.env.close()
+        self.writer.close()
         return total_times,self.episode_rewards,num_episodes
 
     def play(self,savePath:str = None,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):

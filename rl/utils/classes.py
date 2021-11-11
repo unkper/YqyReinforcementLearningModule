@@ -212,7 +212,7 @@ class SaveNetworkMixin():
         p = os.path.join("./",sname)
         if not os.path.exists(p):
             os.mkdir(p)
-        save_name = os.path.join("./",sname,"./{}.pkl".format(name))
+        save_name = os.path.join("./",sname,"./model/{}.pkl".format(name))
         torch.save(network.state_dict(),save_name)
         desc_txt_file = open(os.path.join(sname, "desc.txt"),"w+")
         desc_txt_file.write("algorithm:" + str(self) + "\n")
@@ -223,9 +223,15 @@ class SaveNetworkMixin():
         desc_txt_file.write("envName:" + str(self.env_name) + "\n")
         desc_txt_file.write("agent_count:" + str(self.env.agent_count) + "\n")
         desc_txt_file.write("hidden_dim:" + str(self.hidden_dim) + "\n")
-        if isinstance(self.env, PedsMoveEnv):
-            desc_txt_file.write("person_num:" + str(self.env.person_num) + "\n")
-            desc_txt_file.write("group_size:" + str(self.env.group_size) + "\n")
+        if isinstance(self.env, PedsMoveEnv) or isinstance(self.env, SubprocEnv) and self.env.type == PedsMoveEnv:
+            if isinstance(self.env, SubprocEnv):
+                a1, a2, a3, a4 = self.env.get_env_attr()
+            else:
+                a1, a2, a3, a4 = self.env.person_num, self.env.group_size, self.env.maxStep, self.env.terrain.name
+            desc_txt_file.write("person_num:" + str(a1) + "\n")
+            desc_txt_file.write("group_size:" + str(a2) + "\n")
+            desc_txt_file.write("max_step:" + str(a3) + "\n")
+            desc_txt_file.write("map_name:" + str(a4) + "\n")
         return save_name
 
     def load(self,savePath,network:nn.Module):
@@ -317,12 +323,12 @@ class MAAgentMixin():
                 total_reward[i] += np.mean(r1[:, i])
             if display:
                 self.env.render()
-            if self.total_trans > self.batch_size and self.total_trans_in_train % self.update_frequent == 0:
+            if self.total_trans > self.batch_size and self.total_steps_in_train % self.update_frequent == 0:
                 loss_c, loss_a = self._learn_from_memory()
                 loss_critic += loss_c
                 loss_actor += loss_a
             time_in_episode += 1
-            self.total_trans_in_train += self.n_rol_threads
+            self.total_steps_in_train += self.n_rol_threads
             s0 = s1
             if wait:
                 time.sleep(waitSecond)
@@ -330,10 +336,21 @@ class MAAgentMixin():
         loss_critic /= time_in_episode
         loss_actor /= time_in_episode
 
+        if self.total_episodes_in_train > 0:
+            rewards = {}
+            sum = 0
+            last_episodes = np.array(self.episode_rewards[-1:])
+            for i in range(self.env.agent_count):
+                me = np.mean(last_episodes[:, i])
+                rewards['Agent{}'.format(i)] = me
+                sum += me
+            self.writer.add_scalars("agents/reward", rewards, self.total_steps_in_train)
+            self.writer.add_scalar("agents/mean_reward", sum / self.env.agent_count, self.total_steps_in_train)
+
         if self.total_episodes_in_train > 0 \
                 and self.total_episodes_in_train % (self.log_frequent * self.n_rol_threads) == 0:
             rewards = []
-            last_episodes = np.array(self.episode_rewards[-self.log_frequent - 1:])
+            last_episodes = np.array(self.episode_rewards[-self.log_frequent:])
             for i in range(self.env.agent_count):
                 rewards.append(np.mean(last_episodes[:, i]))
             print("average rewards in last {} episodes:{}".format(self.log_frequent, rewards))
@@ -368,6 +385,10 @@ def worker(remote, parent_remote, env_fn_wrapper):
             remote.send(env.agent_count)
         elif cmd == 'render':
             env.render()
+        elif cmd == 'get_type':
+            remote.send(type(env))
+        elif cmd == 'get_attr':
+            remote.send((env.person_num, env.group_size, env.maxStep, env.terrain.name))
         else:
             raise NotImplementedError
 
@@ -410,6 +431,10 @@ class SubprocEnv(gym.Env):
         self.observation_space, self.action_space = self.remotes[0].recv()
         self.remotes[0].send(('get_agent_count', None))
         self.agent_count = self.remotes[0].recv()
+        self.remotes[0].send(('get_type', None))
+        self.type = self.remotes[0].recv()
+        self.remotes[0].send(('get_attr', None))
+        self.extra_data = self.remotes[0].recv()
 
     def step_async(self, actions):
         for remote, action in zip(self.remotes, actions):
@@ -452,6 +477,9 @@ class SubprocEnv(gym.Env):
             p.join()
         self.closed = True
 
+    def get_env_attr(self):
+        return self.extra_data
+
 def make_parallel_env(ped_env, n_rollout_threads):
     def get_env_fn(rank):
         def init_env():
@@ -462,7 +490,6 @@ def make_parallel_env(ped_env, n_rollout_threads):
         return get_env_fn(0)
     else:
         return SubprocEnv([get_env_fn(i) for i in range(n_rollout_threads)])
-
 
 if __name__ == "__main__":
     noise = OrnsteinUhlenbeckActionNoise(2)

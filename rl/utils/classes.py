@@ -316,7 +316,7 @@ class MAAgentMixin():
         loss_critic, loss_actor = 0.0, 0.0
         s0 = self.state
         #is_done此时已经为数组
-        while not is_done[0, 0]:
+        while not is_done.any():
             a0 = self.step_in_network(s0, explore, epsilon)
             s1, r1, is_done, info = self.act(a0)
             for i in range(self.env.agent_count):

@@ -12,6 +12,7 @@ from typing import List, Tuple, Dict
 from gym.utils import seeding
 
 from ped_env.classes import ACTION_DIM, PedsRLHandler
+from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
 from ped_env.utils.misc import ObjectType
@@ -113,6 +114,7 @@ class PedsMoveEnv(Model, gym.Env):
                  maxStep=3000,
                  PersonHandler=PedsRLHandler,
                  planning_mode:bool=False,
+                 train_mode:bool=True,
                  test_mode:bool=False):
         '''
         一个基于Box2D和pyglet的多行人强化学习仿真环境
@@ -145,9 +147,7 @@ class PedsMoveEnv(Model, gym.Env):
         self.points_in_last_step = []
 
         self.frame_skipping = frame_skipping
-
         self.group_size = group_size
-
         self.person_handler = PersonHandler(self)
         # 由PersonHandler类提供的属性代替，从而使用策略模式来加强灵活性
         self.observation_space = self.person_handler.observation_space
@@ -160,14 +160,15 @@ class PedsMoveEnv(Model, gym.Env):
         self.col_with_wall = 0
 
         #for raycast and aabb_query debug
+        self.train_mode = train_mode
         self.test_mode = test_mode
         self.vec = [0.0 for _ in range(self.agent_count)]
         assert group_size[1] <= 5
 
     def start(self, maps: np.ndarray, person_num_sum: int = 60, person_create_radius: float = 5):
         self.world = b2World(gravity=(0, 0), doSleep=True)
-        # self.listener = MyContactListener(self) #现在使用aabb_query的方式来判定
-        # self.world.contactListener = self.listener
+        self.listener = MyContactListener(self) #现在使用aabb_query的方式来判定
+        self.world.contactListener = self.listener
 
         self.batch = pyglet.graphics.Batch()
         self.display_level = pyglet.graphics.OrderedGroup(0)
@@ -326,20 +327,15 @@ class PedsMoveEnv(Model, gym.Env):
             self.world.Step(1 / TICKS_PER_SEC, vel_iters, pos_iters)
             self.world.ClearForces()
             for ped in self.peds:
-                ret = ped.update(self.exits)
-                if ret == -1:
-                    continue
-                else:
-                    c_agent, c_wall = ret
-                    if c_agent: self.col_with_agent += 1
-                    if c_wall: self.col_with_wall += 1
+                ped.update(self.exits)
             # for group in self.groups:
             #     group.update()
         # 该环境中智能体是合作关系，因此使用统一奖励为好
         obs, rewards = self.person_handler.step(self.peds, self.group_dic, int(self.step_in_env / self.frame_skipping))
-        if self.left_person_num == 0:
+
+        if (not self.train_mode and self.left_person_num == 0) or (self.train_mode and self.left_leader_num == 0):
             is_done = [True for _ in range(self.agent_count)]
-            # print("所有行人都已到达出口，重置环境!")
+
         self.step_in_env += self.frame_skipping
         if self.step_in_env > self.maxStep:  # 如果maxStep步都没有完全撤离，is_done直接为True
             is_done = [True for _ in range(self.agent_count)]

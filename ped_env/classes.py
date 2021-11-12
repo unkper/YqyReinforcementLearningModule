@@ -143,7 +143,7 @@ class PedsRLHandler(PedsHandlerInterface):
         if ped.is_done and ped.has_removed:
             pass
         else:
-            if ped.collide_with_agent:
+            if len(ped.collide_agents) > 0:
                 lr += self.r_collision
             if ped.is_done and not ped.has_removed:
                 lr += self.r_arrival

@@ -86,6 +86,12 @@ class Person(Agent):
         self.id = Person.counter
         Person.counter += 1
         self.box = self.body.CreateFixture(fixtureDef)
+        #添加传感器用于社会力控制
+        sensorDef = b2FixtureDef()
+        sensorDef.shape = b2CircleShape(radius=self.radius+1) #探测范围为1m
+        sensorDef.isSensor = True
+        sensorDef.userData = FixtureInfo(self.id, self, ObjectType.Sensor)
+        self.sensor = self.body.CreateFixture(sensorDef)
         self.type = ObjectType.Agent
         self.view_length = view_length
         self.desired_velocity = desired_velocity
@@ -93,8 +99,11 @@ class Person(Agent):
         self.display_level = display_level
         self.debug_level = debug_level
 
-        self.collide_with_wall = False
-        self.collide_with_agent = False
+        self.collide_obstacles = {}
+        self.collide_agents = {}
+        #此处指智能体的检测器和墙相撞
+        self.detected_obstacles = {}
+        self.detected_agents = {}
 
         self.is_leader = False
 
@@ -130,13 +139,6 @@ class Person(Agent):
         self.x, self.y = self.body.position.x, self.body.position.y
         self.pos = np.array([self.getX, self.getY])
         self.vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
-        c_agent, c_wall = False, False
-        # 清空上一步的碰撞状态
-        if self.collide_with_agent:
-            c_agent = True
-        if self.collide_with_wall:
-            c_wall = True
-        self.collide_with_wall = self.collide_with_agent = False
 
         # 检查是否有行人到达出口要进行移除
         def exam_self_exit(a, b):
@@ -145,7 +147,6 @@ class Person(Agent):
         es = self.objects_query(exits, 1 + self.radius, exam_self_exit)
         if len(es) != 0:
             self.is_done = True
-        return c_agent, c_wall
 
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
@@ -177,17 +178,7 @@ class Person(Agent):
         #self.body.ApplyForceToCenter(applied_force, wake=True)
 
     def fij_force(self, peds, dic):
-        def exam_if_self(a, b):
-            return a.id != b.id
-        detect_persons = self.objects_query(peds, 1 + self.radius * 2, exam_if_self)
-        #detect_persons = self.aabb_query(world, 1 + self.radius * 2) # 如果两个行人距离超过1m，之间的作用力可以忽略不计
-        if self.is_leader:
-            for ped in detect_persons:
-                if not ped.is_leader and dic[ped] == self:
-                    continue
-                else:
-                    self.collide_with_agent = True
-                    break
+        detect_persons = list(self.detected_agents.values())
         total_force = b2Vec2(0, 0)
         for ped in detect_persons:
             pos, next_pos = (self.getX, self.getY), (ped.getX, ped.getY)
@@ -198,14 +189,7 @@ class Person(Agent):
         #self.body.ApplyForceToCenter(total_force, wake=True)
 
     def fiw_force(self, obj):
-        # detect_obstacles = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Obstacle)
-        # detect_walls = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Wall)
-        # detect_exits = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Exit)
-        def exam_self_exit(a, b):
-            if b.type != ObjectType.Exit:return True
-            return b.exit_type != a.exit_type
-        detect_things = self.objects_query(obj, 1 + self.radius * 2, exam_self_exit)
-        #detect_obstacles = self.aabb_query(world, 1 + self.radius * 2, detect_type=ObjectType.Obstacle) # 如果行人与墙间的距离超过1m，之间的作用力可以忽略不计
+        detect_things = list(self.detected_obstacles.values())
         self.collide_with_wall = True if len(detect_things) != 0 else False
         total_force = b2Vec2(0, 0)
         for obs in detect_things:
@@ -378,6 +362,9 @@ class Person(Agent):
         x, y = self.getX, self.getY
         return "id:{},x:{},y:{}".format(self.id, x, y)
 
+    def __repr__(self):
+        return "Agent{}".format(self.id)
+
     @property
     def getX(self):
         return self.x
@@ -443,6 +430,7 @@ class BoxWall():
         # And add a box fixture onto it
         self.box = self.body.CreatePolygonFixture(box=(new_width / 2, new_height / 2), density=0)
         self.box.userData = FixtureInfo(BoxWall.counter, self, object_type)
+        self.id = BoxWall.counter
         BoxWall.counter += 1
 
         self.type = object_type
@@ -464,6 +452,9 @@ class BoxWall():
     @property
     def getY(self):
         return self.y
+
+    def __repr__(self):
+        return "BoxWall{}".format(self.id)
 
 class Exit(BoxWall):
     counter = 0
@@ -493,7 +484,8 @@ class Group():
         leader.is_leader = True
         self.followers = followers
         self.dir_force_dic = defaultdict(lambda : defaultdict(float))
-        self._get_dir_force_between_groupers()
+        self.group_center = self.__get_group_center()
+        self._get_dir_force_to_center()
 
     @classmethod
     def get_gp_magnitude(cls):
@@ -519,7 +511,7 @@ class Group():
 
     def __get_distance(self, a, b):
         ax, ay = a.getX, a.getY
-        bx, by = b.getX, b.getY
+        bx, by = b[0], b[1]
         return ((ax - bx)**2 + (ay - by)**2)**0.5
 
     def __get_group_center(self):
@@ -534,23 +526,24 @@ class Group():
     def __get_nij(self, target, now):
         return normalized(target.pos - now.pos)
 
-    def _get_dir_force_between_groupers(self):
+    LEADER_BEHIND_DIST = 0.25
+    def _get_dir_force_to_center(self):
         #先计算leader与各个follower的间距
         for follower in self.followers:
-            dis = self.__get_distance(self.leader, follower)
+            dis = self.__get_distance(self.leader, self.group_center)
             self.dir_force_dic[follower][self.leader] = [dis * self.__get_nij(self.leader, follower), dis]
-        #按顺序计算各个follower的间距
-        for i in range(len(self.followers)):
-            fa = self.followers[i]
-            for j in range(i + 1, len(self.followers)):
-                fb = self.followers[j]
-                dis = self.__get_distance(fa, fb)
-                self.dir_force_dic[fa][fb] = [dis * self.__get_nij(fb, fa), dis]
-                self.dir_force_dic[fb][fa] = [dis * self.__get_nij(fa, fb), dis]
+        # #按顺序计算各个follower的间距
+        # for i in range(len(self.followers)):
+        #     fa = self.followers[i]
+        #     for j in range(i + 1, len(self.followers)):
+        #         fb = self.followers[j]
+        #         dis = self.__get_distance(fa, fb)
+        #         self.dir_force_dic[fa][fb] = [dis * self.__get_nij(fb, fa), dis]
+        #         self.dir_force_dic[fb][fa] = [dis * self.__get_nij(fa, fb), dis]
 
     def update(self):
-        #self._get_dir_force_between_groupers()
-        self.__get_group_center()
+        self.group_center = self.__get_group_center()
+        self._get_dir_force_to_center()
 
     def get_group_force(self, pedA:Person, pedB:Person):
         key = (pedA, pedB)

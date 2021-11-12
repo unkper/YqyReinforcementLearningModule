@@ -68,8 +68,8 @@ def test2():
 
     debug = False
     # test1()
-    person_num = 8
-    env = Env(map_07, person_num, group_size=(1, 1), maxStep=10000, test_mode=debug)
+    person_num = 60
+    env = Env(map_08, person_num, group_size=(5, 5), maxStep=10000, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
     for epoch in range(1):
@@ -132,8 +132,8 @@ def test4():
 
     debug = False
     # test1()
-    person_num = 8
-    env = Env(map_06, person_num, group_size=(1, 1), maxStep=10000, discrete=False, test_mode=debug)
+    person_num = 60
+    env = Env(map_06, person_num, group_size=(5, 5), maxStep=10000, discrete=False, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
     for epoch in range(1):
@@ -159,7 +159,5 @@ def test4():
               .format(env.col_with_agent, env.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
-
-# Hello World Project
 if __name__ == '__main__':
-    test4()
+    test2()

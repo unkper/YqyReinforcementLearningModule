@@ -210,6 +210,6 @@ def test_func01():
     print(time.time() - start_time)
 
 if __name__ == '__main__':
-    env = PedsMoveEnv(map_05, person_num=30, group_size=(1,6), frame_skipping=8, maxStep=2000, planning_mode=True)
+    env = PedsMoveEnv(map_05, person_num=30, group_size=(5,5), maxStep=2000, planning_mode=False)
     controller = AStarController(env, recorder=recoder_for_debug)
     controller.play(5, True)

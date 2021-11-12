@@ -25,7 +25,6 @@ from rl.utils.networks.dyna_network import dyna_model_network, dyna_q_network
 from rl.utils.networks.maddpg_network import MLPNetworkActor, MLPNetwork_MACritic, \
                                              MaddpgLstmActor, MaddpgLstmCritic, G_MaddpgLstmModelNetwork
 from rl.utils.miscellaneous import learning_curve
-from rl.utils.classes import OrnsteinUhlenbeckActionNoise
 from rl.utils.planners import AStarPlanner
 
 
@@ -66,13 +65,13 @@ def test4(useEnv,envName,n_rol_threads=8,actor_network=None,critic_network=None,
                   decaying_epsilon=True,
                   epsilon_high=1.0,
                   epsilon_low=0.01,
-                  max_episode_num=1600,
+                  max_episode_num=3200,
                   explore_episodes_percent=1.0
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
     learning_curve(data, 2, 1, title="MADDPGAgent performance on {}".format(envName),
-                   x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="")
+                   x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="maddpg")
 
 def test5(useEnv,fileName,episode=3, AgentType=MADDPGAgent,
           actor_network=None, critic_network=None, model_network=None, hidden_dim=64):
@@ -112,13 +111,13 @@ def test7(useEnv,envName,n_rol_threads=8,actor_network=None,critic_network=None,
                   decaying_epsilon=True,
                   epsilon_high=1.0,
                   epsilon_low=0.01,
-                  max_episode_num=1600,
+                  max_episode_num=2,
                   explore_episodes_percent=1.0
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
     learning_curve(data, 2, 1, step_index=0, title="MATD3Agent performance on {}".format(envName),
-                   x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="")
+                   x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="matd3")
 
 if __name__ == '__main__':
     # envs = [(SimpleWorldComm(maxStep=250),"SimpleWorldComm"),(SimpleCrypto(),"SimpleCrypto"),(SimpleReference(),"SimpleReference")]
@@ -131,23 +130,23 @@ if __name__ == '__main__':
     # for item in envs:
     #     test4(item[0],item[1])
     envName = "PedsMoveEnv"
-    maps = [map_05, map_06, map_07, map_08]
+    maps = [map_05, map_06, map_08]
 
-    env = my_env.PedsMoveEnv(terrain=map_04, person_num=30, group_size=(5,5), maxStep=20000)
-    # test7(env, envName, n_rol_threads=8, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic,
-    #             hidden_dim=128)
+    env = my_env.PedsMoveEnv(terrain=map_05, person_num=30, group_size=(5,5), maxStep=20000)
+    test7(env, envName, n_rol_threads=8, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic,
+                hidden_dim=128)
     # for i in range(2):
     #     test7(env, envName, n_rol_threads=8, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic, hidden_dim=128)
-    test4(env, envName, n_rol_threads=16, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic, hidden_dim=128)
+    # test4(env, envName, n_rol_threads=16, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic, hidden_dim=128)
 
     # test3(env, envName, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic,model_network=G_MaddpgLstmModelNetwork, hidden_dim=128)
 
-    # test5(env, '2021_11_11_00_12_PedsMoveEnv', episode=5, AgentType=MATD3Agent, actor_network=MLPNetworkActor,critic_network=MLPNetwork_MACritic) #model_network=G_MaddpgLstmModelNetwork)
+    # test5(env, '2021_11_11_13_36_PedsMoveEnv', episode=5, AgentType=MATD3Agent, actor_network=MLPNetworkActor,critic_network=MLPNetwork_MACritic) #model_network=G_MaddpgLstmModelNetwork)
 
-    for map in maps:
-        env = my_env.PedsMoveEnv(terrain=map, person_num=30 if map != map_hard_obj else 32, group_size=(5, 5) if map != map_hard_obj else (4, 4), maxStep=20000)
-        test7(env, envName, n_rol_threads=16, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic,
-              hidden_dim=128)
+    # for map in maps:
+    #     env = my_env.PedsMoveEnv(terrain=map, person_num=30 if map != map_hard_obj else 32, group_size=(5, 5) if map != map_hard_obj else (4, 4), maxStep=20000)
+    #     test7(env, envName, n_rol_threads=16, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic,
+    #           hidden_dim=128)
 
     # save_file_names = ['2021_10_31_23_36_PedsMoveEnv', '2021_11_01_01_10_PedsMoveEnv',
     #                        '2021_11_01_03_32_PedsMoveEnv']

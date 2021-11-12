@@ -22,6 +22,7 @@ class DDPGAgent:
                  learning_rate, discrete,
                  device, state_dims, action_dims,
                  actor_network = None, critic_network = None, hidden_dim=64):
+        if not discrete: raise Exception("只能处理离散动作空间!")
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
@@ -60,18 +61,12 @@ class DDPGAgent:
         Outputs:
             action (Pytorch Variable): Actions for this agent
         """
-        if explore and self.discrete:
+        if explore:
             action = onehot_from_int(random.randint(0, self.action_dim - 1), self.action_dim)  # 利用随机策略进行采样
-        elif explore and not self.discrete:
-            action = torch.Tensor(self.noise.sample()).to(self.device)
-            action = action.clamp(-1, 1)
-        elif not explore and self.discrete:
+        else:
             action = self.actor(torch.unsqueeze(obs, dim=0)) #统一以一批次的形式进行输入
             action = onehot_from_logits(action)
             action = torch.squeeze(action).to(self.device)
-        else:
-            action = self.actor(torch.unsqueeze(obs, dim=0))
-            action = action.clamp(-1, 1)
         self.count[torch.argmax(action).item()] += 1
         return action
 
@@ -213,6 +208,12 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
             torch.nn.utils.clip_grad_norm_(self.agents[i].actor.parameters(), 0.5)
             self.agents[i].actor_optimizer.step()
             total_loss_actor += actor_loss.item()
+
+            if self.writer is not None:
+                self.writer.add_scalars('agent%i/losses' % i,
+                                   {'vf_loss': critic_loss,
+                                    'pol_loss': actor_loss},
+                                   self.total_steps_in_train)
         # 每隔K轮才对目标网络进行一次更新
         if self.train_update_count % self.K == 0:
             self.update_all_targets()

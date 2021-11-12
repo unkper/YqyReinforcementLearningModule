@@ -22,6 +22,7 @@ class DDPGAgent:
                  learning_rate, discrete,
                  device, state_dims, action_dims, target_entropy_ratio,
                  actor_network = None, critic_network = None, hidden_dim=64):
+        if not discrete: raise Exception("只能处理离散动作空间!")
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
@@ -52,7 +53,7 @@ class DDPGAgent:
 
         # Target entropy is -log(1/|A|) * ratio (= maximum entropy * ratio).
         self.target_entropy = \
-            -np.log(1.0 / self.env.action_space.n) * target_entropy_ratio
+            -np.log(1.0 / action_dim) * target_entropy_ratio
         # We optimize log(alpha), instead of alpha.
         self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
         self.alpha = self.log_alpha.exp()
@@ -68,18 +69,12 @@ class DDPGAgent:
         Outputs:
             action (Pytorch Variable): Actions for this agent
         """
-        if explore and self.discrete:
+        if explore:
             action = onehot_from_int(random.randint(0, self.action_dim - 1), self.action_dim)  # 利用随机策略进行采样
-        elif explore and not self.discrete:
-            action = torch.Tensor(self.noise.sample()).to(self.device)
-            action = action.clamp(-1, 1)
-        elif not explore and self.discrete:
-            action = self.actor(torch.unsqueeze(obs, dim=0)) #统一以一批次的形式进行输入
-            action = onehot_from_logits(action)
-            action = torch.squeeze(action).to(self.device)
+            action_probs = np.zeros(self.action_dim)
         else:
-            action = self.actor(torch.unsqueeze(obs, dim=0))
-            action = action.clamp(-1, 1)
+            action_probs = self.actor(torch.unsqueeze(obs, dim=0)) #统一以一批次的形式进行输入
+            action = onehot_from_logits(action_probs)
         self.count[torch.argmax(action).item()] += 1
         return action
 
@@ -141,6 +136,9 @@ class MASACAgent(MAAgentMixin, SaveNetworkMixin, Agent):
         self.hidden_dim = hidden_dim
         self.gamma = gamma
         self.tau = tau
+        self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
+        self.alpha = self.log_alpha.exp()
+
         self.train_update_count = 0
         self.K = K
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')

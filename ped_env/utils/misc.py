@@ -5,6 +5,7 @@ class ObjectType(enum.Enum):
     Wall = 2
     Obstacle = 3
     Exit = 4
+    Sensor = 5
 
 class FixtureInfo():
     def __init__(self, id:int, model:object, type:ObjectType):

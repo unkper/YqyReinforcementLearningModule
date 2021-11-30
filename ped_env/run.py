@@ -68,8 +68,8 @@ def test2():
 
     debug = False
     # test1()
-    person_num = 60
-    env = Env(map_08, person_num, group_size=(5, 5), maxStep=10000, test_mode=debug)
+    person_num = 30
+    env = Env(map_02, person_num, group_size=(5, 5), maxStep=10000, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
     for epoch in range(1):
@@ -84,7 +84,6 @@ def test2():
                 action = np.zeros([leader_num, 9])
                 action[:, 0] = 1
             obs, reward, is_done, info = env.step(action)
-            # print(obs[0][9:11])
             if debug:
                 env.debug_step()
             step += env.frame_skipping
@@ -133,7 +132,7 @@ def test4():
     debug = False
     # test1()
     person_num = 60
-    env = Env(map_06, person_num, group_size=(5, 5), maxStep=10000, discrete=False, test_mode=debug)
+    env = Env(map_08, person_num, group_size=(5, 5), maxStep=10000, discrete=False, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
     for epoch in range(1):
@@ -161,3 +160,10 @@ def test4():
 
 if __name__ == '__main__':
     test2()
+
+    # import kdtree
+    # points = []
+    # for i in range(100):
+    #     points.append([10 - i * 0.5, 0.3 * i])
+    # tr = kdtree.create(points, dimensions=2)
+    # print(tr.search_nn([4, 1.2]))

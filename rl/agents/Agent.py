@@ -25,6 +25,7 @@ class Agent():
                  gamma=0.9,
                  alpha=0.5,
                  n_rol_threads = -1,
+                 explore_step = 30000,
                  log_dir = "./"
                  ):
         #保存一些Agent可以观测到的环境信息以及已经学到的经验
@@ -56,6 +57,7 @@ class Agent():
         self.lambda_ = lambda_
         self.gamma = gamma
         self.alpha = alpha
+        self.explore_step = explore_step
 
         self.experience = Experience(capacity=capacity)
         #记录当前agent的状态
@@ -78,8 +80,11 @@ class Agent():
         self.loss_callback_ = None
         self.save_callback_ = None
 
+        self.init_train_steps = 0
         self.total_steps_in_train = 0
         self.total_episodes_in_train = 0
+
+
 
 
     def policy(self,A ,s = None,Q = None, epsilon = None):
@@ -193,11 +198,12 @@ class Agent():
         total_time, episode_reward, num_episode = 0,0,0
         total_times,self.episode_rewards,num_episodes = [],[],[]
         max_explore_num = int(max_episode_num * explore_episodes_percent)
-        for i in tqdm(range(0, max_episode_num, self.n_rol_threads)):
+        #self.init_train_steps = self.init_train()
+        for i in tqdm(range(self.init_train_steps, max_episode_num, 1)):
             #用于ε-贪心算法中ε随着经历的递增而逐级减少
             if decaying_epsilon:
                 #epsilon = epsilon_low + (epsilon_high - epsilon_low) * ((max_explore_num - i) / max_explore_num) if i < max_explore_num else 0
-                epsilon = epsilon_low +(epsilon_high - epsilon_low) * np.power(np.e, -4/p*i/max_explore_num) if i < max_explore_num else 0
+                epsilon = epsilon_low + (epsilon_high - epsilon_low) * np.power(np.e, -4/p*i/max_explore_num) if i < max_explore_num else 0
             else:
                 epsilon = epsilon_high
             time_in_episode,episode_reward,loss = self.learning_method(
@@ -205,8 +211,8 @@ class Agent():
                 display = display,wait = wait,
                 waitSecond = waitSecond)
             total_time += time_in_episode
-            num_episode += self.n_rol_threads
-            self.total_episodes_in_train += self.n_rol_threads
+            num_episode += 1
+            self.total_episodes_in_train += 1
             if display_in_episode > 0 and num_episode >= display_in_episode:
                 display = True
                 wait = True

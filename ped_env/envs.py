@@ -9,8 +9,6 @@ import numpy as np
 from Box2D import (b2World, b2Vec2)
 from typing import List, Tuple, Dict
 
-from gym.utils import seeding
-
 from ped_env.classes import ACTION_DIM, PedsRLHandler
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
@@ -22,16 +20,6 @@ from ped_env.functions import calculate_each_group_num
 
 TICKS_PER_SEC = 50
 vel_iters, pos_iters = 6, 2
-
-class Model:
-    def __init__(self):
-        self.world = None
-
-    def find_person(self, person_id) -> Person:
-        raise NotImplemented
-
-    def pop_ped_from_not_arrived(self, person_id):
-        raise NotImplemented
 
 class PedsMoveEnvFactory():
     GROUP_SIZE = 0.25
@@ -67,25 +55,25 @@ class PedsMoveEnvFactory():
             start_pos.append((new_x, new_y))
         return self.create_people(start_pos, exit_type, test_mode)
 
-    def set_group_process(self, group, groups, leader_dic, persons):
+    def set_group_process(self, group, groups, group_dic, persons):
         leader = random.sample(group, 1)[0]  # 随机选取一人作为leader
         followers = copy.copy(group)
         followers.remove(leader)
         group_obj = Group(leader, followers)
         groups.append(group_obj)
-        leader_dic.update({per : group_obj for per in group})  # 将leader和follow的映射关系添加
+        group_dic.update({per : group_obj for per in group})  # 将leader和follow的映射关系添加
         persons.extend(group)
 
-    def create_group_persons_in_radius(self, start_node, radius, person_num, groups, leader_dic:Dict, group_size, exit_type, test_mode=False):
+    def create_group_persons_in_radius(self, terrain:Map, idx, person_num, groups, group_dic:Dict, group_size, test_mode=False):
         each_group_num = calculate_each_group_num(group_size, person_num)
         persons = []
         for num in each_group_num:
-            group_center_node = (start_node[0] + radius * random.random(), start_node[1] + radius * random.random())
-            group = self.inner_create_persons_in_radius(group_center_node, self.GROUP_SIZE, num, exit_type, test_mode)
-            self.set_group_process(group, groups, leader_dic, persons)
+            group_center_node = (terrain.start_points[idx][0] + terrain.create_radius * random.random(), terrain.start_points[idx][1] + terrain.create_radius * random.random())
+            group = self.inner_create_persons_in_radius(group_center_node, self.GROUP_SIZE, num, terrain.get_random_exit(idx), test_mode)
+            self.set_group_process(group, groups, group_dic, persons)
         return persons
 
-    def random_create_persons(self, terrain:Map, person_num, groups, leader_dic, group_size, exit_type, test_mode=False):
+    def random_create_persons(self, terrain:Map, idx, person_num, groups, group_dic, group_size, test_mode=False):
         h, w = terrain.map.shape[0], terrain.map.shape[1]
         each_group_num = calculate_each_group_num(group_size, person_num)
         persons = []
@@ -94,11 +82,11 @@ class PedsMoveEnvFactory():
                 new_x, new_y = random.random() * w,random.random() * h
                 if 1 < new_x < w and 1 < new_y < h and terrain.map[int(new_x), int(new_y)] == 0:
                     break
-            group = self.inner_create_persons_in_radius((new_x, new_y), self.GROUP_SIZE, num, exit_type, test_mode)
-            self.set_group_process(group, groups, leader_dic, persons)
+            group = self.inner_create_persons_in_radius((new_x, new_y), self.GROUP_SIZE, num, terrain.get_random_exit(idx), test_mode)
+            self.set_group_process(group, groups, group_dic, persons)
         return persons
 
-class PedsMoveEnv(Model, gym.Env):
+class PedsMoveEnv(gym.Env):
     viewer = None
     peds = []
     not_arrived_peds = []
@@ -202,14 +190,14 @@ class PedsMoveEnv(Model, gym.Env):
                       for _ in range(len(self.terrain.start_points))]
         person_num[-1] += reminder
         for i, num in enumerate(person_num):
-            exit_type = i % len(self.terrain.exits)
             if not self.test_mode and not self.planning_mode:
-                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain.start_points[i], person_create_radius, num, self.groups, self.group_dic, self.group_size, exit_type + 3, self.test_mode))  # 因为出口从3开始编号，依次给行人赋予出口编号值
+                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.test_mode))
             elif not self.test_mode and self.planning_mode:
-                self.peds.extend(self.factory.random_create_persons(self.terrain, num, self.groups, self.group_dic, self.group_size, exit_type + 3, self.test_mode))
+                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.test_mode))
             else:
+                exit_type = self.terrain.get_random_exit(i)
                 #self.peds.extend(self.factory.random_create_persons(self.terrain, num, self.group_dic, self.group_size, exit_type + 3, self.test_mode))
-                group = self.factory.create_people(self.terrain.start_points, exit_type + 3, self.test_mode)
+                group = self.factory.create_people(self.terrain.start_points, exit_type, self.test_mode)
                 self.factory.set_group_process(group, self.groups, self.group_dic, self.peds)
                 self.peds.extend(group)
         self.left_person_num = sum(person_num)
@@ -328,8 +316,9 @@ class PedsMoveEnv(Model, gym.Env):
             self.world.ClearForces()
             for ped in self.peds:
                 ped.update(self.exits)
-            # for group in self.groups:
-            #     group.update()
+
+            for group in self.groups:
+                group.update()
         # 该环境中智能体是合作关系，因此使用统一奖励为好
         obs, rewards = self.person_handler.step(self.peds, self.group_dic, int(self.step_in_env / self.frame_skipping))
 

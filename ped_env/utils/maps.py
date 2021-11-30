@@ -1,9 +1,9 @@
 import numpy as np
 from numpy import flipud
-
+from random import sample
 
 class Map():
-    def __init__(self, map: np.ndarray, exits: list, start_points: list, name, radius):
+    def __init__(self, map: np.ndarray, exits: list, start_points: list, random_exits:list, name, radius):
         # 对地图进行翻转操作
         map = flipud(map)
         self.map = map.T
@@ -11,6 +11,7 @@ class Map():
         self.start_points = start_points
         self.create_radius = radius
         self.name = name
+        self.random_exits = random_exits
 
     def get_render_scale(self, window_size: int = 500):
         '''
@@ -20,15 +21,40 @@ class Map():
         size = self.map.shape[0]
         return window_size / size
 
+    def get_random_exit(self, index):
+        return sample(self.random_exits[index], 1)[0]
+
     def __str__(self):
         return self.name
 
+
+start_points_map2 = [(1.5, 3), (1.5, 8)]
+exit_map2 = [(11.5, 2), (11.5, 9), (7, 11.5), (7, 0.5)]
+radius_map2 = 1
+random_exits2 = [[3], [4]]
+
+map2 = np.array([
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+])
+
 start_points_map3 = [(1.5, 3), (1.5, 8)]
-exit_map3 = [(11.5, 2), (11.5, 9)]
+exit_map3 = [(11.5, 2), (11.5, 9), (7, 11.5), (7, 0.5)]
 radius_map3 = 1
+random_exits3 = [[3, 6], [4, 5]]
 
 map3 = np.array([
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 5, 5, 5, 2, 2, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
@@ -39,7 +65,7 @@ map3 = np.array([
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 6, 6, 6, 2, 2, 2],
 ])
 
 start_points_map4 = [(1.5, 3), (1.5, 8)]
@@ -62,12 +88,13 @@ map4 = np.array([
 ])
 
 start_points_map5 = [(1.5, 3), (1.5, 8)]
-exit_map5 = [(11.5, 2), (11.5, 9)]
+exit_map5 = [(11.5, 2), (11.5, 9), (7, 11.5), (7, 0.5)]
 radius_map5 = 1
+random_exits5 = [[3, 6], [4, 5]]
 
 #不进行交叉
 map5 = np.array([
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 5, 5, 5, 2, 2, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
     [2, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 4],
@@ -78,15 +105,16 @@ map5 = np.array([
     [2, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 3],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 6, 6, 6, 2, 2, 2],
 ])
 
 start_points_map6 = [(1.5, 3), (1.5, 8)]
-exit_map6 = [(11.5, 2), (11.5, 9)]
+exit_map6 = [(11.5, 2), (11.5, 9), (7, 11.5), (7, 0.5)]
 radius_map6 = 1
+random_exits6 = [[3, 6], [4, 5]]
 
 map6 = np.array([
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 5, 5, 5, 2, 2, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4],
     [2, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 4],
@@ -97,7 +125,7 @@ map6 = np.array([
     [2, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 3],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 6, 6, 6, 2, 2, 2],
 ])
 
 start_points_map7 = [(2, 5.5), (9, 5.5)]
@@ -119,20 +147,21 @@ map7 = np.array([
     [2, 2, 2, 2, 6, 6, 6, 6, 2, 2, 2, 2],
 ])
 
-start_points_map8 = [(2, 2)]
-exit_map8 = [(1.5, 11.5)]
+start_points_map8 = [(2, 5)]
+exit_map8 = [(2, 11.5),(9, 11.5)]
 radius_map8 = 1.5
+random_exits8 = [[3, 4]]
 
 map8 = np.array([
-    [2, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 2],
+    [2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2],
+    [2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2],
+    [2, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 2],
+    [2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
@@ -173,11 +202,12 @@ test_map = np.array([
     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
 ])
 
-map_03 = Map(map3, exit_map3, start_points_map3, "map_03", radius_map3)
-map_04 = Map(map4, exit_map4, start_points_map4, "map_04", radius_map4)
-map_05 = Map(map5, exit_map5, start_points_map5, "map_05", radius_map5) #simple 1600 16 51.01min TD3
-map_06 = Map(map6, exit_map6, start_points_map6, "map_06", radius_map6) #hard 1600 16 6 hour TD3
-map_07 = Map(map7, exit_map7, start_points_map7, "map_07", radius_map7) #mid 1600 16 4 hour TD3
-map_08 = Map(map8, exit_map8, start_points_map8, "map_08", radius_map8) #
-map_test = Map(test_map, exit_test_map, start_points_test_map, "map_test", radius_test_map)
-map_hard_obj = Map(map_hard, exit_map7, start_points_map7, "map_07", radius_map7)
+map_02 = Map(map2, exit_map2, start_points_map2, random_exits2, "map_02", radius_map2)
+map_03 = Map(map3, exit_map3, start_points_map3, random_exits3, "map_03", radius_map3)
+#map_04 = Map(map4, exit_map4, start_points_map4, "map_04", radius_map4)
+map_05 = Map(map5, exit_map5, start_points_map5, random_exits5, "map_05", radius_map5) #simple 1600 16 51.01min TD3
+map_06 = Map(map6, exit_map6, start_points_map6, random_exits6, "map_06", radius_map6) #hard 1600 16 6 hour TD3
+#map_07 = Map(map7, exit_map7, start_points_map7, "map_07", radius_map7) #mid 1600 16 4 hour TD3
+map_08 = Map(map8, exit_map8, start_points_map8, random_exits8, "map_08", radius_map8) #
+#map_test = Map(test_map, exit_test_map, start_points_test_map, "map_test", radius_test_map)
+#map_hard_obj = Map(map_hard, exit_map7, start_points_map7, "map_07", radius_map7)

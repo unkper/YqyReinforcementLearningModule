@@ -311,9 +311,9 @@ class SimpleCritic(nn.Module):
         x = self.fc3(x)
         return x
 
-class MLPNetwork_MACritic(nn.Module):
+class MLPNetworkCritic(nn.Module):
     def __init__(self,state_dims:list,action_dims:list):
-        super(MLPNetwork_MACritic, self).__init__()
+        super(MLPNetworkCritic, self).__init__()
         input_dim = sum(state_dims) + sum(action_dims)
 
         self.layer1 = nn.Linear(input_dim, 64)
@@ -364,35 +364,3 @@ class MLPNetworkActor(nn.Module):
         action = self.out_fc(self.fc3(x))
         return action
 
-class SimpleActor02(nn.Module):
-    def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64,norm_in = True):
-        '''
-        构建一个演员模型
-        :param state_dim: 状态的特征数量 (int)
-        :param action_dim: 行为作为输入的特征数量 (int)
-        :param action_lim: 行为值的限定范围 [-action_lim, action_lim]
-        '''
-        super(SimpleActor02, self).__init__()
-
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        self.discrete = discrete
-
-        self.fc1 = nn.Linear(self.state_dim, 64)
-        self.fc2 = nn.Linear(64, self.action_dim)
-        if self.discrete:
-            print("离散动作,采用softmax作为输出!")
-            self.out_fc = lambda x:x
-        else:
-            self.fc2.weight.data.uniform_(-EPS, EPS)
-            self.out_fc = torch.tanh
-
-    def forward(self,state) -> Tensor:
-        '''
-        前向运算，根据状态的特征表示得到具体的行为值
-        :param state: 状态的特征表示 Tensor [n,state_dim]
-        :return: 行为的特征表示 Tensor [n,action_dim]
-        '''
-        x = F.relu(self.fc1(state))
-        action = self.out_fc(self.fc2(x))
-        return action

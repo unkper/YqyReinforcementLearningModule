@@ -30,6 +30,9 @@ class GymEnvWrapper(gym.Env):
     def seed(self, seed=None):
         self.wrappedEnv.seed(seed)
 
+    def close(self):
+        self.wrapperEnv.close()
+
 class SimpleAdversary(GymEnvWrapper):
     def __init__(self, maxStep = 25):
         super(SimpleAdversary, self).__init__()
@@ -83,7 +86,7 @@ class SimplePusher(GymEnvWrapper):
         obs = list(obs.values())
         reward = list(reward.values())
         is_done = list(is_done.values())
-        return obs, reward, is_done, "SimpleAdversary"
+        return obs, reward, is_done, "SimplePusher"
 
 class SimpleSpread(GymEnvWrapper):
     def __init__(self,maxStep=25):
@@ -102,7 +105,7 @@ class SimpleSpread(GymEnvWrapper):
         obs = list(obs.values())
         reward = list(reward.values())
         is_done = list(is_done.values())
-        return obs, reward, is_done, "SimpleAdversary"
+        return obs, reward, is_done, "SimpleSpread"
 
 class SimpleWorldComm(GymEnvWrapper):
     def __init__(self,maxStep=25):

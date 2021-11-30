@@ -11,7 +11,7 @@ from gym.spaces import Discrete
 from torch import nn
 
 from rl.agents.Agent import Agent
-from rl.utils.networks.pd_network import MLPNetworkActor, MLPNetwork_MACritic
+from rl.utils.networks.pd_network import MLPNetworkActor, MLPNetworkCritic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience, MAAgentMixin
 from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
@@ -19,28 +19,27 @@ from rl.utils.functions import back_specified_dimension, onehot_from_logits, gum
 
 MSELoss = torch.nn.MSELoss()
 
-
 class DDPGAgent:
     def __init__(self, state_dim, action_dim,
                  learning_rate, discrete,
                  device, state_dims, action_dims,
-                 actor_network=None, critic_network=None, hidden_dim=64):
+                 actor_network=None, critic_network=None, actor_hidden_dim=64, critic_hidden_dim=64):
         if not discrete: raise Exception("只能处理离散动作空间!")
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
         self.device = device
         self.actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim).to(self.device)
+            if actor_network is None else actor_network(state_dim, action_dim, actor_hidden_dim).to(self.device)
         self.target_actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network is None else actor_network(state_dim, action_dim, hidden_dim).to(self.device)
+            if actor_network is None else actor_network(state_dim, action_dim, actor_hidden_dim).to(self.device)
         hard_update(self.target_actor, self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 learning_rate)
-        self.critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device) \
-            if critic_network is None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
-        self.target_critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device) \
-            if critic_network is None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
+        self.critic = MLPNetworkCritic(state_dims, action_dims).to(self.device) \
+            if critic_network is None else critic_network(state_dims, action_dims, critic_hidden_dim).to(self.device)
+        self.target_critic = MLPNetworkCritic(state_dims, action_dims).to(self.device) \
+            if critic_network is None else critic_network(state_dims, action_dims, critic_hidden_dim).to(self.device)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  learning_rate)
@@ -66,7 +65,6 @@ class DDPGAgent:
         self.count[torch.argmax(action).item()] += 1
         return action
 
-
 class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
     loss_recoder = []
 
@@ -81,8 +79,10 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
                  tau=0.01,
                  actor_network=None,
                  critic_network=None,
-                 hidden_dim=64,
-                 env_name="training_env"
+                 actor_hidden_dim=64,
+                 critic_hidden_dim=64,
+                 env_name="training_env",
+                 n_steps_train = 3
                  ):
         '''
         环境的输入有以下几点变化，设此时有N个智能体：
@@ -116,6 +116,8 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
             else:
                 self.action_dims.append(back_specified_dimension(action))
         self.n_rol_threads = n_rol_threads
+        self.actor_hidden_dim = actor_hidden_dim
+        self.critic_hidden_dim = critic_hidden_dim
         self.batch_size = batch_size
         self.update_frequent = update_frequent
         self.log_frequent = debug_log_frequent
@@ -125,11 +127,13 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.agents = []
         self.experience = Experience(capacity)
-        self.hidden_dim = hidden_dim
+
+        self.n_steps_train = n_steps_train
+
         for i in range(self.env.agent_count):
             ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
                            self.learning_rate, self.discrete, self.device, self.state_dims,
-                           self.action_dims, actor_network, critic_network, hidden_dim)
+                           self.action_dims, actor_network, critic_network, actor_hidden_dim, critic_hidden_dim)
             self.agents.append(ag)
 
         self.loss_callback_ = loss_callback
@@ -160,10 +164,10 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
                 else:
                     a1 = torch.cat([self.agents[j].target_actor.forward(s1[j]) for j in range(self.env.agent_count)],dim=1)
                 # detach()的作用是让梯度无法传导到target_critic,因为此时只有critic需要更新！
-                target_V = torch.squeeze(self.agents[i].target_critic.forward(s1_critic_in, a1))
+                target_V = self.agents[i].target_critic.forward(s1_critic_in, a1)
             # 优化评判家网络参数，优化的目标是使评判值与r + gamma * Q'(s1,a1)尽量接近
             target_Q = r1[:, i] + self.gamma * target_V * torch.tensor(1 - is_done[:, i]).to(self.device)
-            current_Q = torch.squeeze(self.agents[i].critic.forward(s0_critic_in, a0))  # 此时没有使用detach！
+            current_Q = self.agents[i].critic.forward(s0_critic_in, a0) # 此时没有使用detach！
             critic_loss = MSELoss(current_Q, target_Q).to(self.device)
             self.agents[i].critic_optimizer.zero_grad()
             critic_loss.backward()
@@ -191,17 +195,16 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
             self.agents[i].actor_optimizer.step()
             total_actor_loss += actor_loss.item()
 
-            if self.writer is not None:
-                self.writer.add_scalars('agent%i/losses' % i,
-                                   {'vf_loss': critic_loss,
-                                    'pol_loss': actor_loss},
-                                   self.total_steps_in_train)
-        self.update_all_targets()
+            # if self.writer is not None:
+            #     self.writer.add_scalars('agent/losses i' % i,
+            #                        {'vf_loss': critic_loss,
+            #                         'pol_loss': actor_loss},
+            #                        self.total_steps_in_train)
+
+            soft_update(self.agents[i].target_actor, self.agents[i].actor, self.tau)
+            soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
+
         return (total_critic_loss, total_actor_loss)
 
-    def update_all_targets(self):
-        for agent in self.agents:
-            # 软更新参数
-            soft_update(agent.target_actor, agent.actor, self.tau)
-            soft_update(agent.target_critic, agent.critic, self.tau)
+
 

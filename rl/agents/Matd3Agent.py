@@ -9,7 +9,7 @@ from gym import Env
 from gym.spaces import Discrete
 
 from rl.agents.Agent import Agent
-from rl.utils.networks.pd_network import MLPNetworkActor, MLPNetwork_MACritic
+from rl.utils.networks.maddpg_network import MLPNetworkActor, DoubleQNetworkCritic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience, MAAgentMixin
 from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
@@ -21,33 +21,26 @@ class DDPGAgent:
     def __init__(self, state_dim, action_dim,
                  learning_rate, discrete,
                  device, state_dims, action_dims,
-                 actor_network = None, critic_network = None, hidden_dim=64):
+                 actor_network = None, critic_network = None, actor_hidden_dim=64, critic_hidden_dim=64):
         if not discrete: raise Exception("只能处理离散动作空间!")
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
         self.device = device
         self.actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network == None else actor_network(state_dim, action_dim, discrete, hidden_dim).to(self.device)
+            if actor_network == None else actor_network(state_dim, action_dim, discrete, actor_hidden_dim).to(self.device)
         self.target_actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
-            if actor_network == None else actor_network(state_dim, action_dim, discrete, hidden_dim).to(self.device)
+            if actor_network == None else actor_network(state_dim, action_dim, discrete, actor_hidden_dim).to(self.device)
         hard_update(self.target_actor, self.actor)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
-                                                learning_rate)
-        self.critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device)\
-            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
-        self.target_critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device)\
-            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), learning_rate)
+
+        self.critic = DoubleQNetworkCritic(state_dims, action_dims).to(self.device)\
+            if critic_network == None else critic_network(state_dims, action_dims, critic_hidden_dim).to(self.device)
+        self.target_critic = DoubleQNetworkCritic(state_dims, action_dims).to(self.device)\
+            if critic_network == None else critic_network(state_dims, action_dims, critic_hidden_dim).to(self.device)
         hard_update(self.target_critic, self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
-                                                 learning_rate)
-        self.other_critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device) \
-            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
-        self.other_target_critic = MLPNetwork_MACritic(state_dims, action_dims).to(self.device) \
-            if critic_network == None else critic_network(state_dims, action_dims, hidden_dim).to(self.device)
-        hard_update(self.other_target_critic, self.other_critic)
-        self.other_critic_optimizer = torch.optim.Adam(self.other_critic.parameters(),
-                                                       learning_rate)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), learning_rate)
+
         self.noise = OrnsteinUhlenbeckActionNoise(1 if self.discrete else action_dim)
         self.count = [0 for _ in range(action_dim)]
 
@@ -85,7 +78,9 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
                  K = 5,
                  actor_network = None,
                  critic_network = None,
-                 hidden_dim = 64,
+                 actor_hidden_dim = 64,
+                 critic_hidden_dim = 64,
+                 n_steps_train=5,
                  env_name = "training_env"
                  ):
         '''
@@ -120,13 +115,15 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
             else:
                 self.action_dims.append(back_specified_dimension(action))
         self.n_rol_threads = n_rol_threads
+        self.actor_hidden_dim = actor_hidden_dim
+        self.critic_hidden_dim = critic_hidden_dim
         self.batch_size = batch_size
         self.update_frequent = update_frequent
         self.log_frequent = debug_log_frequent
         self.learning_rate = learning_rate
-        self.hidden_dim = hidden_dim
         self.gamma = gamma
         self.tau = tau
+        self.n_steps_train = n_steps_train
         self.train_update_count = 0
         self.K = K
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -135,7 +132,7 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
         for i in range(self.env.agent_count):
             ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
                            self.learning_rate, self.discrete, self.device, self.state_dims,
-                           self.action_dims,actor_network,critic_network)
+                           self.action_dims, actor_network, critic_network, self.actor_hidden_dim, self.critic_hidden_dim)
             self.agents.append(ag)
 
         self.loss_callback_ = loss_callback
@@ -168,61 +165,46 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
                     a1 = torch.cat([self.agents[j].target_actor.forward(s1[j])
                                     for j in range(self.env.agent_count)],dim=1)
                 # detach()的作用是让梯度无法传导到target_critic,因为此时只有critic需要更新！
-                target_Q1 = torch.squeeze(
-                    self.agents[i].target_critic.forward(s1_critic_in, a1))
-                target_Q2 = torch.squeeze(
-                    self.agents[i].other_target_critic.forward(s1_critic_in, a1))
+                target_Q1, target_Q2 = self.agents[i].target_critic.forward(s1_critic_in, a1)
             # 用两个目标价值网络来计算取其中最小者为TD目标
             target_V = torch.min(target_Q1, target_Q2)
             # 优化两个评判家网络参数，优化的目标是使评判值与r + gamma * Q'(s1,a1)尽量接近
             target_Q = r1[:,i] + self.gamma * target_V * torch.tensor(1 - is_done[:,i]).to(self.device)
-            current_Q1 = torch.squeeze(self.agents[i].critic.forward(s0_critic_in, a0))  # 此时没有使用detach！
-            current_Q2 = torch.squeeze(self.agents[i].other_critic.forward(s0_critic_in, a0))
+            current_Q1, current_Q2 = self.agents[i].critic.forward(s0_critic_in, a0)  # 此时没有使用detach！
             critic_loss = MSELoss(current_Q1, target_Q) + MSELoss(current_Q2, target_Q)
             self.agents[i].critic_optimizer.zero_grad()
-            self.agents[i].other_critic_optimizer.zero_grad()
             critic_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.agents[i].critic.parameters(), 0.5)
-            torch.nn.utils.clip_grad_norm_(self.agents[i].other_critic.parameters(), 0.5)
             self.agents[i].critic_optimizer.step()
-            self.agents[i].other_critic_optimizer.step()
             total_critic_loss += critic_loss.item()
 
-            # 优化演员网络参数，优化的目标是使得Q增大
-            curr_pol_out = self.agents[i].actor.forward(s0[i])
-            pred_a = []
-            if self.discrete:
-                for j in range(self.env.agent_count):
-                    pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
-                                  if i == j else onehot_from_logits(self.agents[j].actor.forward(s0[j])).to(self.device))
-                pred_a = torch.cat(pred_a,dim=1)
-            else:
-                pred_a = torch.cat([self.agents[j].actor.forward(s0[j])
-                                for j in range(self.env.agent_count)],dim=1)
-            # 反向梯度下降
-            actor_loss = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
-            actor_loss += (curr_pol_out**2).mean() * 1e-3
+            # 每隔K轮才对策略网络和目标网络进行一次更新
+            if self.train_update_count % self.K == 0:
+                # 优化演员网络参数，优化的目标是使得Q增大
+                curr_pol_out = self.agents[i].actor.forward(s0[i])
+                pred_a = []
+                if self.discrete:
+                    for j in range(self.env.agent_count):
+                        pred_a.append(gumbel_softmax(curr_pol_out).to(self.device)
+                                      if i == j else onehot_from_logits(self.agents[j].actor.forward(s0[j])).to(self.device))
+                    pred_a = torch.cat(pred_a, dim=1)
+                else:
+                    pred_a = torch.cat([self.agents[j].actor.forward(s0[j])
+                                    for j in range(self.env.agent_count)],dim=1)
+                # 反向梯度下降
+                actor_loss = -1 * self.agents[i].critic.Q1(s0_critic_in, pred_a).mean()
+                actor_loss += (curr_pol_out**2).mean() * 1e-3
 
-            self.agents[i].actor_optimizer.zero_grad()
-            actor_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.agents[i].actor.parameters(), 0.5)
-            self.agents[i].actor_optimizer.step()
-            total_loss_actor += actor_loss.item()
+                self.agents[i].actor_optimizer.zero_grad()
+                actor_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.agents[i].actor.parameters(), 0.5)
+                self.agents[i].actor_optimizer.step()
+                total_loss_actor += actor_loss.item()
 
-            if self.writer is not None:
-                self.writer.add_scalars('agent%i/losses' % i,
-                                   {'vf_loss': critic_loss,
-                                    'pol_loss': actor_loss},
-                                   self.total_steps_in_train)
-        # 每隔K轮才对目标网络进行一次更新
-        if self.train_update_count % self.K == 0:
-            self.update_all_targets()
+                # 软更新参数
+                soft_update(self.agents[i].target_actor, self.agents[i].actor, self.tau)
+                soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
+
         self.train_update_count += 1
         return (total_critic_loss, total_loss_actor)
 
-    def update_all_targets(self):
-        for agent in self.agents:
-            # 软更新参数
-            soft_update(agent.target_actor, agent.actor, self.tau)
-            soft_update(agent.target_critic, agent.critic, self.tau)
-            soft_update(agent.other_target_critic, agent.other_critic, self.tau)

@@ -170,6 +170,7 @@ def process_maddpg_experience_data(trans_pieces, state_dims, agent_count, device
     s0 = [np.stack(s0[:, j], axis=0) for j in range(agent_count)]
     s1 = [np.stack(s1[:, j], axis=0) for j in range(agent_count)]
 
+
     s0_temp_in = [flatten_data(s0[j], state_dims[j], device, ifBatch=True)
                   for j in range(agent_count)]
 
@@ -183,7 +184,7 @@ def process_maddpg_experience_data(trans_pieces, state_dims, agent_count, device
         np.stack([np.concatenate(a0[j, :]) for j in range(a0.shape[0])], axis=0).astype(float)) \
         .float().to(device)
     r1 = torch.tensor(r1).float().to(device)
-    return s0_temp_in,a0,r1,is_done,s1_temp_in,s0_critic_in,s1_critic_in
+    return s0_temp_in, a0, r1, is_done, s1_temp_in, s0_critic_in, s1_critic_in
 
 def print_train_string(experience, trans=500):
     rewards = []
@@ -195,7 +196,6 @@ def print_train_string(experience, trans=500):
     print("average rewards in last {} trans:{}".format(trans, rewards))
     print("{}".format(experience.__str__()))
 
-
 def loss_callback(agent, loss):
     agent.loss_recoder.append(list(loss))
     if len(agent.loss_recoder) > 0: #每一个episode都进行记录
@@ -205,7 +205,26 @@ def loss_callback(agent, loss):
         agent.writer.add_scalar('loss/actor', actor_loss_mean, agent.total_steps_in_train)
         agent.writer.add_scalar('loss/critic', critic_loss_mean, agent.total_steps_in_train)
 
-    if agent.total_episodes_in_train % (agent.log_frequent * agent.n_rol_threads) == 0 \
+    if agent.total_episodes_in_train % agent.log_frequent == 0 \
+            and len(agent.loss_recoder) > 0:
+        arr = np.array(agent.loss_recoder)
+        critic_loss_mean = np.mean(arr[-agent.log_frequent:, 0])
+        actor_loss_mean = np.mean(arr[-agent.log_frequent:, 1])
+        print("Critic mean Loss:{},Actor mean Loss:{}"
+              .format(critic_loss_mean, actor_loss_mean))
+
+def model_based_loss_callback(agent, loss):
+    agent.loss_recoder.append(list(loss))
+    if len(agent.loss_recoder) > 0:  # 每一个episode都进行记录
+        arr = np.array(agent.loss_recoder)
+        critic_loss_mean = np.mean(arr[-agent.log_frequent:, 0])
+        actor_loss_mean = np.mean(arr[-agent.log_frequent:, 1])
+        model_loss_mean = np.mean(arr[-agent.log_frequent:, 2])
+        agent.writer.add_scalar('loss/actor', actor_loss_mean, agent.total_steps_in_train)
+        agent.writer.add_scalar('loss/critic', critic_loss_mean, agent.total_steps_in_train)
+        agent.writer.add_scalar('loss/model', model_loss_mean, agent.total_steps_in_train)
+
+    if agent.total_episodes_in_train % agent.log_frequent == 0 \
             and len(agent.loss_recoder) > 0:
         arr = np.array(agent.loss_recoder)
         critic_loss_mean = np.mean(arr[-agent.log_frequent:, 0])

@@ -33,7 +33,7 @@ class Person(Agent):
 
     radius = 0.4 / 2  # 设置所有行人直径为0.4米
     mass = 64 # 设置所有行人的质量为64kg
-    alpha = 0.5
+    alpha = 0.5 # alpha * control_dir + (1 - alpha) * leader_dir
     A = 2000
     B = -0.08
     tau = 0.5
@@ -151,14 +151,6 @@ class Person(Agent):
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
         if test_mode:
-            # self.name_pic = pyglet.text.Label(str(self.id),
-            #                                   font_name='Times New Roman',
-            #                                   font_size=10,
-            #                                   x=x * render_scale,y=y * render_scale,
-            #                                   anchor_x='center', anchor_y='center',
-            #                                   group=self.debug_level,
-            #                                   batch=batch
-            #                                   )
             pass
         self.pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
                                         self.radius * render_scale,
@@ -175,8 +167,8 @@ class Person(Agent):
         d_v = direction * self.desired_velocity
         applied_force = (d_v - self.vec) * self.mass / self.tau
         self.total_force += applied_force
-        #self.body.ApplyForceToCenter(applied_force, wake=True)
 
+    #社会力模型添加
     def fij_force(self, peds, dic):
         detect_persons = list(self.detected_agents.values())
         total_force = b2Vec2(0, 0)
@@ -186,7 +178,6 @@ class Person(Agent):
             fij = self.A * math.exp((dis - self.radius - ped.radius)/self.B)
             total_force += b2Vec2(fij * (pos[0] - next_pos[0]), fij * (pos[1] - next_pos[1]))
         self.total_force += total_force
-        #self.body.ApplyForceToCenter(total_force, wake=True)
 
     def fiw_force(self, obj):
         detect_things = list(self.detected_obstacles.values())
@@ -200,111 +191,10 @@ class Person(Agent):
         self.total_force += total_force
 
     def ij_group_force(self, group):
-        x = group.followers
-        x.append(group.leader)
-        total_ij_group_f = np.zeros([2])
-        for target_ped in x:
-            if target_ped == self:continue
-            dis = group.dir_force_dic[self][target_ped][1]
-            if dis < 0.37 or dis > 1.5:
-                continue
-            ij_group_f = group.dir_force_dic[self][target_ped][0]
-            total_ij_group_f += ij_group_f
+        if self.is_leader:
+            raise Exception("只能为follower添加成员力!")
+        total_ij_group_f = group.get_group_force(self)
         self.total_force += total_ij_group_f
-
-    def fraction_force(self):
-        #给行人施加摩擦力，力的大小为-self.mass * velocity / self.tau
-        vec = self.body.linearVelocity
-        self.total_force += (-self.mass * vec / self.tau)
-
-    SLOW_DOWN_DISTANCE = 0.6
-    def arrive_force(self, target):
-        now_point = np.array([self.getX, self.getY])
-        target_point = np.array(target)
-        now_vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
-
-        to_target = target_point - now_point
-        distance = np.linalg.norm(to_target)
-        if distance > self.SLOW_DOWN_DISTANCE:
-            vec = normalized(to_target) * self.desired_velocity
-            applied_force = vec - now_vec
-        else:
-            vec = to_target - now_vec
-            applied_force = vec - now_vec
-        applied_force = applied_force * self.desired_velocity * self.mass / self.tau
-        self.total_force += applied_force
-        #self.body.ApplyForceToCenter(applied_force, wake=True)
-
-    def seek_force(self, target):
-        now_point = np.array([self.getX, self.getY])
-        target_point = np.array(target)
-        now_vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
-
-        vec = np.linalg.norm(target_point - now_point)
-        applied_force = vec - now_vec
-        applied_force = applied_force * self.desired_velocity * self.mass / self.tau
-        self.total_force += applied_force
-        #self.body.ApplyForceToCenter(applied_force, wake=True)
-
-    LEADER_BEHIND_DIST = 0.25
-    def leader_follow_force(self, leader_body:b2Body):
-        #计算目标点，并驱使arrive_force到达该点
-        leader_vec = np.array([leader_body.linearVelocity.x, leader_body.linearVelocity.y])
-        leader_pos = np.array([leader_body.position.x, leader_body.position.y])
-
-        target = leader_pos + self.LEADER_BEHIND_DIST * normalized(-leader_vec)
-        self.arrive_force(target)
-
-    def evade_force(self, target_body:b2Body):
-        now_point = np.array([self.getX, self.getY])
-        vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
-        target_vec = np.array([target_body.linearVelocity.x, target_body.linearVelocity.y])
-        target_point = np.array([target_body.position.x, target_body.position.y])
-        to_target = target_point - now_point
-        #计算向前预测的时间
-        lookahead_time = np.linalg.norm(to_target) / (self.desired_velocity + np.linalg.norm(target_vec))
-        #计算预期速度
-        applied_force = normalized(now_point - (target_point + target_vec * lookahead_time)) - vec
-        applied_force = applied_force * self.desired_velocity * self.mass / self.tau
-        self.total_force += applied_force
-        #self.body.ApplyForceToCenter(applied_force, wake=True)
-
-    def evade_controller(self, leader:b2Body, evade_distance=0.5):
-        '''
-        :param leader:
-        :param evade_distance_sqr: 躲避距离的平方值
-        :return:
-        '''
-        #计算领队前方的一个点
-        leader_pos = np.array([leader.position.x, leader.position.y])
-        leader_vec = np.array([leader.linearVelocity.x, leader.linearVelocity.y])
-        pos = np.array([self.getX, self.getY])
-        leader_ahead = leader_pos + normalized(leader_vec) * self.LEADER_BEHIND_DIST
-        #计算角色当前位置与领队前方某点的位置，如果小于某个值，就需要躲避
-        dist = pos - leader_ahead
-        if np.linalg.norm(dist) < evade_distance:
-            self.evade_force(leader)
-
-    leader_last_pos = None
-    timer = 0
-    def exam_leader_moved(self, leader:b2Body):
-        moved = False
-        if self.timer > 0:
-            self.timer -= 1
-            return moved
-        if self.leader_last_pos is None:
-            self.leader_last_pos = np.array([leader.position.x, leader.position.y])
-            self.timer = 2
-        else:
-            now_pos = np.array([leader.position.x, leader.position.y])
-            diff = 0.01
-            if self.leader_last_pos[0] - diff < now_pos[0] < self.leader_last_pos[1] + diff \
-                and self.leader_last_pos[1] - diff < now_pos[1] < self.leader_last_pos[1] + diff:
-                self.timer = 2
-            else:
-                moved = True
-            #if not is_done: self.leader_last_pos = now_pos
-        return moved
 
     def aabb_query(self, world, size, detect_type:ObjectType = ObjectType.Agent, test_mode=False):
         '''
@@ -483,9 +373,10 @@ class Group():
         self.leader = leader
         leader.is_leader = True
         self.followers = followers
+        self.followers_set = set(followers)
         self.dir_force_dic = defaultdict(lambda : defaultdict(float))
         self.group_center = self.__get_group_center()
-        self._get_dir_force_to_center()
+        self._get_group_force_dis_nij()
 
     @classmethod
     def get_gp_magnitude(cls):
@@ -524,32 +415,32 @@ class Group():
         return (center_x, center_y)
 
     def __get_nij(self, target, now):
-        return normalized(target.pos - now.pos)
+        return normalized(target - now.pos)
 
     LEADER_BEHIND_DIST = 0.25
-    def _get_dir_force_to_center(self):
-        #先计算leader与各个follower的间距
+    def _get_group_force_dis_nij(self):
+        #先计算leader身后一定间距的点与各个follower的间距
+        lv, lpos = self.leader.vec, self.leader.pos
+        fpos = lpos - lv * Group.LEADER_BEHIND_DIST
         for follower in self.followers:
-            dis = self.__get_distance(self.leader, self.group_center)
-            self.dir_force_dic[follower][self.leader] = [dis * self.__get_nij(self.leader, follower), dis]
-        # #按顺序计算各个follower的间距
-        # for i in range(len(self.followers)):
-        #     fa = self.followers[i]
-        #     for j in range(i + 1, len(self.followers)):
-        #         fb = self.followers[j]
-        #         dis = self.__get_distance(fa, fb)
-        #         self.dir_force_dic[fa][fb] = [dis * self.__get_nij(fb, fa), dis]
-        #         self.dir_force_dic[fb][fa] = [dis * self.__get_nij(fa, fb), dis]
+            dis = self.__get_distance(follower, fpos)
+            self.dir_force_dic[follower][self.leader] = [dis * self.__get_nij(fpos, follower), dis]
 
     def update(self):
         self.group_center = self.__get_group_center()
-        self._get_dir_force_to_center()
+        self._get_group_force_dis_nij()
 
-    def get_group_force(self, pedA:Person, pedB:Person):
-        key = (pedA, pedB)
-        dis = round(self.dir_force_dic[key], 2)
-        dis = max(min(dis, 0.37), 1.5)
-        return Group.group_force_magnitude_dic[dis]
+    def get_group_force(self, follower:Person):
+        if follower not in self.followers_set:
+            raise Exception("跟随者")
+        nij, dis = self.dir_force_dic[follower][self.leader]
+        dis = np.clip(np.round(dis, 2), 0.37, 1.5)
+        return nij * Group.group_force_magnitude_dic[dis]
+
+    def setup(self, batch, render_scale):
+        self.pic = pyglet.shapes.Circle(self.group_center[0], self.group_center[1], 0.5, color=(0, 0, 255), batch=batch)
+
+
 
 
 

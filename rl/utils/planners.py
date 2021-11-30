@@ -16,13 +16,14 @@ class AStarPlanner:
         :param env:
         :param experience:
         '''
+        self.env = env
         self.experience = Experience(capacity)
         self.init_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
 
         def recode_trans(s, a, r, is_done, s1):
             trans = Transition(s, a, r, is_done, s1)
             self.experience.push(trans)
-        env.planning = True
+        self.env.planning = False
         self.controler = AStarController(env, recorder=recode_trans)
 
     def planning(self, episodes=1):
@@ -32,7 +33,7 @@ class AStarPlanner:
         self.experience.episodes.clear()
 
     def save_experience(self):
-        file = open(os.path.join("./data",self.init_time_str+"_exp{}.pkl".format(self.experience.total_trans)),"wb")
+        file = open(os.path.join("./data",self.init_time_str+"_{}_exp{}.pkl".format(self.env.terrain.name, self.experience.total_trans)),"wb")
         pickle.dump(self.experience,file,0)
 
     def load_experience(self, file):
@@ -40,9 +41,9 @@ class AStarPlanner:
         self.experience = pickle.load(file)
 
 if __name__ == "__main__":
-    env = PedsMoveEnv(map_05, person_num=30, group_size=(1, 6), maxStep=1000)
+    env = PedsMoveEnv(map_05, person_num=30, group_size=(5, 5), maxStep=1000)
     planner = AStarPlanner(env)
-    planner.planning(3000)
+    planner.planning(1500)
     planner.save_experience()
-    # planner.load_experience("./data/2021_11_01_11_48_exp281.pkl")
+    # planner.load_experience("./data/2021_11_17_15_55map_05_exp244.pkl")
     # print(planner.experience.sample(5))

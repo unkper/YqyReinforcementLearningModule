@@ -3,8 +3,9 @@ import numpy as np
 
 from typing import List
 
-from ped_env.utils.maps import Map, map_05, map_06, map_hard_obj
-from ped_env.functions import parse_discrete_action
+from tqdm import tqdm
+
+from ped_env.utils.maps import Map, map_05, map_06
 from ped_env.envs import PedsMoveEnv, ACTION_DIM
 
 #https://github.com/lc6chang/Social_Force_Model
@@ -178,7 +179,7 @@ class AStarController():
         :param render:
         :return:
         '''
-        for epoch in range(episodes):
+        for epoch in tqdm(range(episodes)):
             step, starttime = 0, time.time()
             obs = self.env.reset()
             is_done = [False]
@@ -193,7 +194,7 @@ class AStarController():
             endtime = time.time()
             #print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
             #      .format(self.env.listener.col_with_agent, self.env.listener.col_with_wall))
-            print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+            #print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 def recoder_for_debug(*obj):
     pass
@@ -210,6 +211,6 @@ def test_func01():
     print(time.time() - start_time)
 
 if __name__ == '__main__':
-    env = PedsMoveEnv(map_05, person_num=30, group_size=(5,5), maxStep=2000, planning_mode=False)
+    env = PedsMoveEnv(map_05, person_num=30, group_size=(5,5), maxStep=2000, planning_mode=True)
     controller = AStarController(env, recorder=recoder_for_debug)
     controller.play(5, True)

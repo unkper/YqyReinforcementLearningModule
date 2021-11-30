@@ -8,22 +8,57 @@ import torch.nn.functional as F
 
 from rl.utils.networks.pd_network import EPS
 
-class MLPNetwork_MACritic(nn.Module):
+class MLPNetworkCritic(nn.Module):
     def __init__(self, state_dims, action_dims, hidden_dim=64):
-        super(MLPNetwork_MACritic, self).__init__()
+        super(MLPNetworkCritic, self).__init__()
         input_dim = sum(state_dims) + sum(action_dims)
 
-        self.layer1 = nn.Linear(input_dim, 64)
-        self.layer2 = nn.Linear(64, 64)
-        self.out_layer = nn.Linear(64, 1)
+        self.layer1 = nn.Linear(input_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        self.out_layer = nn.Linear(hidden_dim, 1)
         self.no_linear = F.relu
 
     def forward(self, state, action):
         temp = torch.cat([state, action],dim=1)
         h1 = self.no_linear(self.layer1(temp))
         h2 = self.no_linear(self.layer2(h1))
-        h3 = self.out_layer(h2)
+        h3 = torch.squeeze(self.out_layer(h2))
         return h3
+
+class DoubleQNetworkCritic(nn.Module):
+    def __init__(self, state_dims:list, action_dims:list, hidden_dim=64):
+        super(DoubleQNetworkCritic, self).__init__()
+        input_dim = sum(state_dims) + sum(action_dims)
+
+        self.l1 = nn.Linear(input_dim, hidden_dim)
+        self.l2 = nn.Linear(hidden_dim, hidden_dim)
+        self.l3 = nn.Linear(hidden_dim, 1)
+
+        self.l4 = nn.Linear(input_dim, hidden_dim)
+        self.l5 = nn.Linear(hidden_dim, hidden_dim)
+        self.l6 = nn.Linear(hidden_dim, 1)
+
+        self.no_linear = F.relu
+
+    def forward(self, state, action):
+        temp = torch.cat([state, action],dim=1)
+        h1 = self.no_linear(self.l1(temp))
+        h2 = self.no_linear(self.l2(h1))
+        q1 = torch.squeeze(self.l3(h2))
+
+        h4 = self.no_linear(self.l4(temp))
+        h5 = self.no_linear(self.l5(h4))
+        q2 = torch.squeeze(self.l6(h5))
+
+        return q1, q2
+
+    def Q1(self, state, action):
+        temp = torch.cat([state, action], dim=1)
+        h1 = self.no_linear(self.l1(temp))
+        h2 = self.no_linear(self.l2(h1))
+        q1 = torch.squeeze(self.l3(h2))
+
+        return q1
 
 class MLPNetworkActor(nn.Module):
     def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64, norm_in = True):
@@ -39,9 +74,9 @@ class MLPNetworkActor(nn.Module):
         self.action_dim = action_dim
         self.discrete = discrete
 
-        self.fc1 = nn.Linear(self.state_dim, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, self.action_dim)
+        self.fc1 = nn.Linear(self.state_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, self.action_dim)
         self.no_linear = F.relu
         if self.discrete:
             print("离散动作,采用softmax作为输出!")
@@ -60,6 +95,30 @@ class MLPNetworkActor(nn.Module):
         x = self.no_linear(self.fc2(x))
         action = self.out_fc(self.fc3(x))
         return action
+
+class MLPModelNetwork(nn.Module):
+    def __init__(self, state_dims:List[int], action_dims:List[int], hidden_dim):
+        super(MLPModelNetwork, self).__init__()
+        agent_count = len(state_dims)
+        vfs_in_dim = sum(state_dims)
+        vfa_in_dim = sum(action_dims)
+        self.layer_s2h = nn.Linear(vfs_in_dim, hidden_dim)
+        self.layer_a2h = nn.Linear(vfa_in_dim, hidden_dim)
+        self.layer_sa2h2 = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.layer_h2s1 = nn.Linear(hidden_dim, vfs_in_dim)
+        self.layer_h2r = nn.Linear(hidden_dim, agent_count)
+        self.layer_h2i = nn.Linear(hidden_dim, agent_count)
+
+    def forward(self, s, a):
+        h_s = self.layer_s2h(s)
+        h_a = self.layer_a2h(a)
+        h = F.relu(torch.cat([h_s, h_a], dim=1))
+        h2 = F.relu(self.layer_sa2h2(h))
+        state_1 = self.layer_h2s1(h2)
+        reward = self.layer_h2r(h2)
+        is_done = self.layer_h2i(h2)
+
+        return state_1, reward, is_done
 
 class MaddpgLstmCritic(nn.Module):
     def __init__(self, state_dims, action_dims, hidden_dim=64):

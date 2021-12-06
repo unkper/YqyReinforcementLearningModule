@@ -93,6 +93,7 @@ class EnsembleFC(nn.Module):
     def reset_parameters(self) -> None:
         pass
 
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         w_times_x = torch.bmm(input, self.weight)
         return torch.add(w_times_x, self.bias[:, None, :])  # w times x + b
@@ -119,15 +120,15 @@ class EnsembleModel(nn.Module):#其线性层为[s1, s2, ensemble_size]等于将�
 
         self.max_logvar = nn.Parameter((torch.ones((1, self.output_dim)).float() / 2).to(device), requires_grad=False)
         self.min_logvar = nn.Parameter((-torch.ones((1, self.output_dim)).float() * 10).to(device), requires_grad=False)
-        self.optimizer = torch.optim.AdamW(self.parameters(), lr=learning_rate, weight_decay=0.001)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
         self.apply(init_weights)
-        self.no_linear = Swish()
+        self.swish = Swish()
 
     def forward(self, x, ret_log_var=False):
-        nn1_output = self.no_linear(self.nn1(x))
-        nn2_output = self.no_linear(self.nn2(nn1_output))
-        nn3_output = self.no_linear(self.nn3(nn2_output))
-        nn4_output = self.no_linear(self.nn4(nn3_output))
+        nn1_output = self.swish(self.nn1(x))
+        nn2_output = self.swish(self.nn2(nn1_output))
+        nn3_output = self.swish(self.nn3(nn2_output))
+        nn4_output = self.swish(self.nn4(nn3_output))
         nn5_output = self.nn5(nn4_output)
 
         mean = nn5_output[:, :, :self.output_dim]
@@ -209,7 +210,6 @@ class EnsembleDynamicsModel():
         self._snapshots = {i: (None, 1e10) for i in range(self.network_size)}
 
         num_holdout = int(inputs.shape[0] * holdout_ratio)
-        num_train = inputs.shape[0] - num_holdout
         permutation = np.random.permutation(inputs.shape[0])
         inputs, labels = inputs[permutation], labels[permutation] #打乱输入的顺序
 
@@ -225,28 +225,30 @@ class EnsembleDynamicsModel():
         holdout_inputs = holdout_inputs[None, :, :].repeat([self.network_size, 1, 1])
         holdout_labels = holdout_labels[None, :, :].repeat([self.network_size, 1, 1])
 
-        loss, train_mse_loss = 0, 0
+        for epoch in itertools.count():
 
-        # train_idx = np.vstack([np.random.permutation(train_inputs.shape[0]) for _ in range(self.network_size)])
-        train_idx = np.vstack([np.arange(train_inputs.shape[0])] for _ in range(self.network_size))
-        idx = train_idx[:, :]
-        train_input = torch.from_numpy(train_inputs[idx]).float().to(device)
-        train_label = torch.from_numpy(train_labels[idx]).float().to(device)
-        losses = []
-        mean, logvar = self.ensemble_model(train_input, ret_log_var=True)
-        loss, train_mse_loss = self.ensemble_model.loss(mean, logvar, train_label)
-        self.ensemble_model.train(loss)
-        losses.append(loss)
+            train_idx = np.vstack([np.random.permutation(train_inputs.shape[0]) for _ in range(self.network_size)])
+            # train_idx = np.vstack([np.arange(train_inputs.shape[0])] for _ in range(self.network_size))
+            idx = train_idx[:, :]
+            train_input = torch.from_numpy(train_inputs[idx]).float().to(device)
+            train_label = torch.from_numpy(train_labels[idx]).float().to(device)
+            losses = []
+            mean, logvar = self.ensemble_model(train_input, ret_log_var=True)
+            loss, _ = self.ensemble_model.loss(mean, logvar, train_label)
+            self.ensemble_model.train(loss)
+            losses.append(loss)
 
-        with torch.no_grad():
-            holdout_mean, holdout_logvar = self.ensemble_model(holdout_inputs, ret_log_var=True)
-            _, holdout_mse_losses = self.ensemble_model.loss(holdout_mean, holdout_logvar, holdout_labels, inc_var_loss=False)
-            holdout_mse_losses = holdout_mse_losses.detach().cpu().numpy() #根据验证集的loss来选出最好的几个elite模型
-            sorted_loss_idx = np.argsort(holdout_mse_losses)
-            self.elite_model_idxes = sorted_loss_idx[:self.elite_size].tolist()
-            #break_train = self._save_best(epoch, holdout_mse_losses) #如果loss变化超过max_epochs次，就跳出训练
-
-        return holdout_mse_losses /  num_holdout, loss.cpu().item() / num_train, train_mse_loss / num_train
+            with torch.no_grad():
+                holdout_mean, holdout_logvar = self.ensemble_model(holdout_inputs, ret_log_var=True)
+                _, holdout_mse_losses = self.ensemble_model.loss(holdout_mean, holdout_logvar, holdout_labels, inc_var_loss=False)
+                holdout_mse_losses = holdout_mse_losses.detach().cpu().numpy() #根据验证集的loss来选出最好的几个elite模型
+                sorted_loss_idx = np.argsort(holdout_mse_losses)
+                self.elite_model_idxes = sorted_loss_idx[:self.elite_size].tolist()
+                break_train = self._save_best(epoch, holdout_mse_losses) #如果loss变化超过max_epochs次，就跳出训练
+                if break_train or epoch > 10:
+                    break
+            #print('epoch: {}, holdout mse losses: {}'.format(epoch, holdout_mse_losses))
+        return holdout_mse_losses
 
     def _save_best(self, epoch, holdout_losses):
         updated = False

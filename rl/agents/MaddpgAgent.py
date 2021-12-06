@@ -13,7 +13,7 @@ from torch import nn
 from rl.agents.Agent import Agent
 from rl.utils.networks.pd_network import MLPNetworkActor, MLPNetworkCritic
 from rl.utils.updates import soft_update, hard_update
-from rl.utils.classes import SaveNetworkMixin, OrnsteinUhlenbeckActionNoise, Experience, MAAgentMixin
+from rl.utils.classes import SaveNetworkMixin, Noise, Experience, MAAgentMixin
 from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
     onehot_from_int, save_callback, process_maddpg_experience_data, loss_callback
 
@@ -24,7 +24,6 @@ class DDPGAgent:
                  learning_rate, discrete,
                  device, state_dims, action_dims,
                  actor_network=None, critic_network=None, actor_hidden_dim=64, critic_hidden_dim=64):
-        if not discrete: raise Exception("只能处理离散动作空间!")
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
@@ -43,7 +42,7 @@ class DDPGAgent:
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  learning_rate)
-        self.noise = OrnsteinUhlenbeckActionNoise(1 if self.discrete else action_dim)
+        self.noise = Noise(1 if self.discrete else action_dim)
         self.count = [0 for _ in range(action_dim)]
 
     def step(self, obs, explore):
@@ -56,11 +55,18 @@ class DDPGAgent:
         Outputs:
             action (Pytorch Variable): Actions for this agent
         """
-        if explore:
+        if explore and self.discrete:
             action = onehot_from_int(random.randint(0, self.action_dim - 1), self.action_dim)  # 利用随机策略进行采样
-        else:
+        elif explore and not self.discrete:
+            action = torch.Tensor(self.noise.sample()).to(self.device)
+            action = action.clamp(-1, 1)
+        elif not explore and self.discrete:
             action = self.actor(torch.unsqueeze(obs, dim=0))  # 统一以一批次的形式进行输入
             action = onehot_from_logits(action)
+            action = torch.squeeze(action).to(self.device)
+        else:
+            action = self.actor(torch.unsqueeze(obs, dim=0))
+            action = action.clamp(-1, 1)
             action = torch.squeeze(action).to(self.device)
         self.count[torch.argmax(action).item()] += 1
         return action

@@ -2,12 +2,11 @@
 import abc
 
 from math import inf
-from typing import List, Dict, DefaultDict
-from multiprocessing import Process, Pipe
+from typing import List, Dict
 
 from gym.spaces import Box, Discrete
 from ped_env.functions import parse_discrete_action, calculate_nij, normalized
-from ped_env.objects import Person, Group, BoxWall
+from ped_env.objects import Person, Group
 
 ACTION_DIM = 9
 
@@ -53,7 +52,7 @@ class PedsRLHandler(PedsHandlerInterface):
         self.agent_count = sum([int(num / int(sum(self.env.group_size) / 2)) for num in person_num])
 
         # 强化学习MDP定义区域
-        # 定义观察空间为[智能体当前位置(x,y),智能体当前速度(dx,dy),相对目标的位置(rx,ry),其他跟随者的位置(不存在为(0,0))*5]一共16个值
+        # 定义观察空间为[智能体当前位置(x,y),智能体当前速度(dx,dy),相对目标的位置(rx,ry)]一共16个值
         self.observation_space = [Box(-inf, inf, (16,)) for _ in range(self.agent_count)]
         if self.env.discrete:
             # 定义动作空间为[不动，向左，左上，向上，...]施加相应方向的力
@@ -150,6 +149,33 @@ class PedsRLHandler(PedsHandlerInterface):
                 now_dis = self.env.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
                 if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and last_pos[1] - 0.001 <= now_pos[1] <= last_pos[1] + 0.001) :
                     lr += self.r_move  # 给予-0.1以每步
+                    self.env.distance_to_exit[ped_index] = now_dis
+                    self.env.points_in_last_step[ped_index] = now_pos
+                else:
+                    lr += self.r_wait  # 给予停止不动的行人以惩罚
+        return gr, lr
+
+class PedsRLHandlerRange(PedsRLHandler):
+    def __init__(self, env, r_arrival=0, r_move=-0.1, r_wait=-0.5, r_collision=-1):
+        super(PedsRLHandlerRange, self).__init__(env=env, r_arrival=r_arrival, r_move=r_move, r_wait=r_wait, r_collision=r_collision)
+
+    def get_reward(self, ped:Person, ped_index:int, time):
+        gr, lr = 0.0, 0.0
+        if ped.is_done and ped.has_removed:
+            pass
+        else:
+            if len(ped.collide_agents) > 0:
+                lr += self.r_collision
+            if ped.is_done and not ped.has_removed:
+                lr += self.r_arrival
+            else:
+                last_pos = self.env.points_in_last_step[ped_index]
+                now_pos = (ped.getX, ped.getY)
+                last_dis = self.env.distance_to_exit[ped_index]
+                now_dis = self.env.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
+                if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and last_pos[1] - 0.001 <= now_pos[
+                    1] <= last_pos[1] + 0.001):
+                    lr += self.r_move * now_dis  # 给予-0.1以每步
                     self.env.distance_to_exit[ped_index] = now_dis
                     self.env.points_in_last_step[ped_index] = now_pos
                 else:

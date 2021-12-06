@@ -8,14 +8,8 @@ import gym
 import random
 import numpy as np
 import torch
-import torch.nn.functional as F
-
-from typing import List
 from torch import nn
 from multiprocessing import Pipe, Process
-
-from tqdm import tqdm
-
 from ped_env.envs import PedsMoveEnv
 from rl.utils.functions import flatten_data, process_maddpg_experience_data
 from rl.utils.model.functions import set_rollout_length
@@ -90,17 +84,18 @@ class Experience():
             new_arr = np.ndarray([capacity], dtype=np.object)
             new_arr[:self.total_trans] = self.transitions[:self.total_trans]
             self.capacity = capacity
-            self.next_id = self.total_trans
+            self.next_id = self.total_trans % self.capacity
             self.transitions = new_arr
         else:
             new_arr = np.ndarray([capacity], dtype=np.object)
             if self.total_trans <= capacity: #$
-                new_arr[:self.total_trans] = self.transitions[:self.total_trans]
                 self.capacity = capacity
+                self.total_trans = 0
+                self.next_id = 0
                 self.transitions = new_arr
             else:
-                new_arr[:] = self.transitions[:capacity] #$
-                self.total_trans = capacity
+                self.capacity = capacity
+                self.total_trans = 0
                 self.next_id = 0
                 self.transitions = new_arr
 
@@ -140,11 +135,11 @@ class Experience():
     def __len__(self):
         return self.len
 
-class OrnsteinUhlenbeckActionNoise():
+class Noise():
     '''
     用于连续动作空间的噪声辅助类，输出具有扰动的一系列值
     '''
-    def __init__(self, action_dim, mu = 0,theta = 0.15, sigma = 0.2):
+    def __init__(self, action_dim, policy_noise=0.4, noise_clip=1.0):
         '''
         动作
         :param action_dim:动作空间的维数
@@ -153,22 +148,13 @@ class OrnsteinUhlenbeckActionNoise():
         :param sigma:
         '''
         self.action_dim = action_dim
-        self.mu = mu
-        self.theta = theta
-        self.sigma = sigma
-        self.X = np.ones(self.action_dim) * self.mu
-
-    def reset(self):
-        self.X = np.ones(self.action_dim) * self.mu
+        self.policy_noise = policy_noise
+        self.noise_clip = noise_clip
 
     def sample(self):
-        dx = self.theta * (self.mu - self.X)
-        dx = dx + self.sigma * np.random.randn(len(self.X))
-        self.X = self.X + dx
-        return self.X
+        return np.clip(np.random.randn(self.action_dim) * self.policy_noise, -self.noise_clip, self.noise_clip)
 
 class SaveNetworkMixin():
-
     def save(self,sname:str,name:str,network:nn.Module):
         p = os.path.join("./",sname)
         if not os.path.exists(p):
@@ -222,7 +208,7 @@ class MAAgentMixin():
             s = flatten_data(state[i], self.state_dims[i], self.device)
             action = self.agents[i].step(s, False).detach().cpu().numpy()
             action_list.append(action)
-        action_list = np.array(action_list,dtype=object)
+        action_list = np.array(action_list,dtype=np.float)
         return action_list
 
     def get_exploration_action(self, state, epsilon=0.1):
@@ -237,7 +223,7 @@ class MAAgentMixin():
             s = flatten_data(state[i], self.state_dims[i], self.device)
             action = self.agents[i].step(s, True if value < epsilon else False).detach().cpu().numpy()
             action_list.append(action)
-        action_list = np.array(action_list,dtype=object)
+        action_list = np.array(action_list,dtype=np.float)
         return action_list
 
     def play_init(self, savePath, s0):
@@ -279,8 +265,8 @@ class MAAgentMixin():
                 lc, la = self._learn_from_memory()
                 loss_c += lc
                 loss_a += la
-            loss_c /= self.num_train_repeat
-            loss_a /= self.num_train_repeat
+            loss_c /= self.n_steps_train
+            loss_a /= self.n_steps_train
 
             self.loss_critic += loss_c
             self.loss_actor += loss_a
@@ -302,8 +288,14 @@ class MAAgentMixin():
         while not is_done.any():
             a0 = self.step_in_network(s0, explore, epsilon)
             s1, r1, is_done, info = self.act(a0)
-            for i in range(self.env.agent_count):
-                total_reward[i] += np.mean(r1[:, i])
+            if isinstance(is_done, list):
+                is_done = np.array(is_done)
+            if self.n_rol_threads == 1:
+                for i in range(self.env.agent_count):
+                    total_reward[i] += np.mean(r1[i])
+            else:
+                for i in range(self.env.agent_count):
+                    total_reward[i] += np.mean(r1[:, i])
             if display:
                 self.env.render()
             self.policy_update_step(int(self.total_steps_in_train / self.n_rol_threads))
@@ -345,7 +337,8 @@ class ModelBasedMAAgentMixin():
     def policy_update_step(self, step):
         loss_c, loss_a, loss_m = 0, 0, 0
         if self.total_steps_in_train > self.model_batch_size and step % self.model_train_freq == 0:
-            loss_m = self._learn_simulate_world()
+            losses = self._learn_simulate_world()
+            loss_m = losses[0]
 
             new_rollout_length = set_rollout_length(self.total_episodes_in_train, self.rollout_length_range[0],
                                                     self.rollout_length_range[1], self.rollout_epoch_range[0],
@@ -375,8 +368,8 @@ class ModelBasedMAAgentMixin():
                 lc, la = self._learn_from_memory(trans_pieces)
                 loss_c += lc
                 loss_a += la
-        loss_c /= self.num_train_repeat
-        loss_a /= self.num_train_repeat
+            loss_c /= self.n_steps_train
+            loss_a /= self.n_steps_train
 
         if loss_m != 0.0:
             self.writer.add_scalar("step_loss/model", loss_m, self.total_steps_in_train)
@@ -388,30 +381,43 @@ class ModelBasedMAAgentMixin():
         return [self.loss_critic, self.loss_actor, self.loss_model]
 
     def _learn_simulate_world(self):
-        mean_loss = 0.0
+        mean_losses = [0.0 for _ in range(3)]
         for i in range(self.n_steps_model):
             trans_pieces = self.experience.sample(self.model_batch_size)
-            s0, a0, r1, is_done, s1, s0_critic_in, s1_critic_in = \
+            s0, _, r1, is_done, s1, s0_critic_in, s1_critic_in = \
                 process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
-
-            r1 = torch.tensor(r1).float().to(self.device)
+            if self.discrete:
+                a0 = torch.from_numpy(np.argmax(np.array([x.a0 for x in trans_pieces]), axis=2)).to(self.device)
+            else:
+                a0 = _
             delta_state = s1_critic_in - s0_critic_in
             # world model输入为(s,a),输出为(s',r,is_done)
             inputs = torch.cat([s0_critic_in, a0], dim=-1).detach().cpu().numpy()
             labels = torch.cat([torch.reshape(r1, (r1.shape[0], -1)), delta_state], dim=-1).detach().cpu().numpy()
             # 输入x = (state,action),y = (r,delta_state)
-            loss = self.predict_env.model.train(inputs, labels, batch_size=256, holdout_ratio=0.2)
+            eval_loss, var_loss, mse_loss = self.predict_env.model.train(inputs, labels, batch_size=256, holdout_ratio=0.2)
 
-            mean_loss += loss.mean().item()
-        mean_loss /= self.n_steps_model
-        print("model learn finished,loss:{}.".format(mean_loss))
-        return mean_loss
+            mean_losses[0] += eval_loss.mean().item()
+            mean_losses[1] += var_loss
+            mean_losses[2] += mse_loss.mean().item()
+        for i in range(mean_losses.__len__()):
+            mean_losses[i] /= self.n_steps_model
+        print("model learn finished,eval_loss:{},var_loss:{},mse_loss:{}.".format(mean_losses[0], mean_losses[1], mean_losses[2]))
+        return mean_losses
+
+    def init_random_step(self, state, step):
+        a0 = self.step_in_network(state, True, 1.0)
+        # if self.experience.len > self.model_batch_size and step % self.model_train_freq == 0:
+        #     losses = self._learn_simulate_world()
+        #     self.writer.add_scalar("init/eval_loss", losses[0], step)
+        #     self.writer.add_scalar("init/var_loss", losses[1], step)
+        #     self.writer.add_scalar("init/mse_loss", losses[2], step)
+        return self.act(a0)
 
     def _rollout_model(self, rollout_length):
         trans_pieces = self.experience.sample(self.rollout_batch_size)
         s0 = np.array([x.s0 for x in trans_pieces])
         r1 = np.array([x.reward for x in trans_pieces])
-        is_done = np.array([x.is_done for x in trans_pieces])
         s1 = np.array([x.s1 for x in trans_pieces])
 
         state = s0
@@ -420,8 +426,11 @@ class ModelBasedMAAgentMixin():
             raw_action = []
             for s in state:
                 raw_action.append(self.get_exploitation_action(s))
-            action = np.stack(raw_action).astype(np.float)
-            action = np.reshape(action, [action.shape[0], action.shape[1] * action.shape[2]])
+            if self.discrete:
+                action = np.argmax(np.array(raw_action), axis=2).astype(np.float)
+            else:
+                action = np.array(raw_action).astype(np.float)
+                action = np.reshape(action, [action.shape[0], action.shape[1] * action.shape[2]])
             next_states, rewards, terminals, info = self.predict_env.step(state_in, action)
             if i == 0:
                 delta_s1 = abs(s1 - next_states)
@@ -584,13 +593,15 @@ class SubprocEnv(gym.Env):
 if __name__ == "__main__":
     cap = 20
     exp = Experience(capacity=cap)
-    for i in range(int(cap / 2)):
+    for i in range(int(cap)):
         trans = Transition(i, i, i, i, i)
         exp.push(trans)
     # for i in range(8):
     #     print(exp.sample(int(cap / 2)))
     # print(exp.sample_and_shuffle())
-    exp.resize(20)
+    exp.resize(10)
+    for i in range(20):
+        exp.push(Transition(0, 0, 0, 0, 0))
     print(exp.sample(8))
     print(exp.sample_and_shuffle())
 

@@ -4,7 +4,7 @@ from ped_env.envs import PedsMoveEnv as Env
 from ped_env.envs import PedsMoveEnvFactory
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env
-from ped_env.objects import Person, Group
+from ped_env.classes import PedsRLHandler, PedsRLHandlerCooperation
 
 def HelloWorldProject():
     world = b2d.b2World()
@@ -68,8 +68,8 @@ def test2():
 
     debug = False
     # test1()
-    person_num = 30
-    env = Env(map_02, person_num, group_size=(5, 5), maxStep=10000, test_mode=debug)
+    person_num = 16
+    env = Env(map_02, person_num, group_size=(4, 4), maxStep=10000, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
     for epoch in range(1):
@@ -159,7 +159,7 @@ def test4():
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 if __name__ == '__main__':
-    test2()
+    test4()
 
     # import kdtree
     # points = []

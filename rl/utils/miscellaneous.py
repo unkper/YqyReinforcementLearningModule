@@ -5,6 +5,9 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
+from rl.config import Config
+
+
 def str_key(*args):
     '''将参数用"_"连接起来作为字典的键，需注意参数本身可能会是tuple或者list型，
     比如类似((a,b,c),d)的形式。
@@ -19,6 +22,12 @@ def str_key(*args):
             else:
                 new_arg.append(str(arg))
     return "_".join(new_arg)
+
+def save_parameter_setting(dir, name, config:Config):
+    save_file = open(os.path.join(dir,name+"_parameter.txt"), "w+")
+    for key,value in config.__dict__.items():
+        save_file.write("{}:{}\n".format(key,value))
+    save_file.close()
 
 def learning_curve(data, x_index = 0, y1_index = 1, y1_func = None, step_index = None, title = "",
                    x_name = "", y_name = "",
@@ -61,20 +70,44 @@ def learning_curve(data, x_index = 0, y1_index = 1, y1_func = None, step_index =
     if show:
         plt.show()
 
-def contrast_learning_curve(dir, y_range = None, y_func=np.mean, title="curve"):
+def contrast_learning_curve(dir, y_range = None, y_func=np.mean, smooth_step=-1, use_multiply_result=False, title="curve"):
     fig, ax = plt.subplots()
-    for file in os.listdir(dir):
-        reward_txt = os.path.join(dir, file)
-        y = np.loadtxt(reward_txt, delimiter=",")
+    ys = []
+    names = []
+    if use_multiply_result:
+        for folder in os.listdir(dir):
+            pa = os.path.join(dir,folder)
+            y = []
+            for file in os.listdir(pa):
+                reward_txt = os.path.join(pa, file)
+                part_y = np.loadtxt(reward_txt, delimiter=",")
+                y.append(part_y)
+            y = np.mean(np.array(y), axis=0)
+            ys.append(y)
+            names.append(folder)
+    else:
+        for file in os.listdir(dir):
+            reward_txt = os.path.join(dir, file)
+            y = np.loadtxt(reward_txt, delimiter=",")
+            ys.append(y)
+            names.append(file)
+
+    for y, name in zip(ys, names):
         if y_range != None:
             y = y[y_range[0]:y_range[1]]
-        x = np.arange(0, len(y))
         if y_func != None:
             temp_y = np.zeros(y.shape[0])
             for i in range(y.shape[0]):
                 temp_y[i] = y_func(y[i, :])
             y = temp_y
-        ax.plot(x.data, y.data, label=file)
+            if smooth_step != -1:
+                temp_y = np.zeros(y.shape[0])
+                for i in range(smooth_step//2, y.shape[0] - smooth_step//2):
+                    temp_y[i - smooth_step//2] = np.mean(y[i - smooth_step//2:i + smooth_step//2], axis=0)
+
+                y = temp_y[:-smooth_step]
+        x = np.arange(0, len(y))
+        ax.plot(x.data, y.data, label=name)
     plt.legend()
     plt.show()
 
@@ -85,28 +118,9 @@ def load_data_and_draw(reward_txt, step_txt):
     learning_curve([x, y, step], y1_func=np.mean, step_index=None, title="Test curve", save=False, show=True)
 
 if __name__ == '__main__':
-    arr = np.random.random([256,101])
-    print(arr[np.unravel_index(np.argmax(arr, axis=None), arr.shape)[0], :])
-
-    #contrast_learning_curve("./data/20211119", y_range=(0,10), y_func=np.mean)
+    # arr = np.random.random([256,101])
+    # print(arr[np.unravel_index(np.argmax(arr, axis=None), arr.shape)[0], :])
+    #print(os.listdir("../"))
+    contrast_learning_curve("./data/20211206", y_range=(0,10), y_func=np.mean, use_multiply_result=False)
     # load_data_and_draw("../../data/models/2021_11_11_00_12_PedsMoveEnv/rewards_f81f8533-4240-11ec-84e7-3cecef04b81e.txt",
     #                    "../../data/models/2021_11_11_00_12_PedsMoveEnv/step_f81f8533-4240-11ec-84e7-3cecef04b81e.txt")
-
-# while batch_size > 0:
-#     index = int(random.random() * self.len)
-#     episode_len = self.episodes[index].len
-#     count = int(round(random.random() * episode_len))
-#     count = min(count, batch_size, episode_len)
-#     sample_trans += self.episodes[index].sample(count)
-#     batch_size -= count
-#return sample_trans
-
-# envs = [(SimpleWorldComm(maxStep=250),"SimpleWorldComm"),(SimpleCrypto(),"SimpleCrypto"),(SimpleReference(),"SimpleReference")]
-# for env in envs:
-#     test7(env[0], env[1], actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic, hidden_dim=128)
-# save_file_names = ['2021_10_31_20_21_SimpleWorldComm', '2021_10_31_21_30_SimpleCrypto',
-#                        '2021_10_31_21_53_SimpleReference']
-# for i in range(len(envs)):
-#     test5(envs[i][0], save_file_names[i], episode=5, AgentType=MATD3Agent, actor_network=MaddpgLstmActor, critic_network=MaddpgLstmCritic)
-# for item in envs:
-#     test4(item[0],item[1])

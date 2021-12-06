@@ -26,6 +26,7 @@ class Agent():
                  alpha=0.5,
                  n_rol_threads = -1,
                  explore_step = 30000,
+                 init_train_steps:int = 0,
                  log_dir = "./"
                  ):
         #保存一些Agent可以观测到的环境信息以及已经学到的经验
@@ -79,12 +80,11 @@ class Agent():
 
         self.loss_callback_ = None
         self.save_callback_ = None
+        self.early_stop_callback_ = None
 
-        self.init_train_steps = 0
+        self.init_train_steps = int(init_train_steps)
         self.total_steps_in_train = 0
         self.total_episodes_in_train = 0
-
-
 
 
     def policy(self,A ,s = None,Q = None, epsilon = None):
@@ -198,8 +198,8 @@ class Agent():
         total_time, episode_reward, num_episode = 0,0,0
         total_times,self.episode_rewards,num_episodes = [],[],[]
         max_explore_num = int(max_episode_num * explore_episodes_percent)
-        #self.init_train_steps = self.init_train()
-        for i in tqdm(range(self.init_train_steps, max_episode_num, 1)):
+        self.init_train()
+        for i in tqdm(range(0, max_episode_num, 1)):
             #用于ε-贪心算法中ε随着经历的递增而逐级减少
             if decaying_epsilon:
                 #epsilon = epsilon_low + (epsilon_high - epsilon_low) * ((max_explore_num - i) / max_explore_num) if i < max_explore_num else 0
@@ -223,10 +223,31 @@ class Agent():
                 self.loss_callback_(self, loss)
             if self.save_callback_:
                 self.save_callback_(self, num_episode)
+            if self.early_stop_callback_ != None and self.early_stop_callback_(self, episode_reward, i):
+                print("Early stop in {} episode!".format(i))
+                break
+
         #在训练完成后关闭训练环境
         self.env.close()
         self.writer.close()
         return total_times,self.episode_rewards,num_episodes
+
+    def init_random_step(self, state, step): #用于初始化探索更新使用
+        pass
+
+    def init_train(self):
+        if self.init_train_steps == 0:
+            return
+        print("Init random train start,total step:{}!".format(self.init_train_steps))
+        self.state = self.env.reset()
+        is_done = np.array([[False]])
+        for i in tqdm(range(0, self.init_train_steps, self.n_rol_threads)):
+            if is_done.any():
+                self.state = self.env.reset()
+                is_done = np.array([[False]])
+            else:
+                s1, r1, is_done, info = self.init_random_step(self.state, i)
+                self.state = s1
 
     def play(self,savePath:str = None,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):
         ep = 0
@@ -279,6 +300,3 @@ class Agent():
     @property
     def total_trans(self) -> int:
         return self.experience.total_trans
-
-    def last_episode_detail(self):
-        print(self.experience.last_episode.__str__())

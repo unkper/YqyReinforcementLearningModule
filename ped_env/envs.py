@@ -9,7 +9,7 @@ import numpy as np
 from Box2D import (b2World, b2Vec2)
 from typing import List, Tuple, Dict
 
-from ped_env.classes import ACTION_DIM, PedsRLHandler
+from ped_env.classes import ACTION_DIM, PedsRLHandler, PedsRLHandlerRange
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
@@ -100,7 +100,7 @@ class PedsMoveEnv(gym.Env):
                  discrete=True,
                  frame_skipping=8,
                  maxStep=3000,
-                 PersonHandler=PedsRLHandler,
+                 person_handler=PedsRLHandlerRange,
                  planning_mode:bool=False,
                  train_mode:bool=True,
                  test_mode:bool=False):
@@ -109,6 +109,8 @@ class PedsMoveEnv(gym.Env):
         对于一个有N个人的环境，其状态空间为：[o1,o2,...,oN]，每一个o都是一个长度为14的list，其代表的意义为：
         [智能体编号,8个方向的传感器值,智能体当前位置,智能体当前速度,当前步数]，动作空间为[a1,a2,...,aN]，其中a为Discrete(9)
         分别代表[不动,水平向右,斜向上,...]施加力，奖励为[r1,r2,...,rN],是否结束为[is_done1,...,is_doneN]
+
+        注意：由于编码上还存在问题，因此要使用整数倍的人数，及group_size*exit_num个人
         :param terrain: 地图类，其中包含地形ndarray，出口，行人生成点和生成半径
         :param person_num: 要生成的行人总数
         :param discrete: 动作空间是否离散，连续时针对每一个智能体必须输入一个二维单位方向向量（注意！）
@@ -136,7 +138,7 @@ class PedsMoveEnv(gym.Env):
 
         self.frame_skipping = frame_skipping
         self.group_size = group_size
-        self.person_handler = PersonHandler(self)
+        self.person_handler = person_handler(self)
         # 由PersonHandler类提供的属性代替，从而使用策略模式来加强灵活性
         self.observation_space = self.person_handler.observation_space
         self.action_space = self.person_handler.action_space
@@ -289,7 +291,7 @@ class PedsMoveEnv(gym.Env):
             if len(actions[0]) != ACTION_DIM: raise Exception("动作向量的长度不正确!")
         else:
             if len(actions[0]) != 2: raise Exception("动作向量的长度不正确!")
-        #清空上一步的碰撞状态
+        # 清空上一步的碰撞状态
 
         for i in range(self.frame_skipping):
             # update box2d physical world

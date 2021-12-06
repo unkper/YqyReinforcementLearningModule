@@ -13,7 +13,7 @@ from torch.autograd import Variable
 from rl.agents.Agent import Agent
 from rl.utils.networks.pd_network import Critic, Actor, SimpleCritic, SimpleActor02
 from rl.utils.updates import soft_update, hard_update
-from rl.utils.classes import SaveNetworkMixin,OrnsteinUhlenbeckActionNoise
+from rl.utils.classes import SaveNetworkMixin,Noise
 from rl.utils.functions import back_specified_dimension, onehot_from_int
 
 
@@ -40,7 +40,7 @@ class DDPGAgent(Agent,SaveNetworkMixin):
         self.gamma = 0.999
         self.epochs = epochs
         self.tau = 0.001
-        self.noise = OrnsteinUhlenbeckActionNoise(self.action_dim)
+        self.noise = Noise(self.action_dim)
 
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.actor = SimpleActor02(self.state_dim,

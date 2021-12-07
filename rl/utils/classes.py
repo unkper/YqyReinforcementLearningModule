@@ -155,7 +155,7 @@ class Noise():
         return np.clip(np.random.randn(self.action_dim) * self.policy_noise, -self.noise_clip, self.noise_clip)
 
 class SaveNetworkMixin():
-    def save(self,sname:str,name:str,network:nn.Module):
+    def save(self,sname:str,name:str,network:nn.Module,step:int):
         p = os.path.join("./",sname)
         if not os.path.exists(p):
             os.mkdir(p)
@@ -258,7 +258,7 @@ class MAAgentMixin():
     def policy_init_step(self):
         self.loss_critic, self.loss_actor = 0.0, 0.0
 
-    def policy_update_step(self, step):
+    def policy_update_step(self, step, epsilon=0.0):
         if self.total_trans > self.batch_size and step % self.update_frequent == 0:
             loss_c, loss_a = 0, 0
             for i in range(self.n_steps_train):
@@ -298,7 +298,7 @@ class MAAgentMixin():
                     total_reward[i] += np.mean(r1[:, i])
             if display:
                 self.env.render()
-            self.policy_update_step(int(self.total_steps_in_train / self.n_rol_threads))
+            self.policy_update_step(int(self.total_steps_in_train / self.n_rol_threads), epsilon)
             time_in_episode += 1
             self.total_steps_in_train += self.n_rol_threads
             s0 = s1
@@ -334,7 +334,7 @@ class ModelBasedMAAgentMixin():
     def policy_init_step(self):
         self.loss_critic, self.loss_actor, self.loss_model = 0.0, 0.0, 0.0
 
-    def policy_update_step(self, step):
+    def policy_update_step(self, step, epsilon=0.0):
         loss_c, loss_a, loss_m = 0, 0, 0
         if self.total_steps_in_train > self.model_batch_size and step % self.model_train_freq == 0:
             losses = self._learn_simulate_world()
@@ -350,7 +350,7 @@ class ModelBasedMAAgentMixin():
                 self.model_experience.resize(self.model_retain_epochs * model_steps_per_epoch)
 
             if self.experience.len >= self.rollout_batch_size and self.real_ratio < 1.0:
-                self._rollout_model(self.rollout_length)
+                self._rollout_model(self.rollout_length, epsilon)
 
         loss_c, loss_a = 0.0, 0.0
         if self.total_trans > self.batch_size and step % self.update_frequent == 0:
@@ -387,7 +387,7 @@ class ModelBasedMAAgentMixin():
             s0, _, r1, is_done, s1, s0_critic_in, s1_critic_in = \
                 process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
             if self.discrete:
-                a0 = torch.from_numpy(np.argmax(np.array([x.a0 for x in trans_pieces]), axis=2)).to(self.device)
+                a0 = torch.from_numpy(np.argmax(np.array([x.a0 for x in trans_pieces]), axis=2)).to(self.device) #将One-hot形式转换为索引
             else:
                 a0 = _
             delta_state = s1_critic_in - s0_critic_in
@@ -414,7 +414,7 @@ class ModelBasedMAAgentMixin():
         #     self.writer.add_scalar("init/mse_loss", losses[2], step)
         return self.act(a0)
 
-    def _rollout_model(self, rollout_length):
+    def _rollout_model(self, rollout_length, epsilon):
         trans_pieces = self.experience.sample(self.rollout_batch_size)
         s0 = np.array([x.s0 for x in trans_pieces])
         r1 = np.array([x.reward for x in trans_pieces])
@@ -425,9 +425,9 @@ class ModelBasedMAAgentMixin():
             state_in = np.reshape(state, [state.shape[0], state.shape[1] * state.shape[2]]) #打平数组以便输入
             raw_action = []
             for s in state:
-                raw_action.append(self.get_exploitation_action(s))
+                raw_action.append(self.get_exploration_action(s, epsilon))
             if self.discrete:
-                action = np.argmax(np.array(raw_action), axis=2).astype(np.float)
+                action = np.argmax(np.array(raw_action), axis=2).astype(np.float) #将One-hot形式转换为索引
             else:
                 action = np.array(raw_action).astype(np.float)
                 action = np.reshape(action, [action.shape[0], action.shape[1] * action.shape[2]])
@@ -454,7 +454,7 @@ class ModelBasedMAAgentMixin():
                     nonterm_mask[idx] = False
             if nonterm_mask.sum() == 0:
                 break
-            state = next_states[nonterm_mask]
+            state = next_states[nonterm_mask] #去掉终止态的状态
 
 def worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()

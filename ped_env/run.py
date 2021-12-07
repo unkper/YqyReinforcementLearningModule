@@ -4,7 +4,7 @@ from ped_env.envs import PedsMoveEnv as Env
 from ped_env.envs import PedsMoveEnvFactory
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env
-from ped_env.classes import PedsRLHandler, PedsRLHandlerCooperation
+from ped_env.classes import PedsRLHandler, PedsRLHandlerRange
 
 def HelloWorldProject():
     world = b2d.b2World()
@@ -132,7 +132,7 @@ def test4():
     debug = False
     # test1()
     person_num = 60
-    env = Env(map_08, person_num, group_size=(5, 5), maxStep=10000, discrete=False, test_mode=debug)
+    env = Env(map_02, person_num, group_size=(5, 5), maxStep=10000, discrete=False, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
     for epoch in range(1):

@@ -41,7 +41,7 @@ def test1(useEnv, envName, config:Config):
                   explore_episodes_percent=1.0
                  )
     for i in range(agent.env.agent_count):
-        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
+        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
     learning_curve(data, 2, 1, step_index=0, title="MATD3Agent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="matd3")
 
@@ -70,7 +70,7 @@ def test2(useEnv, envName, config:Config):
                   explore_episodes_percent=1.0
                  )
     for i in range(agent.env.agent_count):
-        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
+        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
     learning_curve(data, 2, 1, step_index=0, title="G_MATD3Agent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="g_matd3")
 
@@ -100,7 +100,7 @@ def test3(useEnv,envName,config:Config):
                     explore_episodes_percent=1.0
                  )
     for i in range(agent.env.agent_count):
-        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
+        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
     learning_curve(data, 2, 1, step_index=0, title="G_MADDPGAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="G_maddpg")
 
@@ -124,16 +124,16 @@ def test4(useEnv,envName,config:Config):
                   explore_episodes_percent=1.0
                  )
     for i in range(agent.env.agent_count):
-        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor)
+        agent.save(agent.init_time_str + "_" + envName,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
     learning_curve(data, 2, 1, step_index=0, title="MADDPGAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="maddpg")
 
-def eval(useEnv,fileName,episode=3, AgentType=MADDPGAgent,
+def eval(useEnv,fileName,load_E,episode=5, AgentType=MATD3Agent,
           config:Config=None):
     env = useEnv
     agent = AgentType(env,actor_network=config.actor_network, critic_network=config.critic_network,
                         actor_hidden_dim=config.actor_hidden_dim, critic_hidden_dim=config.critic_hidden_dim)
-    agent.play(os.path.join("../data/models/",fileName,"model"),episode=episode,waitSecond=0.05)
+    agent.play(os.path.join("../data/models/",fileName,"model"), load_E, episode=episode, waitSecond=0.05)
 
 def testEnv():
     env = SimpleSpread_v3()
@@ -147,24 +147,31 @@ def testEnv():
             print(reward)
 
 if __name__ == '__main__':
-    envs = [("PedsMoveEnv",
-             my_env.PedsMoveEnv(terrain=map_02, person_num=24, group_size=(4, 4), maxStep=200, discrete=False)),
+    envs = [#("PedsMoveEnv",
+            # my_env.PedsMoveEnv(terrain=map_02, person_num=24, group_size=(4, 4), maxStep=20000, discrete=False)),
             ("PedsMoveEnv",
-             my_env.PedsMoveEnv(terrain=map_05, person_num=24, group_size=(4, 4), maxStep=10000, discrete=False)),
+            my_env.PedsMoveEnv(terrain=map_05, person_num=24, group_size=(4, 4), maxStep=10000)),
             ("PedsMoveEnv",
-             my_env.PedsMoveEnv(terrain=map_06, person_num=24, group_size=(4, 4), maxStep=10000, discrete=False)),
+            my_env.PedsMoveEnv(terrain=map_06, person_num=24, group_size=(4, 4), maxStep=10000)),
             ]
-    config = PedsMoveConfig(n_rol_threads=10,max_episode=500)
-    # # eval(envs[0][1], "2021_11_25_17_38_PedsMoveEnv",config=config)
-    # # envs = [("SimpleSpread", SimpleSpread_v3())]
-    # # config = MPEConfig(max_episode=5000, n_rol_threads=1)
+    config = PedsMoveConfig(n_rol_threads=10, max_episode=100)
+    # eval(envs[0][1], "2021_12_06_20_38_PedsMoveEnv", 50, config=config)
+    # envs = [("SimpleSpread", SimpleSpread_v3())]
+    # config = MPEConfig(max_episode=5000, n_rol_threads=1)
 
     for i in range(1):
         for envName, env in envs:
-            #test2(env, envName, config=config) #Model-Based Matd3 10Step
-            test1(env, envName, config=config) #Matd3 10Step
-            #config.n_steps_train = 1
-            #test1(env, envName, config=config) #Matd3 1Step
+            # config.max_episode = 500
+            # print("Matd3 10steps gradient descent training!")
+            # test1(env, envName, config=config) #Matd3 10Step
+            # config.n_steps_train = 1
+            # print("Matd3 1steps gradient descent training!")
+            # test1(env, envName, config=config) #Matd3 1Step
+            config.max_episode = 200
+            config.n_steps_train = 10
+            print("MBPO-Matd3 gradient descent training!")
+            test2(env, envName, config=config) #Model-Based Matd3 10Step
+
 
     # for batch_num in range(20):
     #     for map in maps:
@@ -172,10 +179,6 @@ if __name__ == '__main__':
     #         test3(env, envName, N=64, n_rol_threads=16, max_episode=1600, actor_network=MLPNetworkActor, critic_network=MLPNetworkCritic,
     #               model_network=MLPModelNetwork, hidden_dim=128)
     #         test4(env, envName, n_rol_threads=16, max_episode=1600, actor_network=MLPNetworkActor, critic_network=MLPNetworkCritic, hidden_dim=128)
-
-    # map = map_05
-    # env = my_env.PedsMoveEnv(terrain=map, person_num=30, group_size=(5, 5), maxStep=20000)
-    # test3(env, envName, n_rol_threads=16, actor_network=MLPNetworkActor, critic_network=MLPNetworkCritic,model_network=MLPModelNetwork, hidden_dim=128)
 
     # env = my_env.PedsMoveEnv(terrain=map_05, person_num=30, group_size=(5,5), maxStep=20000)
     # test5(env, '2021_11_12_22_32_PedsMoveEnv', episode=5, AgentType=MADDPGAgent, actor_network=MLPNetworkActor, critic_network=MLPNetwork_MACritic) #model_network=G_MaddpgLstmModelNetwork)

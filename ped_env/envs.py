@@ -1,6 +1,6 @@
 import copy
 import random
-from math import inf, sqrt, pow
+from math import sqrt, pow
 
 import gym
 import pyglet
@@ -10,6 +10,7 @@ from Box2D import (b2World, b2Vec2)
 from typing import List, Tuple, Dict
 
 from ped_env.classes import ACTION_DIM, PedsRLHandler, PedsRLHandlerRange
+from ped_env.pathfinder import AStar
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
@@ -101,6 +102,7 @@ class PedsMoveEnv(gym.Env):
                  frame_skipping=8,
                  maxStep=3000,
                  person_handler=PedsRLHandlerRange,
+                 use_planner = True,
                  planning_mode:bool=False,
                  train_mode:bool=True,
                  test_mode:bool=False):
@@ -138,7 +140,7 @@ class PedsMoveEnv(gym.Env):
 
         self.frame_skipping = frame_skipping
         self.group_size = group_size
-        self.person_handler = person_handler(self)
+        self.person_handler = person_handler(self, use_planner=use_planner)
         # 由PersonHandler类提供的属性代替，从而使用策略模式来加强灵活性
         self.observation_space = self.person_handler.observation_space
         self.action_space = self.person_handler.action_space
@@ -277,6 +279,7 @@ class PedsMoveEnv(gym.Env):
         self.not_arrived_peds.clear()
         self.elements.clear()
         self.start(self.terrain.map, person_num_sum=self.person_num, person_create_radius=self.terrain.create_radius)
+        self.person_handler.init_exit_kd_trees() #初始化KDTree以供后续使用
         # 添加初始观察状态
         init_obs = []
         for ped in self.peds:

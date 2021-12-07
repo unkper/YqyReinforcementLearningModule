@@ -169,7 +169,7 @@ class Agent():
     def learning(self,
                  epsilon_high = 1.0,
                  epsilon_low = 0.01,
-                 p = 0.99,
+                 p = 0.6,
                  decaying_epsilon = True,
                  explore_episodes_percent = 1.0,
                  max_episode_num = 800,
@@ -241,7 +241,7 @@ class Agent():
         print("Init random train start,total step:{}!".format(self.init_train_steps))
         self.state = self.env.reset()
         is_done = np.array([[False]])
-        for i in tqdm(range(0, self.init_train_steps, self.n_rol_threads)):
+        for i in tqdm(range(0, self.init_train_steps, 1)):
             if is_done.any():
                 self.state = self.env.reset()
                 is_done = np.array([[False]])
@@ -249,7 +249,7 @@ class Agent():
                 s1, r1, is_done, info = self.init_random_step(self.state, i)
                 self.state = s1
 
-    def play(self,savePath:str = None,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):
+    def play(self,savePath:str,load_E:int,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):
         ep = 0
         while ep < episode:
             self.state = self.env.reset()
@@ -273,14 +273,14 @@ class Agent():
                     time.sleep(waitSecond)
         self.env.close()
 
-    def play_init(self,savePath,s0):
+    def play_init(self, savePath, s0, step):
         '''
         用于play函数的初始化操作，该函数一定要返回一个初始动作a0\n
         :param savePath:
         :param s0:
         :return:
         '''
-        return random.sample(self.A,k=1)[0]
+        return random.sample(self.A, k = 1)[0]
 
     def play_step(self,savePath,s0):
         '''
@@ -289,7 +289,7 @@ class Agent():
         :param s0:
         :return:
         '''
-        return random.sample(self.A,k=1)[0]
+        return random.sample(self.A, k = 1)[0]
 
     def sample(self,batch_size = 64):
         return self.experience.sample(batch_size)

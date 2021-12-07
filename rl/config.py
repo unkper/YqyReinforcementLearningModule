@@ -124,7 +124,7 @@ class PedsMoveConfig(Config):
 
         self.batch_size = 1024
         self.learning_rate = 0.003
-        self.update_frequent = 100
+        self.update_frequent = 25
         self.debug_log_frequent = 10
         self.actor_hidden_dim = 128
         self.critic_hidden_dim = 256
@@ -137,7 +137,7 @@ class PedsMoveConfig(Config):
         self.rollout_epoch_range = (int(max_episode * 0.2), int(max_episode * 0.35))
         self.model_batch_size = int(512 / 0.8)  # 因为有0.2作为验证集
         self.model_train_freq = 1000  # 250
-        self.n_steps_model = 300
+        self.n_steps_model = 350
         self.network_size = 10
         self.elite_size = 7
         self.use_decay = True

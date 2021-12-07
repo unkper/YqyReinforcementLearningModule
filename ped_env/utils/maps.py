@@ -29,7 +29,7 @@ class Map():
 
 
 start_points_map2 = [(1.5, 3), (1.5, 8)]
-exit_map2 = [(11.5, 2), (11.5, 9), (7, 11.5), (7, 0.5)]
+exit_map2 = [(11.5, 2), (11.5, 9)]
 radius_map2 = 1
 random_exits2 = [[3], [4]]
 

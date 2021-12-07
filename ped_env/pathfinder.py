@@ -2,11 +2,11 @@ import time
 import numpy as np
 
 from typing import List
+from collections import defaultdict
 
 from tqdm import tqdm
 
 from ped_env.utils.maps import Map, map_05, map_06
-from ped_env.envs import PedsMoveEnv, ACTION_DIM
 
 #https://github.com/lc6chang/Social_Force_Model
 class Node:
@@ -17,12 +17,19 @@ class Node:
         self.f = 0
         self.father = (0, 0)
 
+class Path:
+    def __init__(self, s_pos, e_pos, path):
+        self.start_pos = s_pos
+        self.end_pos = e_pos
+        self.path = path
+
 class AStar:
     def __init__(self, map:Map):
         self.map = map
         self.barrier_list = []
         self.init_barrier_list()
         self.dir_vector_matrix_dic = dict() #值是出口坐标(x,y)，键是ndarray
+        self.path_matrix_dic = defaultdict(dict) #键是出口坐标(x,y),值是一个字典(键是起始坐标(sx,sy),值是路径Path)
         self.calculate_dir_vector()
 
     def init_barrier_list(self):
@@ -94,11 +101,18 @@ class AStar:
 
         #  依次遍历父节点，找到下一个位置
         temp = aim_loc[0]
+        path_arr = []
         while node_matrix[temp[0]][temp[1]].father != start_loc:
             temp = node_matrix[temp[0]][temp[1]].father
+            _temp = (temp[0] + 0.5, temp[1] + 0.5) #这里加0.5是为了消除int带来的向下取整效果
+            path_arr.insert(0, _temp)
+        start_loc_tmp = (start_loc[0] + 0.5, start_loc[1] + 0.5)
+        path_arr.insert(0, start_loc_tmp)
         #  返回下一个位置的方向向量，例如：（-1,0），（-1,1）......
+        #  保存路径数据到Path类中返回
+        path = Path(start_loc, aim_loc[0], path_arr)
         re = (temp[0] - start_loc[0], temp[1] - start_loc[1])
-        return re
+        return re, path
 
     def calculate_dir_vector(self):
         terrain = self.map.map
@@ -108,7 +122,10 @@ class AStar:
             for j in range(terrain.shape[1]):
                 for i in range(terrain.shape[0]):
                     if terrain[i, j] == 0:#空地
-                        vector_matrix[i][j] = self.next_loc(i, j, int(exit[0]), int(exit[1]))
+                        start_pos = (i, j)
+                        end_pos = (exit[0], exit[1])
+                        vector_matrix[i][j], pa = self.next_loc(i, j, int(exit[0]), int(exit[1]))
+                        self.path_matrix_dic[end_pos][start_pos] = pa
             self.dir_vector_matrix_dic[exit] = vector_matrix
 
     def print_dir_vector_map(self, matrix:List[List]):
@@ -138,6 +155,8 @@ class AStar:
             print_string += "\n"
         return print_string
 
+ACTION_DIM = 9
+
 class AStarController():
     vec_to_discrete_action_dic = {
         (0, 0): 0,
@@ -150,7 +169,7 @@ class AStarController():
         (0, -1): 7,
         (1, -1): 8
     }
-    def __init__(self, env:PedsMoveEnv, recorder=None):
+    def __init__(self, env, recorder=None):
         '''
         利用了行人模拟环境，并使用AStar算法做自驱动力来控制行人的行走
         :param env:
@@ -199,18 +218,7 @@ class AStarController():
 def recoder_for_debug(*obj):
     pass
 
-def test_func01():
-    m = map_05
-    start_time = time.time()
-    planner = AStar(m)
-    file = open("answer_{}.txt".format(m.name), "w+")
-    for exit in m.exits:
-        file.write(str(exit) + ":\n")
-        file.write(planner.print_dir_vector_map(planner.dir_vector_matrix_dic[exit]))
-        file.write("\n\n")
-    print(time.time() - start_time)
-
 if __name__ == '__main__':
-    env = PedsMoveEnv(map_05, person_num=30, group_size=(5,5), maxStep=2000, planning_mode=True)
-    controller = AStarController(env, recorder=recoder_for_debug)
-    controller.play(5, True)
+    planner = AStar(map_05)
+
+    print("test")

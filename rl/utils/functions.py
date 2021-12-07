@@ -234,8 +234,8 @@ def model_based_loss_callback(agent, loss):
 
 def save_callback(agent, episode_num: int):
     sname = agent.init_time_str + "_" + agent.env_name
-    if episode_num % (agent.log_frequent * 5) == 0:
+    if episode_num % (agent.log_frequent) == 0:
         print("save network!......")
         for i in range(agent.env.agent_count):
-            agent.save(sname, "Actor{}".format(i), agent.agents[i].actor)
-            agent.save(sname, "Critic{}".format(i), agent.agents[i].critic)
+            agent.save(sname, "Actor{}".format(i), agent.agents[i].actor, episode_num)
+            agent.save(sname, "Critic{}".format(i), agent.agents[i].critic, episode_num)

@@ -23,7 +23,7 @@ TICKS_PER_SEC = 50
 vel_iters, pos_iters = 6, 2
 
 class PedsMoveEnvFactory():
-    GROUP_SIZE = 0.25
+    GROUP_SIZE = 0.5
     def __init__(self, world: b2World, l1, l2):
         self.world = world
         self.l1 = l1
@@ -74,6 +74,12 @@ class PedsMoveEnvFactory():
             self.set_group_process(group, groups, group_dic, persons)
         return persons
 
+    def create_group_persons_in_rect(self):
+        pass
+
+    def create_group_persons_in_rect_neat(self):
+        pass
+
     def random_create_persons(self, terrain:Map, idx, person_num, groups, group_dic, group_size, test_mode=False):
         h, w = terrain.map.shape[0], terrain.map.shape[1]
         each_group_num = calculate_each_group_num(group_size, person_num)
@@ -82,6 +88,8 @@ class PedsMoveEnvFactory():
             while True:
                 new_x, new_y = random.random() * w,random.random() * h
                 if 1 < new_x < w and 1 < new_y < h and terrain.map[int(new_x), int(new_y)] == 0:
+                    new_x = int(new_x) + 0.5
+                    new_y = int(new_y) + 0.5 #设置随机点为方格的正中心
                     break
             group = self.inner_create_persons_in_radius((new_x, new_y), self.GROUP_SIZE, num, terrain.get_random_exit(idx), test_mode)
             self.set_group_process(group, groups, group_dic, persons)
@@ -96,16 +104,16 @@ class PedsMoveEnv(gym.Env):
 
     def __init__(self,
                  terrain: Map,
-                 person_num=10,
-                 group_size:Tuple=(1,6),
-                 discrete=True,
-                 frame_skipping=8,
-                 maxStep=3000,
-                 person_handler=PedsRLHandlerRange,
-                 use_planner = True,
-                 planning_mode:bool=False,
-                 train_mode:bool=True,
-                 test_mode:bool=False):
+                 person_num = 10,
+                 group_size:Tuple = (1,6),
+                 discrete = True,
+                 frame_skipping = 8,
+                 maxStep = 3000,
+                 person_handler = PedsRLHandlerRange,
+                 use_planner = False,
+                 random_init_mode:bool = False,
+                 train_mode:bool = True,
+                 test_mode:bool = False):
         '''
         一个基于Box2D和pyglet的多行人强化学习仿真环境
         对于一个有N个人的环境，其状态空间为：[o1,o2,...,oN]，每一个o都是一个长度为14的list，其代表的意义为：
@@ -119,13 +127,13 @@ class PedsMoveEnv(gym.Env):
         :param frame_skipping: 一次step跳过的帧数，等于一次step环境经过frame_skipping * 1 / TICKS_PER_SEC秒
         :param maxStep: 经过多少次step后就强行结束环境，所有行人到达终点时也会结束环境
         :param PersonHandler: 用于处理有关于行人状态空间，动作与返回奖励的类
-        :param planning_mode:用于planner的规划时使用，主要区别是在全场随机生成智能体
+        :param random_init_mode:用于planner的规划时使用，主要区别是在全场随机生成智能体
         :param test_mode: 是否debug
         :param group_size:一个团体的人数，其中至少包含1个leader和多个follower
         '''
         super(PedsMoveEnv, self).__init__()
 
-        self.planning_mode = planning_mode
+        self.random_init_mode = random_init_mode
         self.left_person_num = 0
         self.step_in_env = 0
         self.elements = []
@@ -155,7 +163,9 @@ class PedsMoveEnv(gym.Env):
         self.train_mode = train_mode
         self.test_mode = test_mode
         self.vec = [0.0 for _ in range(self.agent_count)]
-        assert group_size[1] <= 5
+
+        self.path_finder = AStar(self.terrain)
+        assert group_size[1] <= 6
 
     def start(self, maps: np.ndarray, person_num_sum: int = 60, person_create_radius: float = 5):
         self.world = b2World(gravity=(0, 0), doSleep=True)
@@ -194,9 +204,9 @@ class PedsMoveEnv(gym.Env):
                       for _ in range(len(self.terrain.start_points))]
         person_num[-1] += reminder
         for i, num in enumerate(person_num):
-            if not self.test_mode and not self.planning_mode:
+            if not self.test_mode and not self.random_init_mode:
                 self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.test_mode))
-            elif not self.test_mode and self.planning_mode:
+            elif not self.test_mode and self.random_init_mode:
                 self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.test_mode))
             else:
                 exit_type = self.terrain.get_random_exit(i)
@@ -279,7 +289,8 @@ class PedsMoveEnv(gym.Env):
         self.not_arrived_peds.clear()
         self.elements.clear()
         self.start(self.terrain.map, person_num_sum=self.person_num, person_create_radius=self.terrain.create_radius)
-        self.person_handler.init_exit_kd_trees() #初始化KDTree以供后续使用
+        if self.person_handler.use_planner:
+            self.person_handler.init_exit_kd_trees() #初始化KDTree以供后续使用
         # 添加初始观察状态
         init_obs = []
         for ped in self.peds:

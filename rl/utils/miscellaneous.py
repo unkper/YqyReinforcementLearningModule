@@ -121,6 +121,6 @@ if __name__ == '__main__':
     # arr = np.random.random([256,101])
     # print(arr[np.unravel_index(np.argmax(arr, axis=None), arr.shape)[0], :])
     #print(os.listdir("../"))
-    contrast_learning_curve("./data/20211207/map_05", y_range=(0,10), y_func=np.mean, use_multiply_result=False)
+    contrast_learning_curve("data/stats/20211212", y_range=(0, 300), smooth_step=5, y_func=np.mean, use_multiply_result=False)
     # load_data_and_draw("../../data/models/2021_11_11_00_12_PedsMoveEnv/rewards_f81f8533-4240-11ec-84e7-3cecef04b81e.txt",
     #                    "../../data/models/2021_11_11_00_12_PedsMoveEnv/step_f81f8533-4240-11ec-84e7-3cecef04b81e.txt")

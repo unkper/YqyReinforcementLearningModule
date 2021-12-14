@@ -43,6 +43,8 @@ class Person(Agent):
     counter = 0  # 用于记录智能体编号
     pic = None
 
+    a_star_path = None # 用于follow在找不到路时的A*策略使用
+
     def __init__(self,
                  env: b2World,
                  new_x,

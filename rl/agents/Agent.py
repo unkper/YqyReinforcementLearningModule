@@ -12,6 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from rl.utils.classes import Experience,Transition
 from rl.utils.classes import make_parallel_env
+from rl.utils.functions import early_stop_callback
 
 class Agent():
     '''
@@ -65,22 +66,23 @@ class Agent():
         self.state = None
 
         #为了保存方便而使用
-        self.init_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
-        log_dir = os.path.join(log_dir, self.init_time_str + "_" + self.env_name)
-        self.log_dir = log_dir
-        self.model_dir = os.path.join(log_dir, 'model')
-        self.summary_dir = os.path.join(log_dir, 'summary')
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
-        if not os.path.exists(self.model_dir):
-            os.makedirs(self.model_dir)
-        if not os.path.exists(self.summary_dir):
-            os.makedirs(self.summary_dir)
-        self.writer = SummaryWriter(log_dir=self.summary_dir)
+        self.init_time_str = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+        if log_dir != None:
+            log_dir = os.path.join(log_dir, self.init_time_str + "_" + self.env_name)
+            self.log_dir = log_dir
+            self.model_dir = os.path.join(log_dir, 'model')
+            self.summary_dir = os.path.join(log_dir, 'summary')
+            if not os.path.exists(self.log_dir):
+                os.makedirs(self.log_dir)
+            if not os.path.exists(self.model_dir):
+                os.makedirs(self.model_dir)
+            if not os.path.exists(self.summary_dir):
+                os.makedirs(self.summary_dir)
+            self.writer = SummaryWriter(log_dir=self.summary_dir)
 
         self.loss_callback_ = None
         self.save_callback_ = None
-        self.early_stop_callback_ = None
+        self.early_stop_callback_ = early_stop_callback
 
         self.init_train_steps = int(init_train_steps)
         self.total_steps_in_train = 0
@@ -248,6 +250,7 @@ class Agent():
             else:
                 s1, r1, is_done, info = self.init_random_step(self.state, i)
                 self.state = s1
+                is_done = np.array(is_done)
 
     def play(self,savePath:str,load_E:int,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):
         ep = 0

@@ -10,10 +10,12 @@ import numpy as np
 import torch
 from torch import nn
 from multiprocessing import Pipe, Process
-from ped_env.envs import PedsMoveEnv
+
+import ped_env
 from rl.utils.functions import flatten_data, process_maddpg_experience_data
 from rl.utils.model.functions import set_rollout_length
 from rl.utils.updates import hard_update
+
 
 class Transition():
     counter = 0
@@ -171,7 +173,7 @@ class SaveNetworkMixin():
         desc_txt_file.write("agent_count:" + str(self.env.agent_count) + "\n")
         desc_txt_file.write("actor_hidden_dim:" + str(self.actor_hidden_dim) + "\n")
         desc_txt_file.write("critic_hidden_dim:" + str(self.critic_hidden_dim) + "\n")
-        if isinstance(self.env, PedsMoveEnv) or isinstance(self.env, SubprocEnv) and self.env.type == PedsMoveEnv:
+        if isinstance(self.env, ped_env.envs.PedsMoveEnv) or isinstance(self.env, SubprocEnv) and self.env.type == ped_env.envs.PedsMoveEnv:
             if isinstance(self.env, SubprocEnv):
                 a1, a2, a3, a4 = self.env.get_env_attr()
             else:
@@ -262,9 +264,15 @@ class MAAgentMixin():
         if self.total_trans > self.batch_size and step % self.update_frequent == 0:
             loss_c, loss_a = 0, 0
             for i in range(self.n_steps_train):
-                lc, la = self._learn_from_memory()
+                trans_pieces = self.experience.sample(self.batch_size)
+                lc, la = self._learn_from_memory(trans_pieces)
+
+                if self.demo_experience:
+                    demo_trans_pieces = self.demo_experience.sample(self.batch_size_d)
+                    self._learn_from_memory(demo_trans_pieces, True)
                 loss_c += lc
                 loss_a += la
+                self.train_update_count += 1
             loss_c /= self.n_steps_train
             loss_a /= self.n_steps_train
 
@@ -366,6 +374,12 @@ class ModelBasedMAAgentMixin():
                     trans_pieces = self.experience.sample(self.batch_size)
 
                 lc, la = self._learn_from_memory(trans_pieces)
+
+                if self.demo_experience:
+                    demo_trans_pieces = self.demo_experience.sample(self.batch_size_d)
+                    self._learn_from_memory(demo_trans_pieces, True)
+
+                self.train_update_count += 1
                 loss_c += lc
                 loss_a += la
             loss_c /= self.n_steps_train
@@ -484,7 +498,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
         elif cmd == 'get_type':
             remote.send(type(env))
         elif cmd == 'get_attr':
-            if isinstance(env, PedsMoveEnv):
+            if isinstance(env, ped_env.envs.PedsMoveEnv):
                 remote.send((env.person_num, env.group_size, env.maxStep, env.terrain.name))
             else:
                 remote.send(None)

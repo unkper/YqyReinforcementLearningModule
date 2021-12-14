@@ -38,7 +38,13 @@ class Config:
         self.real_ratio = 0.3
         self.model_retain_epochs = 1
 
+        #init bc learn parameter
+        self.use_init_bc = True
+        self.init_bc_steps = 0
+        self.batch_size_d = 128
+
     def update_parameter(self, alg_type):
+        self.rollout_epoch_range = (int(self.max_episode * 0.1), int(self.max_episode * 0.15))
         if alg_type == "matd3" or alg_type == "g_matd3":
             self.actor_network = MLPNetworkActor
             self.critic_network = DoubleQNetworkCritic
@@ -72,6 +78,11 @@ class MPEConfig(Config):
         self.network_size = 10
         self.elite_size = 10
         self.use_decay = True
+
+        #init bc learn parameter
+        self.use_init_bc = True
+        self.init_bc_steps = 500
+        self.batch_size_d = 128
 
         self.test = test
 
@@ -117,6 +128,9 @@ class DebugConfig(Config):
             self.init_train_steps = 0
 
 class PedsMoveConfig(Config):
+    '''
+    model的train freq一定要多，不然会出现model bias
+    '''
     def __init__(self, n_rol_threads=8, max_episode=100):
         super().__init__()
         self.max_episode = max_episode
@@ -131,20 +145,24 @@ class PedsMoveConfig(Config):
         self.gamma = 0.99
         self.tau = 0.01
         self.n_steps_train = 10
-
+        #model learn parameter
         self.real_ratio = 0.1
-        self.rollout_length_range = (1, 8)
-        self.rollout_epoch_range = (int(max_episode * 0.2), int(max_episode * 0.35))
+        self.rollout_length_range = (1, 8)#(1, 10)
+        self.rollout_epoch_range = (int(max_episode * 0.1), int(max_episode * 0.15))
         self.model_batch_size = int(512 / 0.8)  # 因为有0.2作为验证集
-        self.model_train_freq = 1000  # 250
-        self.n_steps_model = 350
+        self.model_train_freq = 200#500  # 250
+        self.n_steps_model = 100#350
         self.network_size = 10
         self.elite_size = 7
         self.use_decay = True
+        #init bc learn parameter
+        self.use_init_bc = True
+        self.init_bc_steps = 0
+        self.batch_size_d = 128
 
     def update_parameter(self, alg_type):
         super(PedsMoveConfig, self).update_parameter(alg_type)
         if alg_type == "g_maddpg" or alg_type == "g_matd3" or alg_type == "g_masac":
-            self.init_train_steps = int(5000 * 5 * 5 / self.n_rol_threads) #25指的是1episode平均500step
+            self.init_train_steps = int(0 / self.n_rol_threads)#int(5000 * 5 * 5 / self.n_rol_threads) #25指的是1episode平均500step
         else:
             self.init_train_steps = 0

@@ -41,7 +41,7 @@ class PedsRLHandler(PedsHandlerInterface):
     '''
     合作的奖励机制
     '''
-    def __init__(self, env, r_arrival=0, r_move = -0.1, r_wait = -0.5, r_collision=-1):
+    def __init__(self, env, r_arrival=0, r_move = -0.1, r_wait = -0.5, r_collision=-1, use_planner=False):
         super().__init__(env)
         self.env = env
 
@@ -68,9 +68,11 @@ class PedsRLHandler(PedsHandlerInterface):
         self.r_collision = r_collision
         self.r_wait = r_wait
         self.r_move = r_move
-        self.planner = AStar(self.env.terrain)
-        self.exit_kd_trees = dict() #键是leader的id，值是使用A*策略产生的路径
-        self.use_planner = False
+        if use_planner:
+            self.planner = AStar(self.env.terrain)
+            self.planner.calculate_dir_vector()
+            self.exit_kd_trees = dict() #键是leader的id，值是使用A*策略产生的路径
+            self.use_planner = False
 
         self.last_observation = {}
 
@@ -80,6 +82,8 @@ class PedsRLHandler(PedsHandlerInterface):
             pos_x, pos_y = int(le.getX), int(le.getY)
             exit_pos = self.env.terrain.exits[le.exit_type - 3] #-3的原因是出口从3开始编号
             pa = self.planner.path_matrix_dic[exit_pos][(pos_x, pos_y)]
+            if pa == None:
+                raise Exception("Leader 生成点存在问题!")
             tree = kdtree.create(pa.path, 2)
             self.exit_kd_trees[le.id] = tree
 
@@ -140,8 +144,10 @@ class PedsRLHandler(PedsHandlerInterface):
             leader_dir = calculate_nij(group.leader, ped)
             mix_dir = ped.alpha * control_dir + (1 - ped.alpha) * leader_dir
         else:
-            pos_i = exit_pos
-            pos_j = ped.pos
+            pos_i, pos_j = exit_pos, ped.pos
+            if ped.a_star_path == None:#计算得到一条去出口的路
+                ped.a_star_path = self.env.path_finder.next_loc(int(pos_j[0]), int(pos_j[1]),
+                                                                int(pos_i[0]), int(pos_i[1]))
             mix_dir = normalized(pos_i - pos_j)
         ped.self_driven_force(mix_dir) #跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
         ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
@@ -171,8 +177,15 @@ class PedsRLHandler(PedsHandlerInterface):
         return gr, lr
 
 class PedsRLHandlerRange(PedsRLHandler):
-    def __init__(self, env, r_arrival=0, r_move=-0.1, r_wait=-0.5, r_collision=-1, r_planner=-0.05, use_planner=False):
-        super(PedsRLHandlerRange, self).__init__(env=env, r_arrival=r_arrival, r_move=r_move, r_wait=r_wait, r_collision=r_collision)
+    def __init__(self, env, r_arrival=0, r_move=-0.1, r_wait=-0.5, r_collision=-1, r_planner=-0.01, use_planner=False, ratio=1):
+        if ratio != 1:
+            r_arrival *= ratio
+            r_move *= ratio
+            r_wait *= ratio
+            r_collision *= ratio
+            r_planner *= ratio
+        super(PedsRLHandlerRange, self).__init__(env=env, r_arrival=r_arrival, r_move=r_move,
+                                                 r_wait=r_wait, r_collision=r_collision, use_planner=use_planner)
         self.r_planner = r_planner
         self.use_planner = use_planner
         if use_planner:
@@ -200,7 +213,7 @@ class PedsRLHandlerRange(PedsRLHandler):
                 now_dis = self.env.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
                 if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and
                         last_pos[1] - 0.001 <= now_pos[1] <= last_pos[1] + 0.001):
-                    lr += self.r_move * now_dis  # 给予-0.1以每步
+                    lr += self.r_move  # 给予-0.1以每步以防止智能体因奖励而无法到达出口
                     self.env.distance_to_exit[ped_index] = now_dis
                     self.env.points_in_last_step[ped_index] = now_pos
                 else:

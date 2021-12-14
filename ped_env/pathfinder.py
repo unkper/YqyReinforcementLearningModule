@@ -1,4 +1,7 @@
+import random
 import time
+
+import gym
 import numpy as np
 
 from typing import List
@@ -6,7 +9,8 @@ from collections import defaultdict
 
 from tqdm import tqdm
 
-from ped_env.utils.maps import Map, map_05, map_06
+from ped_env.utils.maps import Map
+
 
 #https://github.com/lc6chang/Social_Force_Model
 class Node:
@@ -22,6 +26,10 @@ class Path:
         self.start_pos = s_pos
         self.end_pos = e_pos
         self.path = path
+        self.vec_dir = None
+
+    def calculate_vec_dir_in_path(self):
+        pass
 
 class AStar:
     def __init__(self, map:Map):
@@ -30,7 +38,6 @@ class AStar:
         self.init_barrier_list()
         self.dir_vector_matrix_dic = dict() #值是出口坐标(x,y)，键是ndarray
         self.path_matrix_dic = defaultdict(dict) #键是出口坐标(x,y),值是一个字典(键是起始坐标(sx,sy),值是路径Path)
-        self.calculate_dir_vector()
 
     def init_barrier_list(self):
         terrain = self.map.map
@@ -53,9 +60,12 @@ class AStar:
             for j in range(0, terrain.shape[1]):
                 node_matrix[i][j] = Node()
 
+        find_way = False
         open_list.append(start_loc)  # 起始点添加至打开列表
         # 开始算法的循环
         while True:
+            if len(open_list) == 0:
+                break
             now_loc = open_list[0]
             for i in range(1, len(open_list)):  # （1）获取f值最小的点
                 if node_matrix[open_list[i][0]][open_list[i][1]].f < node_matrix[now_loc[0]][now_loc[1]].f:
@@ -97,22 +107,27 @@ class AStar:
 
             #  判断是否停止
             if aim_loc[0] in close_list:
+                find_way = True
                 break
 
-        #  依次遍历父节点，找到下一个位置
-        temp = aim_loc[0]
-        path_arr = []
-        while node_matrix[temp[0]][temp[1]].father != start_loc:
-            temp = node_matrix[temp[0]][temp[1]].father
-            _temp = (temp[0] + 0.5, temp[1] + 0.5) #这里加0.5是为了消除int带来的向下取整效果
-            path_arr.insert(0, _temp)
-        start_loc_tmp = (start_loc[0] + 0.5, start_loc[1] + 0.5)
-        path_arr.insert(0, start_loc_tmp)
-        #  返回下一个位置的方向向量，例如：（-1,0），（-1,1）......
-        #  保存路径数据到Path类中返回
-        path = Path(start_loc, aim_loc[0], path_arr)
-        re = (temp[0] - start_loc[0], temp[1] - start_loc[1])
-        return re, path
+        if find_way:
+            #  依次遍历父节点，找到下一个位置
+            temp = aim_loc[0]
+            path_arr = []
+            while node_matrix[temp[0]][temp[1]].father != start_loc:
+                temp = node_matrix[temp[0]][temp[1]].father
+                _temp = (temp[0] + 0.5, temp[1] + 0.5) #这里加0.5是为了消除int带来的向下取整效果
+                path_arr.insert(0, _temp)
+            start_loc_tmp = (start_loc[0] + 0.5, start_loc[1] + 0.5)
+            path_arr.insert(0, start_loc_tmp)
+            #  返回下一个位置的方向向量，例如：（-1,0），（-1,1）......
+            #  保存路径数据到Path类中返回
+            path = Path(start_loc, aim_loc[0], path_arr)
+            re = (temp[0] - start_loc[0], temp[1] - start_loc[1])
+            return re, path
+        else:
+            #print("Warning,A* find no path from {} to {}!!!".format(start_loc, aim_loc[0]))
+            return (0, 0), None
 
     def calculate_dir_vector(self):
         terrain = self.map.map
@@ -142,6 +157,7 @@ class AStar:
                         print_string += "%"
                 else:
                     vector_char = {
+                        (0, 0):"E",
                         (-1, 0):"←",
                         (0, -1):"↑",
                         (0, 1):"↓",
@@ -157,7 +173,7 @@ class AStar:
 
 ACTION_DIM = 9
 
-class AStarController():
+class AStarController(gym.Env):
     vec_to_discrete_action_dic = {
         (0, 0): 0,
         (1, 0): 1,
@@ -169,14 +185,29 @@ class AStarController():
         (0, -1): 7,
         (1, -1): 8
     }
-    def __init__(self, env, recorder=None):
+    def __init__(self, env, random_policy=False):
         '''
         利用了行人模拟环境，并使用AStar算法做自驱动力来控制行人的行走
         :param env:
         '''
         self.env = env
         self.planner = AStar(env.terrain)
-        self.recorder = recorder
+        self.planner.calculate_dir_vector()
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        self.agent_count = self.env.agent_count
+        self.random_policy = random_policy
+        if random_policy:
+            self.action_space = range(ACTION_DIM)
+
+    def close(self):
+        self.env.close()
+
+    def render(self, mode="human"):
+        self.env.close()
+
+    def reset(self):
+        return self.env.reset()
 
     def step(self, obs):
         actions = []
@@ -185,11 +216,17 @@ class AStarController():
             pos_integer = [int(ped.getX), int(ped.getY)]
             exit = self.env.terrain.exits[ped.exit_type - 3] #根据智能体的id得到智能体要去的出口,3是因为出口从3开始编号
             dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
-            action = np.zeros([ACTION_DIM])
-            if dir != 0:
-                action[self.vec_to_discrete_action_dic[dir]] = 1.0
+            if not self.random_policy:
+                action = np.zeros([ACTION_DIM])
+                if dir != 0:
+                    action[self.vec_to_discrete_action_dic[dir]] = 1.0
+            else:
+                action = np.zeros([ACTION_DIM])
+                choose_action = random.sample(self.action_space, 1)[0]
+                action[choose_action] = 1.0
             actions.append(action)
-        return actions
+        next_obs, reward, is_done, info = self.env.step(actions)
+        return next_obs, reward, is_done, actions
 
     def play(self, episodes, render=True):
         '''
@@ -205,7 +242,6 @@ class AStarController():
             while not is_done[0]:
                 action = self.step(obs)
                 next_obs, reward, is_done, info = self.env.step(action)
-                self.recorder(obs, action, reward, is_done, next_obs)
                 obs = next_obs
                 step += self.env.frame_skipping
                 if render:
@@ -213,12 +249,15 @@ class AStarController():
             endtime = time.time()
             #print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
             #      .format(self.env.listener.col_with_agent, self.env.listener.col_with_wall))
-            #print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+            print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 def recoder_for_debug(*obj):
     pass
 
 if __name__ == '__main__':
-    planner = AStar(map_05)
+    pass
+    # env = PedsMoveEnv(map_05, 30, (5,5))
+    # planner = AStarController(env)
+    # planner.play(5)
 
-    print("test")
+

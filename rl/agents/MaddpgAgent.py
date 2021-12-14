@@ -149,7 +149,7 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
     def __str__(self):
         return "Maddpg"
 
-    def _learn_from_memory(self):
+    def _learn_from_memory(self, trans_pieces, BC=False):
         '''
         从记忆学习，更新两个网络的参数
         :return:
@@ -158,9 +158,11 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
         total_critic_loss = 0.0
         total_actor_loss = 0.0
 
-        trans_pieces = self.experience.sample(self.batch_size)
         s0, a0, r1, is_done, s1, s0_critic_in, s1_critic_in = \
             process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
+
+        if BC and self.discrete:
+            int_a0 = a0.type(torch.IntTensor).to(self.device)
 
         for i in range(self.env.agent_count):
             with torch.no_grad():
@@ -191,9 +193,19 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
                 pred_a = torch.cat(pred_a, dim=1)
             else:
                 pred_a = torch.cat([self.agents[j].actor.forward(s0[j]) for j in range(self.env.agent_count)], dim=1)
+
             # 反向梯度下降
-            actor_loss = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
-            actor_loss += (curr_pol_out ** 2).mean() * 1e-3
+            if BC:
+                Q = self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
+                lmbda = self.alpha / Q.abs().mean().detach()
+                if self.discrete:
+                    actor_loss = -lmbda * Q.mean() + F.cross_entropy(pred_a, int_a0)
+                else:
+                    actor_loss = -lmbda * Q.mean() + F.mse_loss(pred_a, a0)
+                actor_loss += (curr_pol_out ** 2).mean() * 1e-3
+            else:
+                actor_loss = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
+                actor_loss += (curr_pol_out**2).mean() * 1e-3
 
             self.agents[i].actor_optimizer.zero_grad()
             actor_loss.backward()

@@ -88,9 +88,12 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
                  critic_network = None,
                  actor_hidden_dim = 64,
                  critic_hidden_dim = 64,
+                 log_dir="./",
+
                  model_hidden_dim=400,
                  n_steps_train=5,
                  env_name = "training_env",
+
                  init_train_steps=500,
                  network_size=7,
                  elite_size=5,
@@ -103,7 +106,9 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
                  rollout_batch_size=256,
                  real_ratio=0.3,
                  model_retain_epochs=300,
-                 ):
+
+                 batch_size_d = 128,
+                 demo_experience:Experience=None):
         '''
         环境的输入有以下几点变化，设此时有N个智能体：
         状态为(o1,o2,...,oN)
@@ -123,7 +128,7 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
         if env is None:
             raise Exception("agent should have an environment!")
         super(G_MATD3Agent, self).__init__(env, capacity, env_name=env_name, gamma=gamma, n_rol_threads=n_rol_threads,
-                                           init_train_steps=init_train_steps)
+                                           init_train_steps=init_train_steps, log_dir=log_dir)
         self.state_dims = []
         for obs in env.observation_space:
             self.state_dims.append(back_specified_dimension(obs))
@@ -175,6 +180,11 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
         self.predict_env = PredictEnv(self.model, self.env_name, 'pytorch')
         self.model_experience = Experience(capacity)
 
+        self.batch_size_d = batch_size_d
+        if demo_experience:
+            print("使用仿真经验来进行初始化!")
+        self.demo_experience = demo_experience
+
         self.loss_callback_ = model_based_loss_callback
         self.save_callback_ = save_callback
         return
@@ -182,7 +192,7 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
     def __str__(self):
         return "G_Matd3"
 
-    def _learn_from_memory(self, trans_pieces):
+    def _learn_from_memory(self, trans_pieces, BC=False):
         '''
         从记忆学习，更新两个网络的参数
         :return:
@@ -193,6 +203,10 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
 
         s0, a0, r1, is_done, s1, s0_critic_in, s1_critic_in = \
             process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
+
+        if BC and self.discrete:
+            temp_a = np.array([x.a0 for x in trans_pieces])
+            int_a0 = torch.from_numpy(np.argmax(temp_a, axis=2)).to(self.device)
 
         for i in range(self.env.agent_count):
             with torch.no_grad():
@@ -230,8 +244,22 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
                     pred_a = torch.cat([self.agents[j].actor.forward(s0[j])
                                     for j in range(self.env.agent_count)],dim=1)
                 # 反向梯度下降
-                actor_loss = -1 * self.agents[i].critic.Q1(s0_critic_in, pred_a).mean()
-                actor_loss += (curr_pol_out**2).mean() * 1e-3
+                if BC:
+                    #curr_pol_out [128,9] Q,Q_real [128,] int_a0 [128,6]
+                    Q = self.agents[i].critic.Q1(s0_critic_in, pred_a)
+                    Q_real = self.agents[i].critic.Q1(s0_critic_in, a0)
+                    #use Q filter
+                    idx = (Q < Q_real).detach()
+                    #calculate BC Loss
+                    if self.discrete:
+                        bc_loss = F.cross_entropy(curr_pol_out[idx,:], torch.squeeze(int_a0[idx, i]))
+                    else:
+                        bc_loss = F.mse_loss(pred_a[idx,:], a0[idx,:])
+                    actor_loss = -1 * Q.mean() * 0.001 + bc_loss
+                    actor_loss += (curr_pol_out ** 2).mean() * 1e-3
+                else:
+                    actor_loss = -1 * self.agents[i].critic.Q1(s0_critic_in, pred_a).mean()
+                    actor_loss += (curr_pol_out**2).mean() * 1e-3
 
                 self.agents[i].actor_optimizer.zero_grad()
                 actor_loss.backward()
@@ -242,7 +270,6 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
                 # 软更新参数
                 soft_update(self.agents[i].target_actor, self.agents[i].actor, self.tau)
                 soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
-
-        self.train_update_count += 1
+        # 为了更新bc,将该过程移到外部执行
         return (total_critic_loss, total_loss_actor)
 

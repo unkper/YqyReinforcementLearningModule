@@ -2,14 +2,13 @@ import random
 import time
 
 import torch
-import torch.nn.functional as F
-import numpy as np
 
 from gym import Env
 from gym.spaces import Discrete
+from torch.optim import Adam
 
 from rl.agents.Agent import Agent
-from rl.utils.networks.maddpg_network import MLPNetworkActor, DoubleQNetworkCritic
+from rl.utils.networks.maddpg_network import GaussianPolicy, DoubleQNetworkCritic
 from rl.utils.updates import soft_update, hard_update
 from rl.utils.classes import SaveNetworkMixin, Noise, Experience, MAAgentMixin
 from rl.utils.functions import back_specified_dimension, onehot_from_logits, gumbel_softmax, flatten_data, \
@@ -21,15 +20,17 @@ class DDPGAgent:
     def __init__(self, state_dim, action_dim,
                  learning_rate, discrete,
                  device, state_dims, action_dims,
-                 actor_network = None, critic_network = None, actor_hidden_dim=64, critic_hidden_dim=64):
-        if not discrete: raise Exception("只能处理离散动作空间!")
+                 actor_network = None, critic_network = None,
+                 actor_hidden_dim=64, critic_hidden_dim=64,
+                 automatic_entropy_tuning=True):
+        if discrete: raise Exception("只能处理连续动作空间!")
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.discrete = discrete
         self.device = device
-        self.actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
+        self.actor = GaussianPolicy(state_dim, action_dim, actor_hidden_dim, discrete).to(self.device) \
             if actor_network == None else actor_network(state_dim, action_dim, discrete, actor_hidden_dim).to(self.device)
-        self.target_actor = MLPNetworkActor(state_dim, action_dim, discrete).to(self.device) \
+        self.target_actor = GaussianPolicy(state_dim, action_dim, actor_hidden_dim, discrete).to(self.device) \
             if actor_network == None else actor_network(state_dim, action_dim, discrete, actor_hidden_dim).to(self.device)
         hard_update(self.target_actor, self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), learning_rate)
@@ -40,6 +41,11 @@ class DDPGAgent:
             if critic_network == None else critic_network(state_dims, action_dims, critic_hidden_dim).to(self.device)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), learning_rate)
+
+        if automatic_entropy_tuning == True:
+            self.target_entropy = -torch.prod(torch.Tensor(action_dim).to(self.device)).item()
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
+            self.alpha_optim = Adam([self.log_alpha], lr=learning_rate)
 
         self.noise = Noise(1 if self.discrete else action_dim)
         self.count = [0 for _ in range(action_dim)]
@@ -57,7 +63,7 @@ class DDPGAgent:
         if explore and self.discrete:
             action = onehot_from_int(random.randint(0, self.action_dim - 1), self.action_dim)  # 利用随机策略进行采样
         elif explore and not self.discrete:
-            action = torch.Tensor(self.noise.sample()).to(self.device)
+            action, _, _ = self.actor.sample(obs)
             action = action.clamp(-1, 1)
         elif not explore and self.discrete:
             action = self.actor(torch.unsqueeze(obs, dim=0))  # 统一以一批次的形式进行输入
@@ -166,6 +172,9 @@ class MASACAgent(MAAgentMixin, SaveNetworkMixin, Agent):
                     a1 = torch.cat([onehot_from_logits(self.agents[j].target_actor.forward(s1[j])).to(self.device)
                                     for j in range(self.env.agent_count)],dim=1)
                 else:
+                    a1,
+                    for j in range(self.env.agent_count):
+                        self.agents[j].target_actor.forward(s1[j])
                     a1 = torch.cat([self.agents[j].target_actor.forward(s1[j])
                                     for j in range(self.env.agent_count)],dim=1)
                 #计算熵值
@@ -223,9 +232,4 @@ class MASACAgent(MAAgentMixin, SaveNetworkMixin, Agent):
 
         self.train_update_count += 1
         return (total_critic_loss, total_loss_actor)
-
-    def calculate_log_action_probs(self, action_probs):
-        # Avoid numerical instability.
-        z = (action_probs == 0.0).float() * 1e-8
-        return torch.log(action_probs + z)
 

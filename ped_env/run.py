@@ -67,11 +67,11 @@ def test2():
     import numpy as np
 
     debug = False
-    # test1()
-    person_num = 16
-    env = Env(map_02, person_num, group_size=(4, 4), maxStep=10000, test_mode=debug)
+
+    person_num = 40
+    env = Env(map_07, person_num, group_size=(5, 5), maxStep=10000, test_mode=debug)
     leader_num = env.agent_count
-    # print(obs)
+
     for epoch in range(1):
         starttime = time.time()
         step = 0
@@ -88,7 +88,7 @@ def test2():
                 env.debug_step()
             step += env.frame_skipping
             env.render()
-            # print(obs, reward, is_done)
+
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.col_with_agent, env.col_with_wall))
@@ -131,7 +131,7 @@ def test4():
 
     debug = False
     # test1()
-    person_num = 60
+    person_num = 40
     env = Env(map_02, person_num, group_size=(5, 5), maxStep=10000, discrete=False, test_mode=debug)
     leader_num = env.agent_count
     # print(obs)
@@ -159,11 +159,11 @@ def test4():
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 if __name__ == '__main__':
-    test4()
+    test2()
 
     # import kdtree
     # points = []
     # for i in range(100):
     #     points.append([10 - i * 0.5, 0.3 * i])
     # tr = kdtree.create(points, dimensions=2)
-    # print(tr.search_nn([4, 1.2]))
+    # print(kdtree.visualize(tr))

@@ -10,6 +10,8 @@ import numpy as np
 from torch.autograd import Variable
 from gym.spaces import Discrete, Box
 
+import ped_env
+import rl
 from rl.utils.miscellaneous import str_key
 
 
@@ -233,9 +235,15 @@ def model_based_loss_callback(agent, loss):
               .format(critic_loss_mean, actor_loss_mean))
 
 def save_callback(agent, episode_num: int):
-    sname = agent.init_time_str + "_" + agent.env_name
+    sname = agent.log_dir
     if episode_num % (agent.log_frequent) == 0:
         print("save network!......")
         for i in range(agent.env.agent_count):
             agent.save(sname, "Actor{}".format(i), agent.agents[i].actor, episode_num)
             agent.save(sname, "Critic{}".format(i), agent.agents[i].critic, episode_num)
+
+def early_stop_callback(self, rewards, episode):
+    if isinstance(self.env, ped_env.envs.PedsMoveEnv) and isinstance(self.env.person_handler, ped_env.classes.PedsRLHandlerRange):
+        return min(rewards) > -40#当最小的奖励大于-40时，证明算法已经学到一个好的策略
+    return False
+

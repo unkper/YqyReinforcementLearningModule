@@ -82,12 +82,16 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
                  gamma = 0.95,
                  tau = 0.01,
                  K = 5,
+                 log_dir="./",
                  actor_network = None,
                  critic_network = None,
                  actor_hidden_dim = 64,
                  critic_hidden_dim = 64,
                  n_steps_train=5,
-                 env_name = "training_env"
+                 env_name = "training_env",
+
+                 demo_experience:Experience=None,
+                 batch_size_d = 128,
                  ):
         '''
         环境的输入有以下几点变化，设此时有N个智能体：
@@ -107,7 +111,8 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
         '''
         if env is None:
             raise Exception("agent should have an environment!")
-        super(MATD3Agent, self).__init__(env, capacity, env_name=env_name,  gamma=gamma, n_rol_threads=n_rol_threads)
+        super(MATD3Agent, self).__init__(env, capacity, env_name=env_name,  gamma=gamma, n_rol_threads=n_rol_threads,
+                                         log_dir=log_dir)
         self.state_dims = []
         for obs in env.observation_space:
             self.state_dims.append(back_specified_dimension(obs))
@@ -141,6 +146,11 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
                            self.action_dims, actor_network, critic_network, self.actor_hidden_dim, self.critic_hidden_dim)
             self.agents.append(ag)
 
+        self.batch_size_d = batch_size_d
+        if demo_experience:
+            print("使用仿真经验来进行初始化!")
+        self.demo_experience = demo_experience
+
         self.loss_callback_ = loss_callback
         self.save_callback_ = save_callback
         return
@@ -148,7 +158,7 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
     def __str__(self):
         return "Matd3"
 
-    def _learn_from_memory(self):
+    def _learn_from_memory(self, trans_pieces, BC=False):
         '''
         从记忆学习，更新两个网络的参数
         :return:
@@ -157,10 +167,12 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
         total_critic_loss = 0.0
         total_loss_actor = 0.0
 
-        trans_pieces = self.experience.sample(self.batch_size)
-
         s0, a0, r1, is_done, s1, s0_critic_in, s1_critic_in = \
             process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
+
+        if BC and self.discrete:
+            temp_a = np.array([x.a0 for x in trans_pieces])
+            int_a0 = torch.from_numpy(np.argmax(temp_a, axis=2)).to(self.device)
 
         for i in range(self.env.agent_count):
             with torch.no_grad():
@@ -198,8 +210,21 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
                     pred_a = torch.cat([self.agents[j].actor.forward(s0[j])
                                     for j in range(self.env.agent_count)],dim=1)
                 # 反向梯度下降
-                actor_loss = -1 * self.agents[i].critic.Q1(s0_critic_in, pred_a).mean()
-                actor_loss += (curr_pol_out**2).mean() * 1e-3
+                if BC:
+                    Q = self.agents[i].critic.Q1(s0_critic_in, pred_a)
+                    Q_real = self.agents[i].critic.Q1(s0_critic_in, a0)
+                    #use Q filter
+                    idx = (Q < Q_real).detach()
+                    #calculate BC Loss
+                    if self.discrete:
+                        bc_loss = F.cross_entropy(curr_pol_out[idx,:], torch.squeeze(int_a0[idx, i]))
+                    else:
+                        bc_loss = F.mse_loss(pred_a[idx,:], a0[idx,:])
+                    actor_loss = -1 * Q.mean() * 0.001 + bc_loss
+                    actor_loss += (curr_pol_out ** 2).mean() * 1e-3
+                else:
+                    actor_loss = -1 * self.agents[i].critic.Q1(s0_critic_in, pred_a).mean()
+                    actor_loss += (curr_pol_out ** 2).mean() * 1e-3
 
                 self.agents[i].actor_optimizer.zero_grad()
                 actor_loss.backward()
@@ -211,6 +236,6 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
                 soft_update(self.agents[i].target_actor, self.agents[i].actor, self.tau)
                 soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
 
-        self.train_update_count += 1
+        #为了更新bc,将该过程移到外部执行
         return (total_critic_loss, total_loss_actor)
 

@@ -36,6 +36,11 @@ def func4():
     plt.plot(x,y)
     plt.show()
 
+#xvfb-run -a python run.py --map=map_01 --count=1000
+#xvfb-run -a python run.py --map=map_05 --count=1000
+#xvfb-run -a python run.py --map=map_05 --count=50 --use_random=True
+#xvfb-run -a python run.py --map=map_07 --count=1000 --p_num=40 --g_size=5
+#xvfb-run -a python run.py --map=map_08 --count=1000
 if __name__ == '__main__':
     my_parser = argparse.ArgumentParser("Use A*/Random Policy generate experiences and save!")
     my_parser.add_argument('--map', default="map_05", type=str)
@@ -50,6 +55,7 @@ if __name__ == '__main__':
         "map_01": map_01,
         "map_02": map_02,
         "map_05": map_05,
+        "map_06": map_06,
         "map_07": map_07,
         "map_08": map_08,
         "map_09": map_09,

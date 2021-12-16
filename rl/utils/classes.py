@@ -347,21 +347,23 @@ class ModelBasedMAAgentMixin():
         if self.total_steps_in_train > self.model_batch_size and step % self.model_train_freq == 0:
             losses = self._learn_simulate_world()
             loss_m = losses[0]
+            self.model_trained = True
 
+        loss_c, loss_a = 0.0, 0.0
+        if self.model_trained and self.total_trans > self.batch_size and step % self.update_frequent == 0:
+            #rollout model
             new_rollout_length = set_rollout_length(self.total_episodes_in_train, self.rollout_length_range[0],
                                                     self.rollout_length_range[1], self.rollout_epoch_range[0],
                                                     self.rollout_epoch_range[1])
             if self.rollout_length != new_rollout_length:
                 self.rollout_length = new_rollout_length
-                rollouts_per_epoch = self.rollout_batch_size * self.total_episodes_in_train / self.model_train_freq
+                rollouts_per_epoch = self.rollout_batch_size * self.episode_length / self.model_train_freq  # 此处应该是一个episode总的step数,MAMBPO里设定为固定值2000
                 model_steps_per_epoch = int(self.rollout_length * rollouts_per_epoch)
                 self.model_experience.resize(self.model_retain_epochs * model_steps_per_epoch)
 
             if self.experience.len >= self.rollout_batch_size and self.real_ratio < 1.0:
                 self._rollout_model(self.rollout_length, epsilon)
-
-        loss_c, loss_a = 0.0, 0.0
-        if self.total_trans > self.batch_size and step % self.update_frequent == 0:
+            #Gradient update n steps
             for i in range(self.n_steps_train):
                 real_batch_size = int(self.real_ratio * self.batch_size) #从环境中采集经验数
                 model_batch_size = self.batch_size - real_batch_size #从模型中采集经验数
@@ -464,7 +466,7 @@ class ModelBasedMAAgentMixin():
                 self.model_experience.push(tran)
             nonterm_mask = np.ones([terminals.shape[0]], dtype=np.bool)
             for idx in range(terminals.shape[0]):
-                if terminals[idx].any():
+                if terminals[idx].all(): #这里将any改为all
                     nonterm_mask[idx] = False
             if nonterm_mask.sum() == 0:
                 break

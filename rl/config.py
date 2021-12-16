@@ -138,27 +138,27 @@ class PedsMoveConfig(Config):
 
         self.batch_size = 1024
         self.learning_rate = 0.003
-        self.update_frequent = 25
+        self.update_frequent = 50 #25 50
         self.debug_log_frequent = 10
         self.actor_hidden_dim = 128
         self.critic_hidden_dim = 256
-        self.gamma = 0.99
+        self.gamma = 0.999 #0.99
         self.tau = 0.01
         self.n_steps_train = 10
         #model learn parameter
         self.real_ratio = 0.1
         self.rollout_length_range = (1, 8)#(1, 10)
         self.rollout_epoch_range = (int(max_episode * 0.1), int(max_episode * 0.15))
-        self.model_batch_size = int(512 / 0.8)  # 因为有0.2作为验证集
-        self.model_train_freq = 200#500  # 250
-        self.n_steps_model = 100#350
+        self.model_batch_size = int(1024 / 0.8)  # 因为有0.2作为验证集 #512
+        self.model_train_freq = 500#500  # 250
+        self.n_steps_model = 300#350
         self.network_size = 10
-        self.elite_size = 7
+        self.elite_size = 10
         self.use_decay = True
         #init bc learn parameter
         self.use_init_bc = True
         self.init_bc_steps = 0
-        self.batch_size_d = 128
+        self.batch_size_d = 128 #demo replay buffer batch_size
 
     def update_parameter(self, alg_type):
         super(PedsMoveConfig, self).update_parameter(alg_type)

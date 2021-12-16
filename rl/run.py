@@ -15,7 +15,7 @@ from rl.utils.planners import init_offline_train
 from rl.agents.G_MaddpgAgent import G_MADDPGAgent
 from rl.agents.MaddpgAgent import MADDPGAgent
 from rl.agents.Matd3Agent import MATD3Agent
-from rl.agents.G_Matd3Agent import G_MATD3Agent
+from rl.agents.MAMBPOAgent import MAMBPOAgent
 from rl.utils.miscellaneous import learning_curve, save_parameter_setting
 
 from rl.config import *
@@ -40,7 +40,7 @@ def test1(useEnv, envName, config:Config):
                   epsilon_high=1.0, # if not config.use_init_bc else 0.1
                   epsilon_low=0.01,
                   max_episode_num=config.max_episode,
-                  explore_episodes_percent=1.0
+                  explore_episodes_percent=1.0,
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.log_dir,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
@@ -49,21 +49,22 @@ def test1(useEnv, envName, config:Config):
 
 def test2(useEnv, envName, config:Config):
     offline_data = useEnv.terrain.name + "_exp"
+    random_data = useEnv.terrain.name + "_exp_random"
     config.update_parameter("g_matd3")
     env = useEnv
     print(env.observation_space)
     print(env.action_space)
-    agent = G_MATD3Agent(env,n_rol_threads=config.n_rol_threads,capacity=config.capacity,batch_size=config.batch_size,
-                       learning_rate=config.learning_rate,update_frequent=config.update_frequent,debug_log_frequent=config.debug_log_frequent,
-                       gamma=config.gamma,tau=config.tau,K = config.K,log_dir=config.log_dir,actor_network=config.actor_network,
-                       critic_network=config.critic_network,actor_hidden_dim=config.actor_hidden_dim, model_hidden_dim=config.model_hidden_dim,
-                       critic_hidden_dim=config.critic_hidden_dim,n_steps_train=config.n_steps_train,
-                       env_name=envName,init_train_steps=config.init_train_steps,
-                       network_size=config.network_size,elite_size=config.elite_size, use_decay=config.use_decay,
-                       model_batch_size=config.model_batch_size, model_train_freq=config.model_train_freq, n_steps_model=config.n_steps_model,
-                       rollout_length_range=config.rollout_length_range,rollout_epoch_range=config.rollout_epoch_range,
-                       rollout_batch_size=config.rollout_batch_size,real_ratio=config.real_ratio,
-                       model_retain_epochs=config.model_retain_epochs,batch_size_d=config.batch_size_d)#gamma=0.95
+    agent = MAMBPOAgent(env, n_rol_threads=config.n_rol_threads, capacity=config.capacity, batch_size=config.batch_size,
+                        learning_rate=config.learning_rate, update_frequent=config.update_frequent, debug_log_frequent=config.debug_log_frequent,
+                        gamma=config.gamma, tau=config.tau, K = config.K, log_dir=config.log_dir, actor_network=config.actor_network,
+                        critic_network=config.critic_network, actor_hidden_dim=config.actor_hidden_dim, model_hidden_dim=config.model_hidden_dim,
+                        critic_hidden_dim=config.critic_hidden_dim, n_steps_train=config.n_steps_train,
+                        env_name=envName, init_train_steps=config.init_train_steps,
+                        network_size=config.network_size, elite_size=config.elite_size, use_decay=config.use_decay,
+                        model_batch_size=config.model_batch_size, model_train_freq=config.model_train_freq, n_steps_model=config.n_steps_model,
+                        rollout_length_range=config.rollout_length_range, rollout_epoch_range=config.rollout_epoch_range,
+                        rollout_batch_size=config.rollout_batch_size, real_ratio=config.real_ratio,
+                        model_retain_epochs=config.model_retain_epochs, batch_size_d=config.batch_size_d)#gamma=0.95
     save_parameter_setting(agent.log_dir,"g_matd3",config)
     if config.use_init_bc:
         init_offline_train(agent, "./utils/data/exp/{}/experience.pkl".format(offline_data), config.init_bc_steps)
@@ -72,7 +73,8 @@ def test2(useEnv, envName, config:Config):
                   epsilon_high=1.0,  #if not config.use_init_bc else 0.1
                   epsilon_low=0.01 , #if not config.use_init_bc else 0.1
                   max_episode_num=config.max_episode,
-                  explore_episodes_percent=1.0
+                  explore_episodes_percent=1.0,
+                  init_exp_file="./utils/data/exp/{}/experience.pkl".format(random_data)
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.log_dir,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
@@ -133,28 +135,13 @@ def test4(useEnv,envName,config:Config):
     learning_curve(data, 2, 1, step_index=0, title="MADDPGAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="maddpg")
 
-def eval(useEnv,fileName,load_E,episode=5, AgentType=MATD3Agent,
-          config:Config=None):
-    env = useEnv
-    agent = AgentType(env,actor_network=config.actor_network, critic_network=config.critic_network,
-                        actor_hidden_dim=config.actor_hidden_dim, critic_hidden_dim=config.critic_hidden_dim, log_dir=None)
-    agent.play(os.path.join("../data/models/",fileName,"model"), load_E, episode=episode, waitSecond=0.05)
-
-def testEnv():
-    env = SimpleSpread_v3()
-    state = env.reset()
-    is_done = [False]
-    for i in range(1000):
-        while sum(is_done) == 0:
-            obs, reward, is_done, info = env.step(np.random.randn(3,2))
-            env.render()
-            print(obs)
-            print(reward)
-
-# xvfb-run -a python run.py --dir train_1 --map map_05 --train_step 300 --threads 2
+# xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 500  --max_step 1000 --threads 2
+# xvfb-run -a python run.py --dir train_06 --map map_06 --train_step 300  --max_step 1000 --threads 2
+# xvfb-run -a python run.py --dir train_02 --map map_02 --train_step 300  --max_step 1000 --threads 2
 # xvfb-run -a python run.py --dir train_1 --map map_09 --max_step 3000 --train_step 300 --threads 2
 # xvfb-run -a python run.py --dir train_map_01 --map map_01 --max_step 2000 --train_step 500 --threads 2
 # xvfb-run -a python run.py --dir train_map_07 --map map_07 --p_num=40 --g_size=5 --max_step 2000 --train_step 500 --threads 2
+# xvfb-run -a python run.py --dir train_map_08 --map map_08 --max_step 1000 --train_step 500 --threads 2
 
 if __name__ == '__main__':
     my_parser = argparse.ArgumentParser(description="Run PedsMoveEnv use reinforcement learning algroithms!")
@@ -171,6 +158,7 @@ if __name__ == '__main__':
         "map_01": map_01,
         "map_02": map_02,
         "map_05": map_05,
+        "map_06": map_06,
         "map_07": map_07,
         "map_08": map_08,
         "map_09": map_09,
@@ -180,8 +168,7 @@ if __name__ == '__main__':
             ]
 
     config = PedsMoveConfig(n_rol_threads=args.threads, max_episode=args.train_step)
-    # eval_env = my_env.PedsMoveEnv(terrain=map_09, person_num=30, group_size=(5, 5), maxStep=3000)
-    # eval(eval_env, "2021_12_12_23_31_40_PedsMoveEnv", 10, config=config)
+
     if args.dir != './':
         os.mkdir("./"+args.dir)
     config.log_dir = args.dir
@@ -190,22 +177,22 @@ if __name__ == '__main__':
             config.use_init_bc = True
             print("当前测试环境:{}".format(env.terrain.name))
             config.n_steps_train = 10
-            print("MBPO-Matd3 gradient descent training!")
-            test2(env, envName, config=config) #Model-Based Matd3 10Step
-            print("Matd3 10steps gradient descent training!")
-            test1(env, envName, config=config)  # Matd3 10Step
-            config.n_steps_train = 1 #1
-            print("Matd3 1steps gradient descent training!")
-            test1(env, envName, config=config) #Matd3 1Step
+            print("GD-MAMBPO gradient descent training!")
+            test2(env, envName, config=config) #Model-Based Matd3 10Step(GD-MAMBPO)
+            # print("Matd3 10steps gradient descent training!")
+            # test1(env, envName, config=config)  # Matd3 10Step
+            # config.n_steps_train = 1 #1
+            # print("Matd3 1steps gradient descent training!")
+            # test1(env, envName, config=config) #Matd3 1Step
 
     for i in range(1):
         for envName, env in envs:
             config.n_steps_train = 10  # 1
             config.use_init_bc = False
-            test2(env, envName, config=config)  # Model-Based Matd3 10Step No BC
-            test1(env, envName, config=config)  # Matd3 10Step No BC
+            print("MAMBPO gradient descent training!")
+            test2(env, envName, config=config)  # Model-Based Matd3 10Step No BC(MAMBPO)
+            print("MATD3-10 gradient descent training!")
+            test1(env, envName, config=config)  # Matd3 10Step No BC(MATD3-10)
             config.n_steps_train = 1
-            test1(env, envName, config=config)  # Matd3 1Step No BC
-
-    # envs = [("SimpleSpread", SimpleSpread_v3())]
-    # config = MPEConfig(max_episode=5000, n_rol_threads=1)
+            print("MATD3-1 gradient descent training!")
+            test1(env, envName, config=config)  # Matd3 1Step No BC(MATD3-1)

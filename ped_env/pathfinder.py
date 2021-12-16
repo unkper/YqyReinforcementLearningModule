@@ -4,13 +4,12 @@ import time
 import gym
 import numpy as np
 
-from typing import List
+from typing import List, Tuple
 from collections import defaultdict
 
 from tqdm import tqdm
 
-from ped_env.utils.maps import Map
-
+from ped_env.utils.maps import *
 
 #https://github.com/lc6chang/Social_Force_Model
 class Node:
@@ -22,14 +21,23 @@ class Node:
         self.father = (0, 0)
 
 class Path:
-    def __init__(self, s_pos, e_pos, path):
+    def __init__(self, s_pos, e_pos, path:list):
         self.start_pos = s_pos
         self.end_pos = e_pos
         self.path = path
         self.vec_dir = None
 
     def calculate_vec_dir_in_path(self):
-        pass
+        self.vec_dir = {}
+        node_arr = self.path
+        node_arr.append(self.end_pos)
+        for i in range(len(node_arr) - 1):
+            po1, po2 = node_arr[i], node_arr[i+1]
+            po1 = (int(po1[0]), int(po1[1]))
+            po2 = (int(po2[0]), int(po2[1]))
+            dir = (po2[0] - po1[0], po2[1] - po1[1])
+            self.vec_dir[po1] = dir
+        return self.vec_dir
 
 class AStar:
     def __init__(self, map:Map):
@@ -46,7 +54,7 @@ class AStar:
                 if terrain[i, j] in (1, 2):
                     self.barrier_list.append((i, j))
 
-    def next_loc(self, x, y, dest_x, dest_y):
+    def next_loc(self, x, y, dest_x, dest_y)->Tuple[Tuple, Path]:
         # 初始化各种状态
         start_loc = (x, y)  # 初始化起始点
         aim_loc = [(dest_x, dest_y)]  # 初始化目标地点
@@ -240,8 +248,8 @@ class AStarController(gym.Env):
             obs = self.env.reset()
             is_done = [False]
             while not is_done[0]:
-                action = self.step(obs)
-                next_obs, reward, is_done, info = self.env.step(action)
+                next_obs, reward, is_done, actions = self.step(obs)
+                # next_obs, reward, is_done, info = self.env.step(action)
                 obs = next_obs
                 step += self.env.frame_skipping
                 if render:
@@ -256,7 +264,7 @@ def recoder_for_debug(*obj):
 
 if __name__ == '__main__':
     pass
-    # env = PedsMoveEnv(map_05, 30, (5,5))
+    # env = ped_env.envs.PedsMoveEnv(map_05, 30, (5,5))
     # planner = AStarController(env)
     # planner.play(5)
 

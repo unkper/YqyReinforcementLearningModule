@@ -1,6 +1,5 @@
 
 import abc
-import numpy as np
 import kdtree
 
 from math import inf
@@ -8,7 +7,7 @@ from typing import List, Dict
 
 from gym.spaces import Box, Discrete
 from ped_env.functions import parse_discrete_action, calculate_nij, normalized
-from ped_env.objects import Person, Group
+from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
 
 ACTION_DIM = 9
@@ -139,20 +138,44 @@ class PedsRLHandler(PedsHandlerInterface):
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
 
     def set_follower_action(self, ped:Person, action, group:Group, exit_pos):
+        diff = group.get_distance_to_leader(ped)
         if not group.leader.is_done:
-            control_dir = parse_discrete_action(action) if self.env.discrete else action
-            leader_dir = calculate_nij(group.leader, ped)
-            mix_dir = ped.alpha * control_dir + (1 - ped.alpha) * leader_dir
+            if diff < 1.5:#如果follower与leader的间距大于1.5米，使用A*策略来跟上leader
+                ped.person_state = PersonState.follow_leader
+                control_dir = parse_discrete_action(action) if self.env.discrete else action
+                leader_dir = calculate_nij(group.leader, ped)
+                mix_dir = ped.alpha * control_dir + (1 - ped.alpha) * leader_dir
+            else:
+                force = (ped.person_state == PersonState.follow_leader) #如果之前的状态是跟随，那么就要重新计算路径
+                ped.person_state = PersonState.route_to_leader #更新当前状态
+                int_pos_j = self.get_follower_a_star_path(ped, group.leader.pos, ped.pos, force)
+                mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         else:
-            pos_i, pos_j = exit_pos, ped.pos
-            if ped.a_star_path == None:#计算得到一条去出口的路
-                ped.a_star_path = self.env.path_finder.next_loc(int(pos_j[0]), int(pos_j[1]),
-                                                                int(pos_i[0]), int(pos_i[1]))
-            mix_dir = normalized(pos_i - pos_j)
+            force = (ped.person_state != PersonState.route_to_exit)
+            ped.person_state = PersonState.route_to_exit #更新当前状态
+            int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
+            mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         ped.self_driven_force(mix_dir) #跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
         ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
         #ped.ij_group_force(group)
+
+    def get_follower_a_star_path(self, ped, pos_i, pos_j, force=False):
+        '''
+        :param ped: 控制的行人
+        :param pos_i: 要去的目的地
+        :param pos_j: 当前位置
+        :param force: 用于pos_i变化时使用
+        :return: 取整后的行人当前位置用于后续使用
+        '''
+        int_pos_i = (int(pos_i[0]), int(pos_i[1]))
+        int_pos_j = (int(pos_j[0]), int(pos_j[1]))
+        if ped.a_star_path == None  or force or (ped.a_star_path.vec_dir.get(int_pos_j) == None):  # 计算得到一条去出口的路
+            re, path = self.env.path_finder.next_loc(int_pos_j[0], int_pos_j[1],
+                                                     int_pos_i[0], int_pos_i[1])
+            path.calculate_vec_dir_in_path()
+            ped.a_star_path = path
+        return int_pos_j
 
     def get_reward(self, ped:Person, ped_index:int, time):
         gr, lr = 0.0, 0.0

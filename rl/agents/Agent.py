@@ -1,5 +1,6 @@
 import datetime
 import os
+import pickle
 import time
 import gym
 import random
@@ -87,6 +88,8 @@ class Agent():
         self.init_train_steps = int(init_train_steps)
         self.total_steps_in_train = 0
         self.total_episodes_in_train = 0
+
+        self.model_trained = False #用于检查在rollout前是否已经训练过model
 
 
     def policy(self,A ,s = None,Q = None, epsilon = None):
@@ -178,7 +181,8 @@ class Agent():
                  display = False,
                  display_in_episode = 0,
                  wait = False,
-                 waitSecond = 0.01)->tuple:
+                 waitSecond = 0.01,
+                 init_exp_file=None)->tuple:
         '''
         agent的主要循环在该方法内，用于整个学习过程，通过设置相应超参数，其会调用自己的learning_method进行学习
         同时返回（经历的总次数，每个经历的奖励，以及经历的编号）\n
@@ -200,7 +204,7 @@ class Agent():
         total_time, episode_reward, num_episode = 0,0,0
         total_times,self.episode_rewards,num_episodes = [],[],[]
         max_explore_num = int(max_episode_num * explore_episodes_percent)
-        self.init_train()
+        self.init_train(init_exp_file) #加载用于初始化的探索经验
         for i in tqdm(range(0, max_episode_num, 1)):
             #用于ε-贪心算法中ε随着经历的递增而逐级减少
             if decaying_epsilon:
@@ -237,7 +241,15 @@ class Agent():
     def init_random_step(self, state, step): #用于初始化探索更新使用
         pass
 
-    def init_train(self):
+    def load_experience(self, file):
+        file = open(file, "rb")
+        self.experience =  pickle.load(file)
+
+    def init_train(self, file=None):
+        if file != None:
+            print("load random experience!")
+            self.load_experience(file)
+            return
         if self.init_train_steps == 0:
             return
         print("Init random train start,total step:{}!".format(self.init_train_steps))

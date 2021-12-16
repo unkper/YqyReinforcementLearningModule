@@ -34,13 +34,13 @@ class PredictEnv:
             done = done[:, None]
             return done
         elif env_name == "PedsMoveEnv":
-            # state_dim = int(next_obs.shape[1] / self.model.reward_size)
-            # done = np.ones([next_obs.shape[0], self.model.reward_size], dtype=np.bool)
-            # for i in range(self.model.reward_size):
-            #     rel = next_obs[:,i:i+state_dim][:, 2:6] #得到智能体i相对出口的位置和速度
-            #     idx = np.where(np.max(rel, axis=1) > 0.1)
-            #     done[idx[0], :] = False #一旦出现大于0.1的就将终态置为False
-            return np.zeros([next_obs.shape[0], self.model.reward_size], dtype=np.bool)
+            state_dim = int(next_obs.shape[1] / self.model.reward_size)
+            done = np.ones([next_obs.shape[0], self.model.reward_size], dtype=np.bool)
+            for i in range(self.model.reward_size):
+                rel = next_obs[:,i:i+state_dim][:, 2:6] #得到智能体i相对出口的位置和速度
+                idx = np.where(np.max(rel, axis=1) > 0.1)
+                done[idx[0], i] = False #一旦出现大于0.1的就将终态置为False
+            return done # np.zeros([next_obs.shape[0], self.model.reward_size], dtype=np.bool)
         elif 'walker_' in env_name:
             torso_height =  next_obs[:, -2]
             torso_ang = next_obs[:, -1]

@@ -71,7 +71,7 @@ class DDPGAgent:
         self.count[torch.argmax(action).item()] += 1
         return action
 
-class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent):
+class MAMBPOAgent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent):
     loss_recoder = []
 
     def __init__(self, env: Env = None,
@@ -127,8 +127,8 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
         '''
         if env is None:
             raise Exception("agent should have an environment!")
-        super(G_MATD3Agent, self).__init__(env, capacity, env_name=env_name, gamma=gamma, n_rol_threads=n_rol_threads,
-                                           init_train_steps=init_train_steps, log_dir=log_dir)
+        super(MAMBPOAgent, self).__init__(env, capacity, env_name=env_name, gamma=gamma, n_rol_threads=n_rol_threads,
+                                          init_train_steps=init_train_steps, log_dir=log_dir)
         self.state_dims = []
         for obs in env.observation_space:
             self.state_dims.append(back_specified_dimension(obs))
@@ -166,7 +166,7 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
         self.model_batch_size = model_batch_size
         self.model_retain_epochs = model_retain_epochs
         self.n_steps_train = n_steps_train
-        self.model_train_freq = model_train_freq
+        self.model_train_freq = int(model_train_freq / n_rol_threads) #为了消除多线程带来的影响，rollout的更新频率需要增加
         self.n_steps_model = n_steps_model
         self.rollout_length_range = rollout_length_range
         self.rollout_epoch_range = rollout_epoch_range
@@ -179,6 +179,8 @@ class G_MATD3Agent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent
                                            self.env.agent_count, model_hidden_dim, use_decay)
         self.predict_env = PredictEnv(self.model, self.env_name, 'pytorch')
         self.model_experience = Experience(capacity)
+
+        self.episode_length = env.maxStep
 
         self.batch_size_d = batch_size_d
         if demo_experience:

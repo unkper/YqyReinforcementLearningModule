@@ -113,7 +113,7 @@ class PedsMoveEnv(gym.Env):
                  use_planner = False,
                  random_init_mode:bool = False,
                  train_mode:bool = True,
-                 test_mode:bool = False):
+                 debug_mode:bool = False):
         '''
         一个基于Box2D和pyglet的多行人强化学习仿真环境
         对于一个有N个人的环境，其状态空间为：[o1,o2,...,oN]，每一个o都是一个长度为14的list，其代表的意义为：
@@ -128,7 +128,8 @@ class PedsMoveEnv(gym.Env):
         :param maxStep: 经过多少次step后就强行结束环境，所有行人到达终点时也会结束环境
         :param PersonHandler: 用于处理有关于行人状态空间，动作与返回奖励的类
         :param random_init_mode:用于planner的规划时使用，主要区别是在全场随机生成智能体
-        :param test_mode: 是否debug
+        :param train_mode: 当为False时，直到所有行人到达出口才会重置环境，当为True时，一旦所有leader到达出口才会重置环境
+        :param debug_mode: 是否debug
         :param group_size:一个团体的人数，其中至少包含1个leader和多个follower
         '''
         super(PedsMoveEnv, self).__init__()
@@ -161,7 +162,7 @@ class PedsMoveEnv(gym.Env):
 
         #for raycast and aabb_query debug
         self.train_mode = train_mode
-        self.test_mode = test_mode
+        self.debug_mode = debug_mode
         self.vec = [0.0 for _ in range(self.agent_count)]
 
         self.path_finder = AStar(self.terrain)
@@ -204,14 +205,13 @@ class PedsMoveEnv(gym.Env):
                       for _ in range(len(self.terrain.start_points))]
         person_num[-1] += reminder
         for i, num in enumerate(person_num):
-            if not self.test_mode and not self.random_init_mode:
-                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.test_mode))
-            elif not self.test_mode and self.random_init_mode:
-                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.test_mode))
+            if not self.debug_mode and not self.random_init_mode:
+                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.debug_mode))
+            elif not self.debug_mode and self.random_init_mode:
+                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.debug_mode))
             else:
                 exit_type = self.terrain.get_random_exit(i)
-                #self.peds.extend(self.factory.random_create_persons(self.terrain, num, self.group_dic, self.group_size, exit_type + 3, self.test_mode))
-                group = self.factory.create_people(self.terrain.start_points, exit_type, self.test_mode)
+                group = self.factory.create_people(self.terrain.start_points, exit_type, self.debug_mode)
                 self.factory.set_group_process(group, self.groups, self.group_dic, self.peds)
                 self.peds.extend(group)
         self.left_person_num = sum(person_num)
@@ -283,6 +283,7 @@ class PedsMoveEnv(gym.Env):
         BoxWall.counter = 0
         Exit.counter = 0
         Group.counter = 0
+        self.col_with_wall = self.col_with_agent = 0
         self.step_in_env = 0
         self.peds_exit_time.clear()
         self.peds.clear()

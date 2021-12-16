@@ -2,6 +2,7 @@ import Box2D as b2d
 
 from ped_env.envs import PedsMoveEnv as Env
 from ped_env.envs import PedsMoveEnvFactory
+from ped_env.pathfinder import AStarController
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env
 from ped_env.classes import PedsRLHandler, PedsRLHandlerRange
@@ -68,11 +69,11 @@ def test2():
 
     debug = False
 
-    person_num = 40
-    env = Env(map_07, person_num, group_size=(5, 5), maxStep=10000, test_mode=debug)
+    person_num = 30
+    env = Env(map_11, person_num, group_size=(5, 5), maxStep=1000, debug_mode=debug)
     leader_num = env.agent_count
 
-    for epoch in range(1):
+    for epoch in range(5000):
         starttime = time.time()
         step = 0
         obs = env.reset()
@@ -157,6 +158,11 @@ def test4():
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.col_with_agent, env.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+
+def test5():
+    env = Env(map_01, 30, (5, 5))
+    planner = AStarController(env)
+    planner.play(5)
 
 if __name__ == '__main__':
     test2()

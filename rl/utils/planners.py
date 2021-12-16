@@ -70,6 +70,8 @@ class AStarPlanner:
 
     def save_experience(self):
         dir_name = "{}_exp".format(self.env.terrain.name)
+        if self.random_policy:
+            dir_name += "_random"
         os.mkdir("./data/exp/" + dir_name)
         file_exp = open(os.path.join("./data/exp", dir_name,
                                      "experience.pkl"),"wb")

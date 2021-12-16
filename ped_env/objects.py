@@ -1,6 +1,6 @@
 import copy
 import random
-import math
+import enum
 from collections import defaultdict
 from typing import List
 
@@ -26,6 +26,12 @@ class Agent():
 
     def self_driven_force(self, force):
         raise NotImplemented
+
+class PersonState(enum.Enum):
+    walk_to_goal = 1
+    follow_leader = 2
+    route_to_leader = 3
+    route_to_exit = 4
 
 class Person(Agent):
     body = None
@@ -119,6 +125,8 @@ class Person(Agent):
         self.raycast_callback = RaycastCallBack(self)
 
         self.total_force = np.zeros([2])
+
+        self.person_state = PersonState.walk_to_goal
 
         # 通过射线得到8个方向上的其他行人与障碍物
         # 修复bug:未按照弧度值进行旋转
@@ -419,6 +427,11 @@ class Group():
     def __get_nij(self, target, now):
         return normalized(target - now.pos)
 
+    def get_distance_to_leader(self, ped:Person):
+        lx, ly = self.leader.getX, self.leader.getY
+        gx, gy = ped.getX, ped.getY
+        return ((lx - gx) ** 2 + (ly - gy) ** 2) ** 0.5
+
     LEADER_BEHIND_DIST = 0.25
     def _get_group_force_dis_nij(self):
         #先计算leader身后一定间距的点与各个follower的间距
@@ -430,7 +443,7 @@ class Group():
 
     def update(self):
         self.group_center = self.__get_group_center()
-        self._get_group_force_dis_nij()
+        #self._get_group_force_dis_nij()
 
     def get_group_force(self, follower:Person):
         if follower not in self.followers_set:

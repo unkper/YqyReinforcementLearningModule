@@ -69,8 +69,8 @@ def test2():
 
     debug = False
 
-    person_num = 30
-    env = Env(map_11, person_num, group_size=(5, 5), maxStep=1000, debug_mode=debug)
+    person_num = 40
+    env = Env(map_10, person_num, group_size=(5, 5), maxStep=500, debug_mode=debug, random_init_mode=True)
     leader_num = env.agent_count
 
     for epoch in range(5000):
@@ -160,7 +160,7 @@ def test4():
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 def test5():
-    env = Env(map_01, 30, (5, 5))
+    env = Env(map_05, 30, (5, 5))
     planner = AStarController(env)
     planner.play(5)
 

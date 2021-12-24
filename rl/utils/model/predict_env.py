@@ -1,8 +1,9 @@
 import numpy as np
 
+from rl.utils.model.model import EnsembleDynamicsModel
 
 class PredictEnv:
-    def __init__(self, model, env_name, model_type):
+    def __init__(self, model:EnsembleDynamicsModel, env_name, model_type):
         self.model = model
         self.env_name = env_name
         self.model_type = model_type
@@ -37,8 +38,9 @@ class PredictEnv:
             state_dim = int(next_obs.shape[1] / self.model.reward_size)
             done = np.ones([next_obs.shape[0], self.model.reward_size], dtype=np.bool)
             for i in range(self.model.reward_size):
-                rel = next_obs[:,i:i+state_dim][:, 2:6] #得到智能体i相对出口的位置和速度
-                idx = np.where(np.max(rel, axis=1) > 0.1)
+                rel = next_obs[:,i:i+state_dim][:, 4:6] #得到智能体i相对出口的位置,速度可能预测不准
+                dis = np.sqrt(np.power(rel[:,0],2)+np.power(rel[:,1],2))
+                idx = np.where(dis > 1.2) #1.2是指离出口的距离
                 done[idx[0], i] = False #一旦出现大于0.1的就将终态置为False
             return done # np.zeros([next_obs.shape[0], self.model.reward_size], dtype=np.bool)
         elif 'walker_' in env_name:
@@ -75,7 +77,7 @@ class PredictEnv:
 
         return log_prob, stds
 
-    def step(self, obs, act, deterministic=False):
+    def step(self, obs, act, deterministic=True):
         if len(obs.shape) == 1:
             obs = obs[None]
             act = act[None]
@@ -104,27 +106,41 @@ class PredictEnv:
         batch_idxes = np.arange(0, batch_size)
 
         samples = ensemble_samples[model_idxes, batch_idxes]
-        model_means = ensemble_model_means[model_idxes, batch_idxes]
-        model_stds = ensemble_model_stds[model_idxes, batch_idxes]
+        #model_means = ensemble_model_means[model_idxes, batch_idxes]
+        #model_stds = ensemble_model_stds[model_idxes, batch_idxes]
 
-        log_prob, dev = self._get_logprob(samples, ensemble_model_means, ensemble_model_vars)
+        #log_prob, dev = self._get_logprob(samples, ensemble_model_means, ensemble_model_vars)
 
         rewards, next_obs = samples[:, :self.model.reward_size], samples[:, self.model.reward_size:]
         terminals = self._termination_fn(self.env_name, obs, act, next_obs)
 
-        batch_size = model_means.shape[0]
-        return_means = np.concatenate((model_means[:, :self.model.reward_size], terminals, model_means[:, self.model.reward_size:]), axis=-1)
-        return_stds = np.concatenate((model_stds[:, :self.model.reward_size], np.zeros((batch_size, self.model.reward_size)), model_stds[:, self.model.reward_size:]), axis=-1) #修改为多智能体形式
+        i = 0
+        for re in rewards[terminals]:
+            if i > 3:
+                break
+            i += 1
+            print("rewards:{}".format(re))
+        print("#####################################")
+        # if self.env_name == "PedsMoveEnv":#判断为结束状态时直接将奖励置为0
+        #     rewards[terminals] = 0
+
+        #batch_size = model_means.shape[0]
+        #return_means = np.concatenate((model_means[:, :self.model.reward_size], terminals, model_means[:, self.model.reward_size:]), axis=-1)
+        #return_stds = np.concatenate((model_stds[:, :self.model.reward_size], np.zeros((batch_size, self.model.reward_size)), model_stds[:, self.model.reward_size:]), axis=-1) #修改为多智能体形式
 
         if return_single:
             next_obs = next_obs[0]
-            return_means = return_means[0]
-            return_stds = return_stds[0]
+            #return_means = return_means[0]
+            #return_stds = return_stds[0]
             rewards = rewards[0]
             terminals = terminals[0]
 
         next_obs = next_obs.reshape([next_obs.shape[0], self.model.reward_size,
                                      int(next_obs.shape[1] / self.model.reward_size)])
 
-        info = {'mean': return_means, 'std': return_stds, 'log_prob': log_prob, 'dev': dev}
+        #info = {'mean': return_means, 'std': return_stds}
+        info = {}
         return next_obs, rewards, terminals, info
+
+    def load_model(self, dir):
+        self.model.load(dir)

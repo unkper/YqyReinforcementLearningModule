@@ -13,7 +13,7 @@ from multiprocessing import Pipe, Process
 
 import ped_env
 from rl.utils.functions import flatten_data, process_maddpg_experience_data
-from rl.utils.model.functions import set_rollout_length
+from rl.utils.model.functions import set_rollout_length, set_model_train_freq
 from rl.utils.updates import hard_update
 
 
@@ -272,7 +272,8 @@ class MAAgentMixin():
                     self._learn_from_memory(demo_trans_pieces, True)
                 loss_c += lc
                 loss_a += la
-                self.train_update_count += 1
+
+            self.train_update_count += 1
             loss_c /= self.n_steps_train
             loss_a /= self.n_steps_train
 
@@ -338,13 +339,30 @@ class MAAgentMixin():
                 agent.count = [0 for _ in range(agent.action_dim)]
         return time_in_episode, total_reward, loss
 
+from math import cos, sin
+from Box2D import b2Vec2, b2Mat22, b2Mul
+
+identity = np.array([1, 0])
+DIRECTIONS = []
+DIRECTIONS.append(np.zeros([2]))
+for idx, angle in enumerate(range(0, 360, int(360 / 8))):
+    theta = np.radians(angle)
+    mat = np.array([cos(theta), -sin(theta),
+                   sin(theta), cos(theta)]).reshape([2, 2])
+    vec = np.matmul(mat, identity)
+    DIRECTIONS.append(vec)
+
 class ModelBasedMAAgentMixin():
     def policy_init_step(self):
         self.loss_critic, self.loss_actor, self.loss_model = 0.0, 0.0, 0.0
 
     def policy_update_step(self, step, epsilon=0.0):
         loss_c, loss_a, loss_m = 0, 0, 0
-        if self.total_steps_in_train > self.model_batch_size and step % self.model_train_freq == 0:
+        if self.experience.len > self.model_batch_size and step % self.model_train_freq == 0: #修改
+            # self.n_step_model = set_model_train_freq(self.total_episodes_in_train, self.n_steps_model_range[0],
+            #                                         self.n_steps_model_range[1], self.rollout_epoch_range[0],
+            #                                         self.rollout_epoch_range[1])
+
             losses = self._learn_simulate_world()
             loss_m = losses[0]
             self.model_trained = True
@@ -361,7 +379,8 @@ class ModelBasedMAAgentMixin():
                 model_steps_per_epoch = int(self.rollout_length * rollouts_per_epoch)
                 self.model_experience.resize(self.model_retain_epochs * model_steps_per_epoch)
 
-            if self.experience.len >= self.rollout_batch_size and self.real_ratio < 1.0:
+            if self.experience.len >= self.rollout_batch_size and self.real_ratio < 1.0 \
+                    and self.train_update_count % self.rollout_delay == 0:
                 self._rollout_model(self.rollout_length, epsilon)
             #Gradient update n steps
             for i in range(self.n_steps_train):
@@ -381,11 +400,11 @@ class ModelBasedMAAgentMixin():
                     demo_trans_pieces = self.demo_experience.sample(self.batch_size_d)
                     self._learn_from_memory(demo_trans_pieces, True)
 
-                self.train_update_count += 1
                 loss_c += lc
                 loss_a += la
             loss_c /= self.n_steps_train
             loss_a /= self.n_steps_train
+            self.train_update_count += 1
 
         if loss_m != 0.0:
             self.writer.add_scalar("step_loss/model", loss_m, self.total_steps_in_train)
@@ -394,18 +413,31 @@ class ModelBasedMAAgentMixin():
         self.loss_model += loss_m
 
     def policy_end_step(self, time_in_episode):
+        self.loss_critic /= time_in_episode
+        self.loss_actor /= time_in_episode
+        self.loss_model /= time_in_episode
         return [self.loss_critic, self.loss_actor, self.loss_model]
 
+    def transform_discrete_a(self, a0_idx):
+        global DIRECTIONS
+        a0 = np.zeros([a0_idx.shape[0], a0_idx.shape[1] * 2])
+        for i in range(a0_idx.shape[0]):
+            for j in range(a0_idx.shape[1]):
+                a0[i, j * 2:(j + 1) * 2] = DIRECTIONS[a0_idx[i, j]]
+        return torch.from_numpy(a0).to(self.device)
+
     def _learn_simulate_world(self):
+        global DIRECTIONS
         mean_losses = [0.0 for _ in range(3)]
         for i in range(self.n_steps_model):
             trans_pieces = self.experience.sample(self.model_batch_size)
-            s0, _, r1, is_done, s1, s0_critic_in, s1_critic_in = \
+            s0, temp_a0, r1, is_done, s1, s0_critic_in, s1_critic_in = \
                 process_maddpg_experience_data(trans_pieces, self.state_dims, self.env.agent_count, self.device)
             if self.discrete:
-                a0 = torch.from_numpy(np.argmax(np.array([x.a0 for x in trans_pieces]), axis=2)).to(self.device) #将One-hot形式转换为索引
+                a0_idx = np.argmax(np.array([x.a0 for x in trans_pieces]), axis=2).astype(int)  # 将One-hot形式转换为索引
+                a0 = self.transform_discrete_a(a0_idx)
             else:
-                a0 = _
+                a0 = temp_a0
             delta_state = s1_critic_in - s0_critic_in
             # world model输入为(s,a),输出为(s',r,is_done)
             inputs = torch.cat([s0_critic_in, a0], dim=-1).detach().cpu().numpy()
@@ -434,6 +466,7 @@ class ModelBasedMAAgentMixin():
         trans_pieces = self.experience.sample(self.rollout_batch_size)
         s0 = np.array([x.s0 for x in trans_pieces])
         r1 = np.array([x.reward for x in trans_pieces])
+        is_done = np.array([x.is_done for x in trans_pieces])
         s1 = np.array([x.s1 for x in trans_pieces])
 
         state = s0
@@ -443,7 +476,8 @@ class ModelBasedMAAgentMixin():
             for s in state:
                 raw_action.append(self.get_exploration_action(s, epsilon))
             if self.discrete:
-                action = np.argmax(np.array(raw_action), axis=2).astype(np.float) #将One-hot形式转换为索引
+                action_idx = np.argmax(np.array(raw_action), axis=2) #将One-hot形式转换为索引
+                action = self.transform_discrete_a(action_idx).cpu().numpy()
             else:
                 action = np.array(raw_action).astype(np.float)
                 action = np.reshape(action, [action.shape[0], action.shape[1] * action.shape[2]])
@@ -461,6 +495,7 @@ class ModelBasedMAAgentMixin():
                 max_delta_s1_idx = np.unravel_index(np.argmax(delta_s1, axis=None), delta_s1.shape)
                 log_string2 = "max_delta_s1_idx:{}{}".format(max_delta_s1_idx, max_delta_s1_idx[1] % 16)
                 print("Step:{},{},{}".format(self.total_steps_in_train, log_string, log_string2))
+
             for j in range(state.shape[0]):
                 tran = Transition(state[j], raw_action[j], rewards[j], terminals[j], next_states[j])
                 self.model_experience.push(tran)

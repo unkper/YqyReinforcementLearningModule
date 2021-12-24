@@ -1,5 +1,6 @@
 import copy
 import random
+from collections import defaultdict
 from math import sqrt, pow
 
 import gym
@@ -80,18 +81,20 @@ class PedsMoveEnvFactory():
     def create_group_persons_in_rect_neat(self):
         pass
 
-    def random_create_persons(self, terrain:Map, idx, person_num, groups, group_dic, group_size, test_mode=False):
-        h, w = terrain.map.shape[0], terrain.map.shape[1]
+    def random_create_persons(self, terrain:Map, idx, person_num, groups, group_dic, group_size, start_point_dic, test_mode=False):
+        # h, w = terrain.map.shape[0], terrain.map.shape[1]
         each_group_num = calculate_each_group_num(group_size, person_num)
         persons = []
         for num in each_group_num:
-            while True:
-                new_x, new_y = random.random() * w,random.random() * h
-                if 1 < new_x < w and 1 < new_y < h and terrain.map[int(new_x), int(new_y)] == 0:
-                    new_x = int(new_x) + 0.5
-                    new_y = int(new_y) + 0.5 #设置随机点为方格的正中心
-                    break
-            group = self.inner_create_persons_in_radius((new_x, new_y), self.GROUP_SIZE, num, terrain.get_random_exit(idx), test_mode)
+            # while True:
+            #     new_x, new_y = random.random() * w,random.random() * h
+            #     if 1 < new_x < w and 1 < new_y < h and terrain.map[int(new_x), int(new_y)] == 0:
+            #         new_x = int(new_x) + 0.5
+            #         new_y = int(new_y) + 0.5 #设置随机点为方格的正中心
+            #         break
+            exit_type = terrain.get_random_exit(idx)
+            new_x, new_y = random.sample(start_point_dic[exit_type], 1)[0]
+            group = self.inner_create_persons_in_radius((new_x, new_y), self.GROUP_SIZE, num, exit_type, test_mode)
             self.set_group_process(group, groups, group_dic, persons)
         return persons
 
@@ -146,6 +149,7 @@ class PedsMoveEnv(gym.Env):
 
         self.distance_to_exit = []
         self.points_in_last_step = []
+        self.init_map_points = False
 
         self.frame_skipping = frame_skipping
         self.group_size = group_size
@@ -168,31 +172,42 @@ class PedsMoveEnv(gym.Env):
         self.path_finder = AStar(self.terrain)
         assert group_size[1] <= 6
 
-    def start(self, maps: np.ndarray, person_num_sum: int = 60, person_create_radius: float = 5):
+    def start(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
         self.world = b2World(gravity=(0, 0), doSleep=True)
-        self.listener = MyContactListener(self) #现在使用aabb_query的方式来判定
+        self.listener = MyContactListener(self)  # 现在使用aabb_query的方式来判定
         self.world.contactListener = self.listener
 
         self.batch = pyglet.graphics.Batch()
         self.display_level = pyglet.graphics.OrderedGroup(0)
         self.debug_level = pyglet.graphics.OrderedGroup(1)
-        self.factory = PedsMoveEnvFactory(self.world,self.display_level,self.debug_level)
-        # 根据shape为50*50的map来构建1*1的墙，当该处值为1代表是墙
-        start_nodes_obs = []
-        start_nodes_wall = []
-        start_nodes_exit = []
-        #按照从左往右，从上到下的遍历顺序
-        for j in range(maps.shape[1]):
-            for i in range(maps.shape[0]):
-                if maps[i, j] == 1:
-                    start_nodes_obs.append((i + 0.5, j + 0.5))
-                elif maps[i, j] == 2:
-                    start_nodes_wall.append((i + 0.5, j + 0.5))
-                elif 9 >= maps[i, j] >= 3:
-                    start_nodes_exit.append((i + 0.5, j + 0.5, maps[i, j]))
-        self.obstacles = self.factory.create_walls(start_nodes_obs, (1, 1),  ObjectType.Obstacle, color=ColorBlue)
-        self.exits = self.factory.create_walls(start_nodes_exit, (1, 1),  ObjectType.Exit, color=ColorRed, CreateClass=Exit)  # 创建出口
-        self.walls = self.factory.create_walls(start_nodes_wall, (1, 1), ObjectType.Wall)  # 建造围墙
+        self.factory = PedsMoveEnvFactory(self.world, self.display_level, self.debug_level)
+
+        if not self.init_map_points:
+            # 根据shape为50*50的map来构建1*1的墙，当该处值为1代表是墙
+            self.start_nodes_obs = []
+            self.start_nodes_wall = []
+            self.start_nodes_exit = []
+
+            #按照从左往右，从上到下的遍历顺序
+            for j in range(maps.shape[1]):
+                for i in range(maps.shape[0]):
+                    if maps[i, j] == 1:
+                        self.start_nodes_obs.append((i + 0.5, j + 0.5))
+                    elif maps[i, j] == 2:
+                        self.start_nodes_wall.append((i + 0.5, j + 0.5))
+                    elif 9 >= maps[i, j] >= 3:
+                        self.start_nodes_exit.append((i + 0.5, j + 0.5, maps[i, j]))
+
+            self.start_point_dic = defaultdict(list)
+            for j in range(spawn_maps.shape[1]):
+                for i in range(spawn_maps.shape[0]):
+                    if 9 >= spawn_maps[i, j] >= 3:
+                        self.start_point_dic[spawn_maps[i, j]].append((i + 0.5, j + 0.5))
+            self.init_map_points = True
+
+        self.obstacles = self.factory.create_walls(self.start_nodes_obs, (1, 1),  ObjectType.Obstacle, color=ColorBlue)
+        self.exits = self.factory.create_walls(self.start_nodes_exit, (1, 1),  ObjectType.Exit, color=ColorRed, CreateClass=Exit)  # 创建出口
+        self.walls = self.factory.create_walls(self.start_nodes_wall, (1, 1), ObjectType.Wall)  # 建造围墙
 
         # 随机初始化行人点，给每个生成点平均分配到不同出口的人群,并根据平均数来计算需要的领队数
         self.peds = []
@@ -208,7 +223,7 @@ class PedsMoveEnv(gym.Env):
             if not self.debug_mode and not self.random_init_mode:
                 self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.debug_mode))
             elif not self.debug_mode and self.random_init_mode:
-                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.debug_mode))
+                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.start_point_dic, self.debug_mode))
             else:
                 exit_type = self.terrain.get_random_exit(i)
                 group = self.factory.create_people(self.terrain.start_points, exit_type, self.debug_mode)
@@ -289,7 +304,7 @@ class PedsMoveEnv(gym.Env):
         self.peds.clear()
         self.not_arrived_peds.clear()
         self.elements.clear()
-        self.start(self.terrain.map, person_num_sum=self.person_num, person_create_radius=self.terrain.create_radius)
+        self.start(self.terrain.map, self.terrain.map_spawn, person_num_sum=self.person_num)
         if self.person_handler.use_planner:
             self.person_handler.init_exit_kd_trees() #初始化KDTree以供后续使用
         # 添加初始观察状态

@@ -137,7 +137,7 @@ class MATD3Agent(MAAgentMixin, SaveNetworkMixin, Agent):
         self.n_steps_train = n_steps_train
         self.train_update_count = 0
         self.K = K
-        self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.agents = []
         self.experience = Experience(capacity)
         for i in range(self.env.agent_count):

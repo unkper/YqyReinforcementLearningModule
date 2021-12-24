@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 from rl.config import Config
 
-
 def str_key(*args):
     '''将参数用"_"连接起来作为字典的键，需注意参数本身可能会是tuple或者list型，
     比如类似((a,b,c),d)的形式。
@@ -121,6 +120,4 @@ if __name__ == '__main__':
     # arr = np.random.random([256,101])
     # print(arr[np.unravel_index(np.argmax(arr, axis=None), arr.shape)[0], :])
     #print(os.listdir("../"))
-    contrast_learning_curve("data/stats/20211216", y_range=(0, 500), smooth_step=5, y_func=np.mean, use_multiply_result=False)
-    # load_data_and_draw("../../data/models/2021_11_11_00_12_PedsMoveEnv/rewards_f81f8533-4240-11ec-84e7-3cecef04b81e.txt",
-    #                    "../../data/models/2021_11_11_00_12_PedsMoveEnv/step_f81f8533-4240-11ec-84e7-3cecef04b81e.txt")
+    contrast_learning_curve("data/stats/20211224/1", y_range=(0, 800), smooth_step=20, y_func=np.mean, use_multiply_result=False)

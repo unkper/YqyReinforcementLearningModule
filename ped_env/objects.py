@@ -33,6 +33,18 @@ class PersonState(enum.Enum):
     route_to_leader = 3
     route_to_exit = 4
 
+# 通过射线得到8个方向上的其他行人与障碍物
+# 修复bug:未按照弧度值进行旋转
+identity = b2Vec2(1, 0)
+DIRECTIONS = []
+DIRECTIONS.append(b2Vec2(0, 0))
+for angle in range(0, 360, int(360 / 8)):
+    theta = np.radians(angle)
+    mat = b2Mat22(cos(theta), -sin(theta),
+                  sin(theta), cos(theta))
+    vec = b2Mul(mat, identity)
+    DIRECTIONS.append(vec)
+
 class Person(Agent):
     body = None
     box = None
@@ -47,7 +59,7 @@ class Person(Agent):
     Bf = 3.93216
 
     counter = 0  # 用于记录智能体编号
-    pic = None
+    body_pic = None
 
     a_star_path = None # 用于follow在找不到路时的A*策略使用
 
@@ -125,19 +137,13 @@ class Person(Agent):
         self.raycast_callback = RaycastCallBack(self)
 
         self.total_force = np.zeros([2])
+        self.fij_force_last_eps = np.zeros([2])
+        self.fiw_force_last_eps = np.zeros([2])
 
         self.person_state = PersonState.walk_to_goal
 
-        # 通过射线得到8个方向上的其他行人与障碍物
-        # 修复bug:未按照弧度值进行旋转
-        identity = b2Vec2(1, 0)
-        self.directions = []
-        for angle in range(0, 360, int(360 / 8)):
-            theta = np.radians(angle)
-            mat = b2Mat22(cos(theta), -sin(theta),
-                          sin(theta), cos(theta))
-            vec = b2Mul(mat, identity)
-            self.directions.append(vec)
+        global DIRECTIONS
+        self.directions = DIRECTIONS
 
     def update(self, exits):
         if self.is_done and self.has_removed:
@@ -160,12 +166,20 @@ class Person(Agent):
 
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
+        #print("Agent angle:{}".format(math.degrees(self.body.angle) % 360))
         if test_mode:
             pass
-        self.pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
-                                        self.radius * render_scale,
-                                        color=self.color,
-                                        batch=batch, group=self.display_level)
+        self.body_pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
+                                             self.radius * render_scale,
+                                             color=self.color,
+                                             batch=batch, group=self.display_level)
+        # t_len = self.radius * 1.5
+        # cos_30 = -0.8660254
+        # x1, y1 = x, (y + self.radius)
+        # x2, y2 = x1 - t_len * 0.5, y1 + t_len * cos_30
+        # x3, y3 = x1 + t_len * 0.5, y1 + t_len * cos_30
+        # self.head = pyglet.shapes.Triangle(x1 * render_scale, y1 * render_scale, x2 * render_scale, y2 * render_scale,
+        #                                    x3 * render_scale, y3 * render_scale, batch=batch, group=self.debug_level, color=self.color)
         if self.is_leader:
             self.leader_pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
                                         self.radius * 0.3 * render_scale,
@@ -187,6 +201,7 @@ class Person(Agent):
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             fij = self.A * math.exp((dis - self.radius - ped.radius)/self.B)
             total_force += b2Vec2(fij * (pos[0] - next_pos[0]), fij * (pos[1] - next_pos[1]))
+        self.fij_force_last_eps = total_force
         self.total_force += total_force
 
     def fiw_force(self, obj):
@@ -198,6 +213,7 @@ class Person(Agent):
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             fiw = self.A * math.exp((dis - self.radius - 0.5) / self.B) #因为每块墙的大小都为1*1m
             total_force += b2Vec2(fiw * (pos[0] - next_pos[0]), fiw * (pos[1] - next_pos[1]))
+        self.fiw_force_last_eps = total_force
         self.total_force += total_force
 
     def ij_group_force(self, group):
@@ -248,9 +264,9 @@ class Person(Agent):
         return callback.obs
 
     def delete(self, env:b2World):
-        if self.pic != None:
-            self.pic.delete()
-            del (self.pic)
+        if self.body_pic != None:
+            self.body_pic.delete()
+            del (self.body_pic)
             if self.is_leader:
                 self.leader_pic.delete()
                 del (self.leader_pic)

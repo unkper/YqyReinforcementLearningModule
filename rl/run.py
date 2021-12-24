@@ -1,5 +1,8 @@
+import multiprocessing
 import os
 import sys
+
+import torch
 
 curPath = os.path.abspath("../" + os.path.curdir)
 sys.path.append(curPath)
@@ -9,6 +12,7 @@ sys.path.append(os.path.join(curPath, './rl/env/multiagent_particle_envs'))
 import ped_env.envs as my_env
 import argparse
 
+from multiprocessing import Process
 from ped_env.utils.maps import *
 from rl.env.mpe import SimpleSpread, SimpleTag, SimpleSpread_v3
 from rl.utils.planners import init_offline_train
@@ -20,8 +24,8 @@ from rl.utils.miscellaneous import learning_curve, save_parameter_setting
 
 from rl.config import *
 
-def test1(useEnv, envName, config:Config):
-    config.update_parameter("matd3")
+def test1(useEnv, envName, config:Config, lock=None):
+    config.update_parameter("MATD3")
     offline_data = useEnv.terrain.name + "_exp"
     env = useEnv
     print(env.observation_space)
@@ -34,7 +38,7 @@ def test1(useEnv, envName, config:Config):
                        env_name=envName,batch_size_d=config.batch_size_d)#gamma=0.95
     save_parameter_setting(agent.log_dir,"matd3",config)
     if config.use_init_bc:
-        init_offline_train(agent, "./utils/data/exp/{}/experience.pkl".format(offline_data), config.init_bc_steps)
+        init_offline_train(agent, "./utils/data/exp/{}/experience.pkl".format(offline_data), config.init_bc_steps, lock=lock)
     data = agent.learning(
                   decaying_epsilon=True,
                   epsilon_high=1.0, # if not config.use_init_bc else 0.1
@@ -44,13 +48,12 @@ def test1(useEnv, envName, config:Config):
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.log_dir,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
-    learning_curve(data, 2, 1, step_index=0, title="MATD3Agent performance on {}".format(envName),
-                   x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="matd3")
 
-def test2(useEnv, envName, config:Config):
-    offline_data = useEnv.terrain.name + "_exp"
-    random_data = useEnv.terrain.name + "_exp_random"
-    config.update_parameter("g_matd3")
+def test2(useEnv, envName, config:Config, debug=False, lock=None):
+    if not debug:
+        offline_data = useEnv.terrain.name + "_exp"
+        random_data = useEnv.terrain.name + "_exp_random"
+    config.update_parameter("GD_MAMBPO" if config.use_init_bc else "MAMBPO")
     env = useEnv
     print(env.observation_space)
     print(env.action_space)
@@ -66,20 +69,19 @@ def test2(useEnv, envName, config:Config):
                         rollout_batch_size=config.rollout_batch_size, real_ratio=config.real_ratio,
                         model_retain_epochs=config.model_retain_epochs, batch_size_d=config.batch_size_d)#gamma=0.95
     save_parameter_setting(agent.log_dir,"g_matd3",config)
-    if config.use_init_bc:
-        init_offline_train(agent, "./utils/data/exp/{}/experience.pkl".format(offline_data), config.init_bc_steps)
+    if config.use_init_bc and not debug:
+        init_offline_train(agent, "./utils/data/exp/{}/experience.pkl".format(offline_data), config.init_bc_steps, lock=lock)
     data = agent.learning(
                   decaying_epsilon=True,
                   epsilon_high=1.0,  #if not config.use_init_bc else 0.1
                   epsilon_low=0.01 , #if not config.use_init_bc else 0.1
                   max_episode_num=config.max_episode,
                   explore_episodes_percent=1.0,
-                  init_exp_file="./utils/data/exp/{}/experience.pkl".format(random_data)
+                  init_exp_file="./utils/data/exp/{}/experience.pkl".format(random_data),
+                  lock=lock
                  )
     for i in range(agent.env.agent_count):
         agent.save(agent.log_dir,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
-    learning_curve(data, 2, 1, step_index=0, title="G_MATD3Agent performance on {}".format(envName),
-                   x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="g_matd3")
 
 def test3(useEnv,envName,config:Config):
     config.update_parameter("g_maddpg")
@@ -135,13 +137,52 @@ def test4(useEnv,envName,config:Config):
     learning_curve(data, 2, 1, step_index=0, title="MADDPGAgent performance on {}".format(envName),
                    x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName="maddpg")
 
-# xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 500  --max_step 1000 --threads 2
-# xvfb-run -a python run.py --dir train_06 --map map_06 --train_step 300  --max_step 1000 --threads 2
-# xvfb-run -a python run.py --dir train_02 --map map_02 --train_step 300  --max_step 1000 --threads 2
-# xvfb-run -a python run.py --dir train_1 --map map_09 --max_step 3000 --train_step 300 --threads 2
+def run_experiment_once(args, id, lock=None):
+    env_dict = {
+        "map_02": map_02,
+        "map_05": map_05,
+        "map_06": map_06,
+        "map_10": map_10,
+        # "map_11": map_11,
+        # "map_12": map_12
+    }
+    envName, env = ("PedsMoveEnv",my_env.PedsMoveEnv(terrain=env_dict[args.map], person_num=args.p_num,
+                                                     group_size=(args.g_size, args.g_size), maxStep=args.max_step,
+                                                     random_init_mode=args.random_init))
+
+    config = DebugConfig()
+    #config = PedsMoveConfig(n_rol_threads=args.threads, max_episode=args.train_step)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+
+    if args.dir != './':
+        os.mkdir("./" + args.dir + "/" + str(id))
+    config.log_dir = args.dir + "/" + str(id)
+
+    config.use_init_bc = True
+    print("当前测试环境:{}".format(env.terrain.name))
+    config.n_steps_train = 10
+    print("GD-MAMBPO gradient descent training!")
+    test2(env, envName, config=config, lock=lock)  # Model-Based Matd3 10Step(GD-MAMBPO)
+    # print("MATD3-10 gradient descent training!")
+    # test1(env, envName, config=config)  # Matd3 10Step No BC(MATD3-10)
+
+
+    config.n_steps_train = 10  # 1
+    config.use_init_bc = False
+    print("MAMBPO gradient descent training!")
+    test2(env, envName, config=config)  # Model-Based Matd3 10Step No BC(MAMBPO)
+    print("MATD3-10 gradient descent training!")
+    test1(env, envName, config=config)  # Matd3 10Step No BC(MATD3-10)
+
+# xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 400  --max_step 250 --threads 2 --p_num=8 --g_size=1
+# xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 400  --max_step 250 --threads 2
+# xvfb-run -a python run.py --dir train_06 --map map_06 --train_step 300  --max_step 250 --threads 2
+# xvfb-run -a python run.py --dir train_02 --map map_02 --train_step 300  --max_step 250 --threads 2
 # xvfb-run -a python run.py --dir train_map_01 --map map_01 --max_step 2000 --train_step 500 --threads 2
-# xvfb-run -a python run.py --dir train_map_07 --map map_07 --p_num=40 --g_size=5 --max_step 2000 --train_step 500 --threads 2
-# xvfb-run -a python run.py --dir train_map_08 --map map_08 --max_step 1000 --train_step 500 --threads 2
+
+# xvfb-run -a python run.py --dir train_10 --map map_10 --train_step 400  --max_step 250 --threads 2 --p_num=32 --g_size=4
+# xvfb-run -a python run.py --dir train_11 --map map_11 --train_step 400  --max_step 250 --threads 2 --p_num=32 --g_size=4
+# xvfb-run -a python run.py --dir train_12 --map map_12 --train_step 400  --max_step 250 --threads 2 --p_num=32 --g_size=4
 
 if __name__ == '__main__':
     my_parser = argparse.ArgumentParser(description="Run PedsMoveEnv use reinforcement learning algroithms!")
@@ -149,50 +190,25 @@ if __name__ == '__main__':
     my_parser.add_argument('--map', default="map_05", type=str)
     my_parser.add_argument('--p_num', default=30, type=int)
     my_parser.add_argument('--g_size', default=5, type=int)
-    my_parser.add_argument('--max_step', default=1000, type=int)
-    my_parser.add_argument('--count', default=1, type=int)
+    my_parser.add_argument('--max_step', default=250, type=int)
+    my_parser.add_argument('--count', default=2, type=int)
     my_parser.add_argument('--train_step', default=100, type=int)
+    my_parser.add_argument('--random_init', default=True, type=bool)
     my_parser.add_argument('--threads', default=2, type=int)
     args = my_parser.parse_args()
-    env_dict = {
-        "map_01": map_01,
-        "map_02": map_02,
-        "map_05": map_05,
-        "map_06": map_06,
-        "map_07": map_07,
-        "map_08": map_08,
-        "map_09": map_09,
-    }
-    envs = [("PedsMoveEnv",
-             my_env.PedsMoveEnv(terrain=env_dict[args.map], person_num=args.p_num, group_size=(args.g_size, args.g_size), maxStep=args.max_step)),
-            ]
-
-    config = PedsMoveConfig(n_rol_threads=args.threads, max_episode=args.train_step)
 
     if args.dir != './':
-        os.mkdir("./"+args.dir)
-    config.log_dir = args.dir
-    for i in range(args.count):
-        for envName, env in envs:
-            config.use_init_bc = True
-            print("当前测试环境:{}".format(env.terrain.name))
-            config.n_steps_train = 10
-            print("GD-MAMBPO gradient descent training!")
-            test2(env, envName, config=config) #Model-Based Matd3 10Step(GD-MAMBPO)
-            # print("Matd3 10steps gradient descent training!")
-            # test1(env, envName, config=config)  # Matd3 10Step
-            # config.n_steps_train = 1 #1
-            # print("Matd3 1steps gradient descent training!")
-            # test1(env, envName, config=config) #Matd3 1Step
+        os.mkdir("./" + args.dir)
+    if args.count == 1:#采用单线程的形式
+        run_experiment_once(args, "1")
+    else:
+        lock = multiprocessing.Lock()
+        sub_processes = []
+        for i in range(args.count):
+            p = Process(target=run_experiment_once, args=(args, i, lock))
+            p.start()
+            sub_processes.append(p)
+        for p in sub_processes:
+            p.join()
+        print("主进程结束!")
 
-    for i in range(1):
-        for envName, env in envs:
-            config.n_steps_train = 10  # 1
-            config.use_init_bc = False
-            print("MAMBPO gradient descent training!")
-            test2(env, envName, config=config)  # Model-Based Matd3 10Step No BC(MAMBPO)
-            print("MATD3-10 gradient descent training!")
-            test1(env, envName, config=config)  # Matd3 10Step No BC(MATD3-10)
-            config.n_steps_train = 1
-            print("MATD3-1 gradient descent training!")
-            test1(env, envName, config=config)  # Matd3 1Step No BC(MATD3-1)

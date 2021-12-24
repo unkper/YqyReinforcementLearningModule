@@ -1,4 +1,5 @@
 import copy
+import pickle
 import random
 
 import os
@@ -241,9 +242,32 @@ def save_callback(agent, episode_num: int):
         for i in range(agent.env.agent_count):
             agent.save(sname, "Actor{}".format(i), agent.agents[i].actor, episode_num)
             agent.save(sname, "Critic{}".format(i), agent.agents[i].critic, episode_num)
+        if isinstance(agent, rl.agents.MAMBPOAgent.MAMBPOAgent):
+            agent.save_model()
 
 def early_stop_callback(self, rewards, episode):
     if isinstance(self.env, ped_env.envs.PedsMoveEnv) and isinstance(self.env.person_handler, ped_env.classes.PedsRLHandlerRange):
         return min(rewards) > -40#当最小的奖励大于-40时，证明算法已经学到一个好的策略
     return False
+
+def setup_seed(seed):
+    # 设置随机数种子函数，用于强化学习的可复现而使用
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+
+def load_experience(file, lock=None):
+    #带有锁机制的加载经验
+    def inner_func(file):
+        file = open(file, "rb")
+        return pickle.load(file)
+
+    if lock:
+        with lock:
+            print("带有锁加载机制!")
+            return inner_func(file)
+    else:
+        return inner_func(file)
 

@@ -153,7 +153,7 @@ class MAMBPOAgent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent)
         self.n_steps_train = n_steps_train
         self.train_update_count = 0
         self.K = K
-        self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.agents = []
         self.experience = Experience(capacity)
         for i in range(self.env.agent_count):
@@ -167,15 +167,16 @@ class MAMBPOAgent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent)
         self.model_retain_epochs = model_retain_epochs
         self.n_steps_train = n_steps_train
         self.model_train_freq = int(model_train_freq / n_rol_threads) #为了消除多线程带来的影响，rollout的更新频率需要增加
-        self.n_steps_model = n_steps_model
+        self.n_steps_model = n_steps_model #变为随着rollout的进行训练次数越来越少
         self.rollout_length_range = rollout_length_range
         self.rollout_epoch_range = rollout_epoch_range
         self.rollout_length = 1
         self.rollout_batch_size = rollout_batch_size
+        self.rollout_delay = 4
         self.real_ratio = real_ratio
         self.l2_norm = 0.0
         self.model = EnsembleDynamicsModel(network_size, elite_size, sum(self.state_dims),
-                                           sum(self.action_dims) if not self.discrete else self.env.agent_count,
+                                           sum(self.action_dims) if not self.discrete else 2 * self.env.agent_count,#当为离散动作时，依然采用连续动作空间(x,y)
                                            self.env.agent_count, model_hidden_dim, use_decay)
         self.predict_env = PredictEnv(self.model, self.env_name, 'pytorch')
         self.model_experience = Experience(capacity)
@@ -252,11 +253,14 @@ class MAMBPOAgent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent)
                     Q_real = self.agents[i].critic.Q1(s0_critic_in, a0)
                     #use Q filter
                     idx = (Q < Q_real).detach()
-                    #calculate BC Loss
-                    if self.discrete:
-                        bc_loss = F.cross_entropy(curr_pol_out[idx,:], torch.squeeze(int_a0[idx, i]))
+                    if torch.sum(idx) <= 1:
+                        bc_loss = 0.0
                     else:
-                        bc_loss = F.mse_loss(pred_a[idx,:], a0[idx,:])
+                        #calculate BC Loss
+                        if self.discrete:
+                            bc_loss = F.cross_entropy(curr_pol_out[idx,:], torch.squeeze(int_a0[idx, i]))
+                        else:
+                            bc_loss = F.mse_loss(pred_a[idx,:], a0[idx,:])
                     actor_loss = -1 * Q.mean() * 0.001 + bc_loss
                     actor_loss += (curr_pol_out ** 2).mean() * 1e-3
                 else:
@@ -274,4 +278,7 @@ class MAMBPOAgent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agent)
                 soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
         # 为了更新bc,将该过程移到外部执行
         return (total_critic_loss, total_loss_actor)
+
+    def save_model(self):
+        self.model.save(self.log_dir)
 

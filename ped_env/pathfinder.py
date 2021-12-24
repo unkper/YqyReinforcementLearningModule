@@ -193,7 +193,7 @@ class AStarController(gym.Env):
         (0, -1): 7,
         (1, -1): 8
     }
-    def __init__(self, env, random_policy=False):
+    def __init__(self, env, random_policy=False, discrete=True):
         '''
         利用了行人模拟环境，并使用AStar算法做自驱动力来控制行人的行走
         :param env:
@@ -205,8 +205,9 @@ class AStarController(gym.Env):
         self.action_space = self.env.action_space
         self.agent_count = self.env.agent_count
         self.random_policy = random_policy
+        self.discrete = discrete
         if random_policy:
-            self.action_space = range(ACTION_DIM)
+            self.action_space = range(ACTION_DIM) if discrete else self.action_space
 
     def close(self):
         self.env.close()
@@ -229,9 +230,12 @@ class AStarController(gym.Env):
                 if dir != 0:
                     action[self.vec_to_discrete_action_dic[dir]] = 1.0
             else:
-                action = np.zeros([ACTION_DIM])
-                choose_action = random.sample(self.action_space, 1)[0]
-                action[choose_action] = 1.0
+                if self.discrete:
+                    action = np.zeros([ACTION_DIM])
+                    choose_action = random.sample(self.action_space, 1)[0]
+                    action[choose_action] = 1.0
+                else:
+                    action = self.action_space[idx].sample()
             actions.append(action)
         next_obs, reward, is_done, info = self.env.step(actions)
         return next_obs, reward, is_done, actions

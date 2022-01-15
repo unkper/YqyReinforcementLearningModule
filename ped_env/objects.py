@@ -10,6 +10,9 @@ import numpy as np
 
 from Box2D import *
 from math import sin, cos
+
+from numpy import ndarray
+
 from ped_env.utils.colors import ColorRed, exit_type_to_color, ColorYellow
 from ped_env.functions import transfer_to_render, normalized, ij_power
 from ped_env.utils.misc import FixtureInfo, ObjectType
@@ -141,11 +144,14 @@ class Person(Agent):
         self.fiw_force_last_eps = np.zeros([2])
 
         self.person_state = PersonState.walk_to_goal
+        self.group = None
 
         global DIRECTIONS
         self.directions = DIRECTIONS
 
-    def update(self, exits):
+        self.exit_in_step = -1
+
+    def update(self, exits, step_in_env, map:ndarray):
         if self.is_done and self.has_removed:
             self.x, self.y = 0, 0
             self.pos = np.array([0, 0])
@@ -160,9 +166,11 @@ class Person(Agent):
         def exam_self_exit(a, b):
             return b.exit_type == a.exit_type
 
+        out_of_edge = self.x < 0 or self.x >= map.shape[0] or self.y < 0 or self.y >= map.shape[1]
         es = self.objects_query(exits, 1 + self.radius, exam_self_exit)
-        if len(es) != 0:
+        if len(es) != 0 or out_of_edge:
             self.is_done = True
+            self.exit_in_step = step_in_env
 
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
@@ -193,20 +201,23 @@ class Person(Agent):
         self.total_force += applied_force
 
     #社会力模型添加
-    def fij_force(self, peds, dic):
+    def fij_force(self, peds, group):
         detect_persons = list(self.detected_agents.values())
         total_force = b2Vec2(0, 0)
         for ped in detect_persons:
+            if self.is_leader and ped in group:
+                continue
             pos, next_pos = (self.getX, self.getY), (ped.getX, ped.getY)
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             fij = self.A * math.exp((dis - self.radius - ped.radius)/self.B)
+            if ped in group:
+                fij *= 0.2
             total_force += b2Vec2(fij * (pos[0] - next_pos[0]), fij * (pos[1] - next_pos[1]))
         self.fij_force_last_eps = total_force
         self.total_force += total_force
 
     def fiw_force(self, obj):
         detect_things = list(self.detected_obstacles.values())
-        self.collide_with_wall = True if len(detect_things) != 0 else False
         total_force = b2Vec2(0, 0)
         for obs in detect_things:
             pos, next_pos = (self.getX, self.getY), (obs.getX, obs.getY)
@@ -272,7 +283,6 @@ class Person(Agent):
                 del (self.leader_pic)
         env.DestroyBody(self.body)
         self.has_removed = True
-        del(self)
 
     def __str__(self):
         x, y = self.getX, self.getY
@@ -400,6 +410,9 @@ class Group():
         leader.is_leader = True
         self.followers = followers
         self.followers_set = set(followers)
+        self.members = followers.copy()
+        self.members.append(leader)
+        self.members_set = set(self.members)
         self.dir_force_dic = defaultdict(lambda : defaultdict(float))
         self.group_center = self.__get_group_center()
         self._get_group_force_dis_nij()
@@ -459,7 +472,7 @@ class Group():
 
     def update(self):
         self.group_center = self.__get_group_center()
-        #self._get_group_force_dis_nij()
+        self._get_group_force_dis_nij()
 
     def get_group_force(self, follower:Person):
         if follower not in self.followers_set:
@@ -468,8 +481,11 @@ class Group():
         dis = np.clip(np.round(dis, 2), 0.37, 1.5)
         return nij * Group.group_force_magnitude_dic[dis]
 
-    def setup(self, batch, render_scale):
-        self.pic = pyglet.shapes.Circle(self.group_center[0], self.group_center[1], 0.5, color=(0, 0, 255), batch=batch)
+    def __contains__(self, item):
+        return item in self.members_set
+
+    # def setup(self, batch, render_scale):
+    #     self.pic = pyglet.shapes.Circle(self.group_center[0], self.group_center[1], 0.5, color=(0, 0, 255), batch=batch)
 
 
 

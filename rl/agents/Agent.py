@@ -4,6 +4,8 @@ import pickle
 import time
 import gym
 import random
+
+import keyboard
 import numpy as np
 
 from gym import Env
@@ -82,6 +84,8 @@ class Agent():
                 os.makedirs(self.summary_dir)
             self.writer = SummaryWriter(log_dir=self.summary_dir)
 
+        self.info_handler = None
+        self.info_callback_ = None
         self.loss_callback_ = None
         self.save_callback_ = None
         self.early_stop_callback_ = early_stop_callback
@@ -125,9 +129,13 @@ class Agent():
         s1, r1, is_done, info = self.env.step(a0)
 
         if self.n_rol_threads == 1:
+            if self.info_callback_ != None:
+                self.info_callback_(info, self.info_handler)
             trans = Transition(s0, a0, r1, is_done, s1)
             self.experience.push(trans)
         else:
+            if self.info_callback_ != None:
+                self.info_callback_(info[0], self.info_handler)
             for i in range(self.n_rol_threads):
                 trans = Transition(s0[i], a0[i], r1[i], is_done[i], s1[i])
                 self.experience.push(trans)
@@ -265,28 +273,48 @@ class Agent():
                 self.state = s1
                 is_done = np.array(is_done)
 
-    def play(self,savePath:str,load_E:int,episode:int=5,display:bool=True,wait:bool=True,waitSecond:float=0.01):
+    def play(self,savePath:str, episode:int=5, display:bool=True, wait:bool=True, waitSecond:float=0.01, rep_action_num:int=1, press:bool=False):
+        '''
+
+        :param savePath:
+        :param episode:
+        :param display:
+        :param wait:
+        :param waitSecond:
+        :param rep_action_num: 用于跳帧时使用，使得渲染时画面正常
+        :return:
+        '''
         ep = 0
         while ep < episode:
             self.state = self.env.reset()
             s0 = self.state
             if display:
                 self.env.render()
-            a0 = self.play_init(savePath, s0, ep)
+            a0 = self.play_init(savePath, s0)
             time_in_episode = 0
 
             is_done = [False]
             ep += 1
             while not is_done[0]:
-                s1, r1, is_done, info = self.act(a0)
-                if type(is_done) is bool:is_done = [is_done]
-                if display:
-                    self.env.render()
+                for i in range(rep_action_num):
+                    s1, r1, is_done, info = self.act(a0)
+                    if type(is_done) is bool: is_done = [is_done]
+                    if is_done[0]:
+                        break
+                    if display:
+                        self.env.render()
                 a1 = self.play_step(savePath,s0)
                 s0, a0 = s1, a1
                 time_in_episode += 1
                 if wait:
                     time.sleep(waitSecond)
+                if press and display:
+                    while True:
+                        if display:
+                            self.env.render()
+                        if self.env.viewer.pressed:
+                            self.env.viewer.pressed = False
+                            break
         self.env.close()
 
     def play_init(self, savePath, s0, step):

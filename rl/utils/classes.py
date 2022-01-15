@@ -182,6 +182,8 @@ class SaveNetworkMixin():
             desc_txt_file.write("group_size:" + str(a2) + "\n")
             desc_txt_file.write("max_step:" + str(a3) + "\n")
             desc_txt_file.write("map_name:" + str(a4) + "\n")
+        if self.info_handler != None:
+            self.info_handler.save(self.log_dir)
         return save_name
 
     def load(self,savePath,network:nn.Module):
@@ -313,6 +315,11 @@ class MAAgentMixin():
             s0 = s1
             if wait:
                 time.sleep(waitSecond)
+        if self.info_callback_ != None and info != None:
+            if self.n_rol_threads == 1:
+                self.info_callback_(info, self.info_handler, True)
+            else:
+                self.info_callback_(info[0], self.info_handler, True)
         loss = self.policy_end_step(time_in_episode)
 
         if self.total_episodes_in_train > 0:
@@ -340,7 +347,6 @@ class MAAgentMixin():
         return time_in_episode, total_reward, loss
 
 from math import cos, sin
-from Box2D import b2Vec2, b2Mat22, b2Mul
 
 identity = np.array([1, 0])
 DIRECTIONS = []
@@ -379,9 +385,11 @@ class ModelBasedMAAgentMixin():
                 model_steps_per_epoch = int(self.rollout_length * rollouts_per_epoch)
                 self.model_experience.resize(self.model_retain_epochs * model_steps_per_epoch)
 
-            if self.experience.len >= self.rollout_batch_size and self.real_ratio < 1.0 \
-                    and self.train_update_count % self.rollout_delay == 0:
+            if self.experience.len >= self.rollout_batch_size and self.real_ratio < 1.0:
                 self._rollout_model(self.rollout_length, epsilon)
+
+                # if self.demo_experience:
+                #     self._rollout_model(self.rollout_length, epsilon, True)
             #Gradient update n steps
             for i in range(self.n_steps_train):
                 real_batch_size = int(self.real_ratio * self.batch_size) #从环境中采集经验数
@@ -455,26 +463,26 @@ class ModelBasedMAAgentMixin():
 
     def init_random_step(self, state, step):
         a0 = self.step_in_network(state, True, 1.0)
-        # if self.experience.len > self.model_batch_size and step % self.model_train_freq == 0:
-        #     losses = self._learn_simulate_world()
-        #     self.writer.add_scalar("init/eval_loss", losses[0], step)
-        #     self.writer.add_scalar("init/var_loss", losses[1], step)
-        #     self.writer.add_scalar("init/mse_loss", losses[2], step)
         return self.act(a0)
 
-    def _rollout_model(self, rollout_length, epsilon):
+    def _rollout_model(self, rollout_length, epsilon, use_a_star_policy=False):
         trans_pieces = self.experience.sample(self.rollout_batch_size)
         s0 = np.array([x.s0 for x in trans_pieces])
         r1 = np.array([x.reward for x in trans_pieces])
-        is_done = np.array([x.is_done for x in trans_pieces])
+        #is_done = np.array([x.is_done for x in trans_pieces])
         s1 = np.array([x.s1 for x in trans_pieces])
 
         state = s0
         for i in range(rollout_length):
             state_in = np.reshape(state, [state.shape[0], state.shape[1] * state.shape[2]]) #打平数组以便输入
-            raw_action = []
-            for s in state:
-                raw_action.append(self.get_exploration_action(s, epsilon))
+            if use_a_star_policy:
+                raw_action = []
+                for s in state:
+                    raw_action.append(self.a_star_policy.step(s))
+            else:
+                raw_action = []
+                for s in state:
+                    raw_action.append(self.get_exploration_action(s, epsilon))
             if self.discrete:
                 action_idx = np.argmax(np.array(raw_action), axis=2) #将One-hot形式转换为索引
                 action = self.transform_discrete_a(action_idx).cpu().numpy()
@@ -489,16 +497,19 @@ class ModelBasedMAAgentMixin():
                 r_data = {"max":np.max(delta_r),"min":np.min(delta_r),"mean":np.mean(delta_r)}
                 self.writer.add_scalars("step_loss/state", s1_data, self.total_steps_in_train)
                 self.writer.add_scalars("step_loss/reward", r_data, self.total_steps_in_train)
-                log_string = "s1_delta,max:{}%%%min:{}%%%mean:{},".format(str(np.max(delta_s1)), str(np.min(delta_s1)), str(np.mean(delta_s1))) + \
-                             "r_delta,max:{}%%%min:{}%%%mean:{},".format(str(np.max(delta_r)), str(np.min(delta_r)), str(np.mean(delta_r))) + \
-                             "loss_model:{},".format(self.loss_model)
-                max_delta_s1_idx = np.unravel_index(np.argmax(delta_s1, axis=None), delta_s1.shape)
-                log_string2 = "max_delta_s1_idx:{}{}".format(max_delta_s1_idx, max_delta_s1_idx[1] % 16)
-                print("Step:{},{},{}".format(self.total_steps_in_train, log_string, log_string2))
+                # log_string = "s1_delta,max:{}%%%min:{}%%%mean:{},".format(str(np.max(delta_s1)), str(np.min(delta_s1)), str(np.mean(delta_s1))) + \
+                #              "r_delta,max:{}%%%min:{}%%%mean:{},".format(str(np.max(delta_r)), str(np.min(delta_r)), str(np.mean(delta_r))) + \
+                #              "loss_model:{},".format(self.loss_model)
+                # max_delta_s1_idx = np.unravel_index(np.argmax(delta_s1, axis=None), delta_s1.shape)
+                # log_string2 = "max_delta_s1_idx:{}{}".format(max_delta_s1_idx, max_delta_s1_idx[1] % 16)
+                # print("Step:{},{},{}".format(self.total_steps_in_train, log_string, log_string2))
 
             for j in range(state.shape[0]):
                 tran = Transition(state[j], raw_action[j], rewards[j], terminals[j], next_states[j])
-                self.model_experience.push(tran)
+                if use_a_star_policy:
+                    self.demo_experience.push(tran)
+                else:
+                    self.model_experience.push(tran)
             nonterm_mask = np.ones([terminals.shape[0]], dtype=np.bool)
             for idx in range(terminals.shape[0]):
                 if terminals[idx].all(): #这里将any改为all
@@ -640,6 +651,45 @@ class SubprocEnv(gym.Env):
 
     def get_env_attr(self):
         return self.extra_data
+
+class PedsMoveInfoDataHandler:
+    def __init__(self, terrain, agent_count, save_l_pos=True):
+        self.info_data = {
+            "evacuation_time":[],
+            "collision_wall_agent":[],
+            "collision_agent_agent":[],
+            "leader_pos":[]
+        }
+        self.agent_count = agent_count
+        self.save_l_pos= save_l_pos
+        self.map_shape = terrain.map.shape
+        self.leader_pos_arr = np.zeros([agent_count, self.map_shape[0], self.map_shape[1]], dtype=np.int)
+
+    def step(self, info):
+        if not self.save_l_pos:
+            return
+        time, c_wa, c_aa, l_pos = info
+        l_pos_idx = np.array(l_pos).astype(int)
+        for i in range(self.leader_pos_arr.shape[0]):
+            self.leader_pos_arr[i, l_pos_idx[i, 0], l_pos_idx[i, 1]] += 1
+
+    def reset(self, info):
+        time, c_wa, c_aa, l_pos = info
+        self.info_data["evacuation_time"].append(time)
+        self.info_data["collision_wall_agent"].append(c_wa)
+        self.info_data["collision_agent_agent"].append(c_aa)
+        self.info_data["leader_pos"].append(self.leader_pos_arr)
+        self.leader_pos_arr = np.zeros([self.agent_count, self.map_shape[0], self.map_shape[1]], dtype=np.int)
+
+    def save(self, dir):
+        pa = os.path.join(dir, "extra_data")
+        if not os.path.exists(pa):
+            os.mkdir(pa)
+        for key,value in self.info_data.items():
+            file = open(os.path.join(pa,str(key)+".npy"),"wb+")
+            arr = np.array(value, dtype=np.float32)
+            np.save(file, arr)
+            file.close()
 
 if __name__ == "__main__":
     cap = 20

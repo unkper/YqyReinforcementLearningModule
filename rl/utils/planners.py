@@ -13,22 +13,11 @@ from rl.utils.classes import Experience, Transition, make_parallel_env
 from rl.utils.functions import load_experience
 
 
-def init_offline_train(agent:Agent, data, episode, lock=None):
+def load_offline_train(env, data, lock=None):
     print("开始进行离线BC训练...")
-    planner = AStarPlanner(agent.env, load_mode=True)
+    planner = AStarPlanner(env, load_mode=True)
     planner.load_experience(data, lock)
-    for i in tqdm(range(episode)):
-        trans_pieces = planner.experience.sample(agent.batch_size)
-        loss_c, loss_a = agent._learn_from_memory(trans_pieces, True)
-        agent.writer.add_scalar("init/loss_critic", loss_c, i)
-        agent.writer.add_scalar("init/loss_actor", loss_a, i)
-    sname = agent.log_dir
-    print("save network!......")
-    for i in range(agent.env.agent_count):
-        agent.save(sname, "Actor{}".format(i), agent.agents[i].actor, 0)
-        agent.save(sname, "Critic{}".format(i), agent.agents[i].critic, 0)
-    print("将演示经验赋值给智能体!")
-    agent.demo_experience = planner.experience
+    return planner.experience
 
 class AStarPlanner:
     def __init__(self, env, capacity=1e6, n_rol_threads=1, load_mode=False, use_random_policy=False, discrete=False):
@@ -50,11 +39,14 @@ class AStarPlanner:
     def planning(self, episodes=1):
         for epoch in tqdm(range(0, episodes, self.n_rol_threads)):
             step, starttime = 0, time.time()
+            total_reward = 0.0
             obs = self.controler.reset()
             is_done = np.array([False])
             while not is_done.any():
                 next_obs, reward, is_done, action = self.controler.step(obs)
+                total_reward += np.mean(reward)
                 if self.n_rol_threads == 1:
+                    is_done = np.array(is_done)
                     trans = Transition(obs, action, reward, is_done, next_obs)
                     self.experience.push(trans)
                 else:
@@ -66,7 +58,8 @@ class AStarPlanner:
             endtime = time.time()
             # print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
             #      .format(self.env.listener.col_with_agent, self.env.listener.col_with_wall))
-            print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+            print("奖励为{}!".format(total_reward))
+            #print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
     def clear_experience(self):
         self.experience.clear()

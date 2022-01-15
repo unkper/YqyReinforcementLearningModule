@@ -9,7 +9,6 @@ from torch import nn
 
 from rl.utils.functions import get_dict
 
-
 def greedy_policy(A, s, Q, epsilon = None):
     """在给定一个状态下，从行为空间A中选择一个行为a，使得Q(s,a) = max(Q(s,))
     考虑到多个行为价值相同的情况返回一个随机行为

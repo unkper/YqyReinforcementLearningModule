@@ -10,7 +10,7 @@ import numpy as np
 from Box2D import (b2World, b2Vec2)
 from typing import List, Tuple, Dict
 
-from ped_env.classes import ACTION_DIM, PedsRLHandler, PedsRLHandlerRange
+from ped_env.classes import ACTION_DIM, PedsRLHandler, PedsRLHandlerWithPlanner
 from ped_env.pathfinder import AStar
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
@@ -62,6 +62,8 @@ class PedsMoveEnvFactory():
         followers = copy.copy(group)
         followers.remove(leader)
         group_obj = Group(leader, followers)
+        for member in group:
+            member.group = group_obj
         groups.append(group_obj)
         group_dic.update({per : group_obj for per in group})  # 将leader和follow的映射关系添加
         persons.extend(group)
@@ -102,7 +104,6 @@ class PedsMoveEnv(gym.Env):
     viewer = None
     peds = []
     not_arrived_peds = []
-    peds_exit_time = {}
     once = False
 
     def __init__(self,
@@ -112,7 +113,7 @@ class PedsMoveEnv(gym.Env):
                  discrete = True,
                  frame_skipping = 8,
                  maxStep = 3000,
-                 person_handler = PedsRLHandlerRange,
+                 person_handler = PedsRLHandlerWithPlanner,
                  use_planner = False,
                  random_init_mode:bool = False,
                  train_mode:bool = True,
@@ -127,7 +128,7 @@ class PedsMoveEnv(gym.Env):
         :param terrain: 地图类，其中包含地形ndarray，出口，行人生成点和生成半径
         :param person_num: 要生成的行人总数
         :param discrete: 动作空间是否离散，连续时针对每一个智能体必须输入一个二维单位方向向量（注意！）
-        :param frame_skipping: 一次step跳过的帧数，等于一次step环境经过frame_skipping * 1 / TICKS_PER_SEC秒
+        :param frame_skipping: 一次step跳过的帧数，等于一次step环境经过frame_skipping * 1 / TICKS_PER_SEC(50)秒
         :param maxStep: 经过多少次step后就强行结束环境，所有行人到达终点时也会结束环境
         :param PersonHandler: 用于处理有关于行人状态空间，动作与返回奖励的类
         :param random_init_mode:用于planner的规划时使用，主要区别是在全场随机生成智能体
@@ -170,7 +171,7 @@ class PedsMoveEnv(gym.Env):
         self.vec = [0.0 for _ in range(self.agent_count)]
 
         self.path_finder = AStar(self.terrain)
-        assert group_size[1] <= 6
+        #assert group_size[1] <= 6_map11_use
 
     def start(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
         self.world = b2World(gravity=(0, 0), doSleep=True)
@@ -247,14 +248,12 @@ class PedsMoveEnv(gym.Env):
             ele.setup(self.batch, self.terrain.get_render_scale())
 
     def delete_person(self, per: Person):
-        self.world.DestroyBody(per.body)
-        self.pop_ped_from_not_arrived(per.id)
+        self.pop_from_render_list(per.id)
         self.left_person_num -= 1
-        self.not_arrived_peds.remove(per)
         per.delete(self.world)
         if per.is_leader: self.left_leader_num -= 1
 
-    def pop_ped_from_not_arrived(self, person_id):
+    def pop_from_render_list(self, person_id):
         """
         将行人从渲染队列中移除
         :param person_id:
@@ -300,7 +299,6 @@ class PedsMoveEnv(gym.Env):
         Group.counter = 0
         self.col_with_wall = self.col_with_agent = 0
         self.step_in_env = 0
-        self.peds_exit_time.clear()
         self.peds.clear()
         self.not_arrived_peds.clear()
         self.elements.clear()
@@ -314,7 +312,7 @@ class PedsMoveEnv(gym.Env):
                 init_obs.append(self.person_handler.get_observation(ped, self.group_dic[ped], 0))
         return init_obs
 
-    def step(self, actions):
+    def step(self, actions, planning_mode=False):
         is_done = [False for _ in range(self.agent_count)]
         if len(actions) != self.agent_count: raise Exception("动作向量与智能体数量不匹配!")
         if self.discrete:
@@ -329,9 +327,6 @@ class PedsMoveEnv(gym.Env):
                 if ped.is_done and ped.has_removed:
                     continue
                 belong_group = self.group_dic[ped]
-                if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
-                    self.delete_person(ped)
-                    continue
                 if ped.is_leader:
                     #是leader用强化学习算法来控制
                     self.person_handler.set_action(ped, actions[belong_group.id])
@@ -347,12 +342,21 @@ class PedsMoveEnv(gym.Env):
             self.world.Step(1 / TICKS_PER_SEC, vel_iters, pos_iters)
             self.world.ClearForces()
             for ped in self.peds:
-                ped.update(self.exits)
+                ped.update(self.exits, self.step_in_env, self.terrain.map)
 
             for group in self.groups:
                 group.update()
+
         # 该环境中智能体是合作关系，因此使用统一奖励为好
         obs, rewards = self.person_handler.step(self.peds, self.group_dic, int(self.step_in_env / self.frame_skipping))
+
+        for ped in self.peds:#在get_rewards之后进行以使到达状态可以被检查
+            if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
+                self.delete_person(ped)
+                continue
+
+        if planning_mode and self.left_leader_num < self.agent_count:
+            is_done = [True for _ in range(self.agent_count)]
 
         if (not self.train_mode and self.left_person_num == 0) or (self.train_mode and self.left_leader_num == 0):
             is_done = [True for _ in range(self.agent_count)]
@@ -360,8 +364,19 @@ class PedsMoveEnv(gym.Env):
         self.step_in_env += self.frame_skipping
         if self.step_in_env > self.maxStep:  # 如果maxStep步都没有完全撤离，is_done直接为True
             is_done = [True for _ in range(self.agent_count)]
-            # print("在{}步时强行重置环境!".format(self.maxStep))
-        return obs, rewards, is_done, (self.step_in_env, self.col_with_wall, self.col_with_agent)
+            print("在{}步时强行重置环境!".format(self.maxStep))
+        leader_pos = []
+        leader_step = []
+        for group in self.groups:
+            leader_pos.append(group.leader.pos.tolist()) #添加leader在最后一帧的位置
+            leader_step.append(group.leader.exit_in_step)
+        info = [
+            leader_step,
+            self.col_with_wall,
+            self.col_with_agent,
+            leader_pos
+        ]
+        return obs, rewards, is_done, info
 
     def debug_step(self):
         if not self.once:

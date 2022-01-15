@@ -23,13 +23,19 @@ class PedsMoveEnvViewer(pyglet.window.Window):
         self.env = env
         self.frame_time = time.time()
         self.cor_frame_time = self.env.frame_skipping * 1 / TICKS_PER_SEC
+        self.pressed = False
 
     def render(self):
         self.env.setup_graphics()
         self.switch_to()
         self.dispatch_events()
         self.dispatch_event('on_draw')
+        #self.dispatch_event('on_key_press')
         self.flip()
+
+    def on_key_press(self, symbol, modifiers):
+        if symbol == pyglet.window.key.SPACE and not self.pressed:
+            self.pressed = True
 
     def on_draw(self):
         self.clear()
@@ -37,10 +43,11 @@ class PedsMoveEnvViewer(pyglet.window.Window):
         dt = now_time - self.frame_time
         self.frame_time = now_time
         self.env.batch.draw()
+        time_in_env = self.env.step_in_env * 1 / 50
         if self.cor_frame_time < dt:
-            self.set_caption("行人行走模拟环境" + "@@以更慢的速度渲染!")
+            self.set_caption("行人行走模拟环境,当前时间:{}".format(time_in_env) + "@@以更慢的速度渲染!")
         else:
-            self.set_caption("行人行走模拟环境")
+            self.set_caption("行人行走模拟环境,当前时间:{}".format(time_in_env))
             time.sleep(self.cor_frame_time - dt)
 
 class PedsMoveEnvViewerWithBuffer(pyglet.window.Window):

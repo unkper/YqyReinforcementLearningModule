@@ -114,13 +114,13 @@ class PredictEnv:
         rewards, next_obs = samples[:, :self.model.reward_size], samples[:, self.model.reward_size:]
         terminals = self._termination_fn(self.env_name, obs, act, next_obs)
 
-        i = 0
-        for re in rewards[terminals]:
-            if i > 3:
-                break
-            i += 1
-            print("rewards:{}".format(re))
-        print("#####################################")
+        # i = 0
+        # for re in rewards[terminals]:
+        #     if i > 3:
+        #         break
+        #     i += 1
+        #     print("rewards:{}".format(re))
+        # print("#####################################")
         # if self.env_name == "PedsMoveEnv":#判断为结束状态时直接将奖励置为0
         #     rewards[terminals] = 0
 

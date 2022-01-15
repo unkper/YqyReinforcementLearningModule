@@ -1,11 +1,10 @@
 import Box2D as b2d
 
 from ped_env.envs import PedsMoveEnv as Env
-from ped_env.envs import PedsMoveEnvFactory
-from ped_env.pathfinder import AStarController
+from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *
-from rl.utils.classes import make_parallel_env
-from ped_env.classes import PedsRLHandler, PedsRLHandlerRange
+from rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
+from ped_env.classes import PedsRLHandler, PedsRLHandlerWithPlanner
 
 def HelloWorldProject():
     world = b2d.b2World()
@@ -32,48 +31,19 @@ def HelloWorldProject():
             body.angle
         ))
 
-def test1():
-    import pyglet
-
-    canvas = {}
-
-    try:
-        config = pyglet.gl.Config(double_buffer=True)
-        window = pyglet.window.Window(1280, 720, resizable=True, config=config)
-        window.set_minimum_size(640, 480)
-
-        batch = pyglet.graphics.Batch()
-
-        canvas[1] = pyglet.text.Label("Moo", x=10, y=10, batch=batch)
-
-        @window.event
-        def on_draw():
-            window.clear()
-            batch.draw()
-
-        @window.event
-        def on_key_press(symbol, modifiers):
-            # As soon as a key is pressed, we delete the batch objects (all of them)
-            for index in list(canvas):
-                canvas[index].delete()
-                del (canvas[index])
-
-        pyglet.app.run()
-
-    finally:
-        window.close()
-
 def test2():
     import time
     import numpy as np
 
     debug = False
+    save = True
 
     person_num = 40
-    env = Env(map_10, person_num, group_size=(5, 5), maxStep=500, debug_mode=debug, random_init_mode=True)
+    env = Env(map_12, person_num, group_size=(5, 5), frame_skipping=12, maxStep=250, debug_mode=debug, random_init_mode=True)
     leader_num = env.agent_count
+    handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
 
-    for epoch in range(5000):
+    for epoch in range(5):
         starttime = time.time()
         step = 0
         obs = env.reset()
@@ -85,15 +55,18 @@ def test2():
                 action = np.zeros([leader_num, 9])
                 action[:, 0] = 1
             obs, reward, is_done, info = env.step(action)
+            handler.step(info)
             if debug:
                 env.debug_step()
             step += env.frame_skipping
             env.render()
-
+        handler.reset(info)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.col_with_agent, env.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+    handler.save("./")
+
 
 def test3():
     import time
@@ -160,12 +133,38 @@ def test4():
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 def test5():
-    env = Env(map_05, 30, (5, 5))
-    planner = AStarController(env)
-    planner.play(5)
+    import time
+    import numpy as np
+
+    debug = False
+
+    person_num = 32
+    env = Env(map_12, person_num, group_size=(4, 4), frame_skipping=8, maxStep=300, debug_mode=debug, random_init_mode=True)
+    leader_num = env.agent_count
+    policy = AStarPolicy(env.terrain)
+
+    for epoch in range(20):
+        starttime = time.time()
+        step = 0
+        obs = env.reset()
+        is_done = [False]
+        while not is_done[0]:
+            action = policy.step(obs)
+            for i in range(1):
+                obs, reward, is_done, info = env.step(action)
+                env.render()
+                if is_done[0]:
+                    break
+                if debug:
+                    env.debug_step()
+                step += env.frame_skipping
+        endtime = time.time()
+        print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
+              .format(env.col_with_agent, env.col_with_wall))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 if __name__ == '__main__':
-    test2()
+    test5()
 
     # import kdtree
     # points = []

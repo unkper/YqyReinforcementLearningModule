@@ -13,11 +13,13 @@ class MyContactListener(b2ContactListener):
             exit = infoA if infoA.type == ObjectType.Exit else infoB
             if agent.model.is_done == True:
                 return
-            # 只有exit_type匹配时，才将agent的is_done置为true，删除刚体的流程放在循环中进行
+            #只有exit_type匹配时，才将agent的is_done置为true，删除刚体的流程放在循环中进行
             if agent.model.exit_type == exit.model.exit_type:
                 agent.model.is_done = True
-                # print("One Agent{} has reached exit{}!!!".format(agent.id, exit.id))
+            # print("One Agent{} has reached exit{}!!!".format(agent.id, exit.id))
         elif (infoA.type == ObjectType.Agent and infoB.type == ObjectType.Agent):
+            if infoB.model in infoA.model.group:
+                return
             self.env.col_with_agent += 1
             #互相添加彼此
             infoA.model.collide_agents[infoB.id] = infoB.model
@@ -46,6 +48,8 @@ class MyContactListener(b2ContactListener):
     def EndContact(self, contact:b2Contact):
         infoA, infoB = contact.fixtureA.userData, contact.fixtureB.userData
         if (infoA.type == ObjectType.Agent and infoB.type == ObjectType.Agent):
+            if infoB.model in infoA.model.group:
+                return
             if infoB.id in infoA.model.collide_agents.keys():infoA.model.collide_agents.pop(infoB.id)
             if infoA.id in infoB.model.collide_agents.keys():infoB.model.collide_agents.pop(infoA.id)
 
@@ -55,6 +59,7 @@ class MyContactListener(b2ContactListener):
 
         elif (infoA.type == ObjectType.Agent and infoB.type in (ObjectType.Wall, ObjectType.Obstacle)) \
                 or (infoA.type in (ObjectType.Wall, ObjectType.Obstacle) and infoB.type == ObjectType.Agent):
+
             agent = infoA if infoA.type == ObjectType.Agent else infoB
             obs = infoA if infoA.type in (ObjectType.Wall, ObjectType.Obstacle) else infoB
             if obs.id in agent.model.collide_obstacles.keys():agent.model.collide_obstacles.pop(obs.id)

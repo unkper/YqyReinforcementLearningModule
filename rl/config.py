@@ -1,7 +1,5 @@
 from rl.utils.networks.maddpg_network import MLPNetworkActor, MLPNetworkCritic, DoubleQNetworkCritic
 
-
-
 class Config:
     def __init__(self):
         self.max_episode = 100
@@ -42,6 +40,13 @@ class Config:
         self.use_init_bc = True
         self.init_bc_steps = 0
         self.batch_size_d = 128
+        self.lambda1 = 1#0.001
+        self.lambda2 = 1#0.078
+
+        #epsilon-greedy explore param
+        self.decaying_epsilon = True
+        self.epsilon_high = 1.0
+        self.epsilon_low = 0.01
 
     def update_parameter(self, alg_type):
         self.rollout_epoch_range = (int(self.max_episode * 0.1), int(self.max_episode * 0.15))
@@ -99,7 +104,7 @@ class DebugConfig(Config):
         self.max_episode = 20
         self.n_rol_threads = 2
 
-        self.batch_size = 5
+        self.batch_size = 12
         self.learning_rate = 0.003
         self.actor_hidden_dim = 128
         self.critic_hidden_dim = 256
@@ -119,7 +124,7 @@ class DebugConfig(Config):
         self.elite_size = 10
         self.use_decay = True
         # init bc learn parameter
-        self.use_init_bc = False
+        self.use_init_bc = True
         self.init_bc_steps = 0
         self.batch_size_d = 6  # demo replay buffer batch_size
 
@@ -132,16 +137,15 @@ class DebugConfig(Config):
 
 class PedsMoveConfig(Config):
     '''
-    model的train freq一定要多，不然会出现model bias
     '''
-    def __init__(self, n_rol_threads=8, max_episode=100):
+    def __init__(self, n_rol_threads=8, max_episode=100, use_decay_epsilon=False):
         super().__init__()
         self.max_episode = max_episode
         self.n_rol_threads = n_rol_threads
 
         self.batch_size = 1024
         self.learning_rate = 0.003
-        self.update_frequent = 25 #10 25 50
+        self.update_frequent = 25 #10 25 50 100
         self.debug_log_frequent = 10
         self.actor_hidden_dim = 128
         self.critic_hidden_dim = 256
@@ -156,14 +160,24 @@ class PedsMoveConfig(Config):
         self.model_batch_size = int(1024 / 0.8)  # 因为有0.2作为验证集 #512
         self.model_train_freq = 250#500  # 250
         self.n_steps_model = 20
-        self.model_hidden_dim = 400
+        self.model_hidden_dim = 200
         self.network_size = 10
         self.elite_size = 10
         self.use_decay = True
         #init bc learn parameter
         self.use_init_bc = True
         self.init_bc_steps = 0
-        self.batch_size_d = 512 #demo replay buffer batch_size
+        self.batch_size_d = 512 #512 #demo replay buffer batch_size
+        self.lambda1 = 1
+        self.lambda2 = 1
+
+        if use_decay_epsilon:
+            self.decaying_epsilon = True
+            self.epsilon_high = 1.0
+            self.epsilon_low = 0.01
+        else:
+            self.decaying_epsilon = False
+            self.epsilon_high = 0.2
 
     def update_parameter(self, alg_type):
         super(PedsMoveConfig, self).update_parameter(alg_type)

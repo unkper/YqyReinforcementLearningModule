@@ -173,7 +173,7 @@ class PuckWorldEnv(gym.Env):
             #    将其加入到add_onegeom(）列表中，如果需要多次渲染，则将其加入add_geom()
             # 5. 在渲染整个viewer之前，对有需要的geom的参数进行修改，修改主要基于该对象
             #    的Transform对象
-            # 6. 调用Viewer的render()方法进行绘制
+            # 6_map11_use. 调用Viewer的render()方法进行绘制
 
             target = rendering.make_circle(t_rad, 30, True)
             target.set_color(0.1, 0.9, 0.1)

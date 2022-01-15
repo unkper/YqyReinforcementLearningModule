@@ -2,13 +2,14 @@ import random
 import time
 
 import gym
-import numpy as np
+import kdtree
 
 from typing import List, Tuple
 from collections import defaultdict
 
 from tqdm import tqdm
 
+import ped_env.envs
 from ped_env.utils.maps import *
 
 #https://github.com/lc6chang/Social_Force_Model
@@ -75,6 +76,8 @@ class AStar:
             if len(open_list) == 0:
                 break
             now_loc = open_list[0]
+            if now_loc[0] < 0 or now_loc[0] >= terrain.shape[0] or now_loc[1] < 0 or now_loc[1] >= terrain.shape[1]:
+                break
             for i in range(1, len(open_list)):  # （1）获取f值最小的点
                 if node_matrix[open_list[i][0]][open_list[i][1]].f < node_matrix[now_loc[0]][now_loc[1]].f:
                     now_loc = open_list[i]
@@ -134,7 +137,7 @@ class AStar:
             re = (temp[0] - start_loc[0], temp[1] - start_loc[1])
             return re, path
         else:
-            #print("Warning,A* find no path from {} to {}!!!".format(start_loc, aim_loc[0]))
+            print("Warning,A* find no path from {} to {}!!!".format(start_loc, aim_loc[0]))
             return (0, 0), None
 
     def calculate_dir_vector(self):
@@ -200,6 +203,7 @@ class AStarController(gym.Env):
         '''
         self.env = env
         self.planner = AStar(env.terrain)
+        self.exit_tree = kdtree.create(env.terrain.exits)
         self.planner.calculate_dir_vector()
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
@@ -237,7 +241,8 @@ class AStarController(gym.Env):
                 else:
                     action = self.action_space[idx].sample()
             actions.append(action)
-        next_obs, reward, is_done, info = self.env.step(actions)
+        next_obs, reward, is_done, info = self.env.step(actions, planning_mode=False)
+        #self.env.render()
         return next_obs, reward, is_done, actions
 
     def play(self, episodes, render=True):
@@ -250,26 +255,73 @@ class AStarController(gym.Env):
         for epoch in tqdm(range(episodes)):
             step, starttime = 0, time.time()
             obs = self.env.reset()
+            total_reward = 0.0
             is_done = [False]
             while not is_done[0]:
                 next_obs, reward, is_done, actions = self.step(obs)
-                # next_obs, reward, is_done, info = self.env.step(action)
+                total_reward += np.mean(reward)
                 obs = next_obs
-                step += self.env.frame_skipping
+                step += 1#self.env.frame_skipping
                 if render:
                     self.env.render()
             endtime = time.time()
+            print("奖励为{}!".format(total_reward))
             #print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
             #      .format(self.env.listener.col_with_agent, self.env.listener.col_with_wall))
             print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+
+class AStarPolicy():
+    vec_to_discrete_action_dic = {
+        (0, 0): 0,
+        (1, 0): 1,
+        (1, 1): 2,
+        (0, 1): 3,
+        (-1, 1): 4,
+        (-1, 0): 5,
+        (-1, -1): 6,
+        (0, -1): 7,
+        (1, -1): 8
+    }
+
+    def __init__(self, terrain):
+        self.map = terrain.map
+        self.planner = AStar(terrain)
+        self.exit_tree = kdtree.create(terrain.exits)
+        self.planner.calculate_dir_vector()
+
+    def is_pos_vaild(self, pos):
+        pos_x, pos_y = pos
+        if pos_x < 0 or pos_x >= self.map.shape[0] or pos_y < 0 or pos_y >= self.map.shape[1]:
+            return False
+        if self.map[pos_x, pos_y] != 0:
+            return False
+        return True
+
+    def step(self, obs):
+        actions = []
+        for ob in obs:
+            pos_x, pos_y = ob[0:2] #得到智能体当前位置
+            pos_integer = [int(pos_x), int(pos_y)]
+            rx, ry = ob[4:6] #得到相对于出口的距离
+            ex = pos_x + rx
+            ey = pos_y + ry
+            exit = self.exit_tree.search_nn((ex, ey))[0].data #寻找相对最近的节点
+            if self.is_pos_vaild(pos_integer):
+                dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
+            else:
+                dir = 0
+            action = np.zeros([ACTION_DIM])
+            if dir != 0:
+                action[self.vec_to_discrete_action_dic[dir]] = 1.0
+            actions.append(action)
+        return actions
 
 def recoder_for_debug(*obj):
     pass
 
 if __name__ == '__main__':
-    pass
-    # env = ped_env.envs.PedsMoveEnv(map_05, 30, (5,5))
-    # planner = AStarController(env)
-    # planner.play(5)
+    env = ped_env.envs.PedsMoveEnv(map_12, 32, (4, 4), random_init_mode=True)
+    planner = AStarController(env)
+    planner.play(20)
 
 

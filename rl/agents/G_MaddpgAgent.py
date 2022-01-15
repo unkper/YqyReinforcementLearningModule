@@ -163,7 +163,6 @@ class G_MADDPGAgent(ModelBasedMAAgentMixin, MAAgentMixin, SaveNetworkMixin, Agen
         self.rollout_length = 1
         self.rollout_batch_size = rollout_batch_size
         self.real_ratio = real_ratio
-        self.l2_norm = 0.0
         self.model = EnsembleDynamicsModel(network_size, elite_size, sum(self.state_dims),
                                            sum(self.action_dims) if not self.discrete else self.env.agent_count,
                                            self.env.agent_count, model_hidden_dim, use_decay)

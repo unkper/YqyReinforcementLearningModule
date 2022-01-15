@@ -114,6 +114,7 @@ def run_experiment_once(args, id, lock=None):
     config.use_init_bc = True
     print("当前测试环境:{}".format(env.terrain.name))
     config.n_steps_train = 10
+    config.batch_size_d = 512
     # print("GD-MAMBPO gradient descent training!")
     # test2(env, envName, config=config, lock=lock)  # Model-Based Matd3 10Step(GD-MAMBPO)
 
@@ -122,14 +123,14 @@ def run_experiment_once(args, id, lock=None):
 
     config.n_steps_train = 10  # 1
     config.use_init_bc = False
-    print("MAMBPO gradient descent training!")
-    test2(env, envName, config=config)  # Model-Based Matd3 10Step No BC(MAMBPO)
+    # print("MAMBPO gradient descent training!")
+    # test2(env, envName, config=config)  # Model-Based Matd3 10Step No BC(MAMBPO)
     #
     print("MATD3-10 gradient descent training!")
     test1(env, envName, config=config)  # Matd3 10Step No BC(MATD3-10)
 
-    # config.n_steps_train = 1
-    # test1(env, envName, config=config)  # Matd3 1Step No BC(MATD3-1)
+    config.n_steps_train = 1
+    test1(env, envName, config=config)  # Matd3 1Step No BC(MATD3-1)
 
 # xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 400  --max_step 250 --threads 2 --p_num=8 --g_size=1
 # xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 400  --max_step 250 --threads 2
@@ -143,17 +144,17 @@ def run_experiment_once(args, id, lock=None):
 
 if __name__ == '__main__':
     my_parser = argparse.ArgumentParser(description="Run PedsMoveEnv use reinforcement learning algroithms!")
-    my_parser.add_argument('--dir', default="01_train", type=str)
-    my_parser.add_argument('--map', default="map_11", type=str)
+    my_parser.add_argument('--dir', default="bc_train", type=str)
+    my_parser.add_argument('--map', default="map_10", type=str)
     my_parser.add_argument('--p_num', default=32, type=int)
     my_parser.add_argument('--g_size', default=4, type=int)
-    my_parser.add_argument('--max_step', default=500, type=int)
-    my_parser.add_argument('--count', default=1, type=int)
+    my_parser.add_argument('--max_step', default=250, type=int)
+    my_parser.add_argument('--count', default=3, type=int)
     my_parser.add_argument('--frame_skip', default=8, type=int)
-    my_parser.add_argument('--train_step', default=20, type=int)
+    my_parser.add_argument('--train_step', default=80, type=int)
     my_parser.add_argument('--random_init', default=True, type=bool)
     my_parser.add_argument('--threads', default=2, type=int)
-    my_parser.add_argument('--use_decay', default=False, type=bool)
+    my_parser.add_argument('--use_decay', default=True, type=bool)
     args = my_parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 

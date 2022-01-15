@@ -242,13 +242,18 @@ def save_callback(agent, episode_num: int):
         for i in range(agent.env.agent_count):
             agent.save(sname, "Actor{}".format(i), agent.agents[i].actor, episode_num)
             agent.save(sname, "Critic{}".format(i), agent.agents[i].critic, episode_num)
-        if isinstance(agent, rl.agents.MAMBPOAgent.MAMBPOAgent):
-            agent.save_model()
+        #if isinstance(agent, rl.agents.MAMBPOAgent.MAMBPOAgent):
+            #agent.save_model()
+    if agent.info_callback_ != None:
+        agent.info_handler.save(sname)
 
 def early_stop_callback(self, rewards, episode):
-    if isinstance(self.env, ped_env.envs.PedsMoveEnv) and isinstance(self.env.person_handler, ped_env.classes.PedsRLHandlerRange):
+    if isinstance(self.env, ped_env.envs.PedsMoveEnv) and isinstance(self.env.person_handler, ped_env.classes.PedsRLHandlerWithPlanner):
         return min(rewards) > -40#当最小的奖励大于-40时，证明算法已经学到一个好的策略
     return False
+
+def info_callback(info, handler, reset=False):
+    handler.step(info) if not reset else handler.reset(info)
 
 def setup_seed(seed):
     # 设置随机数种子函数，用于强化学习的可复现而使用

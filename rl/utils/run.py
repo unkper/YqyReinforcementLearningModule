@@ -36,10 +36,10 @@ def func4():
     plt.plot(x,y)
     plt.show()
 
-#xvfb-run -a python run.py --map=map_10 --count=1000 --p_num=32 --g_size=4
-#xvfb-run -a python run.py --map=map_10 --count=1000 --p_num=32 --g_size=4 --use_random=True
-#xvfb-run -a python run.py --map=map_05 --count=1000
-#xvfb-run -a python run.py --map=map_05 --count=1000 --use_random=True
+#xvfb-run -a python run.py --map=map_10 --count=200 --p_num=32 --g_size=4 --thread=5
+#xvfb-run -a python run.py --map=map_10 --count=50 --p_num=32 --g_size=4 --use_random=True --thread=5
+#xvfb-run -a python run.py --map=map_05 --count=200 --thread=5
+#xvfb-run -a python run.py --map=map_05 --count=50 --use_random=True --thread=5
 #xvfb-run -a python run.py --map=map_02 --count=200 --use_random=True --random_init=True
 #xvfb-run -a python run.py --map=map_05 --count=100 --use_random=True --threads=5
 #xvfb-run -a python run.py --map=map_05 --count=1000 --use_random=False --random_init=True
@@ -47,18 +47,21 @@ def func4():
 #xvfb-run -a python run.py --map=map_06 --count=1000 --use_random=True
 #xvfb-run -a python run.py --map=map_07 --count=1000 --p_num=40 --g_size=5
 #xvfb-run -a python run.py --map=map_08 --count=1000
-#python run.py --map=map_05 --count=60 --p_num=2 --g_size=1
+#python run.py --map=map_05 --count=60 --p_num=2 --g_size=1 --threads=2
+#python run.py --map=map_05 --count=60 --p_num=2 --g_size=1 --threads=2 --use_random
 if __name__ == '__main__':
     my_parser = argparse.ArgumentParser("Use A*/Random Policy generate experiences and save!")
-    my_parser.add_argument('--map', default="map_05", type=str)
+    my_parser.add_argument('--map', default="map_12", type=str) #map_05
     my_parser.add_argument('--p_num', default=30, type=int)
     my_parser.add_argument('--g_size', default=5, type=int)
     my_parser.add_argument('--count', default=100, type=int)
     my_parser.add_argument('--max_step', default=1000, type=int)
-    my_parser.add_argument('--threads', default=20, type=int)
+    my_parser.add_argument('--threads', default=20, type=int) #20
     my_parser.add_argument('--use_random', default=False, type=bool)
     my_parser.add_argument('--discrete', default=True, type=bool)
     my_parser.add_argument('--random_init', default=True, type=bool)
+    my_parser.add_argument('--frame_skip', default=8, type=int)
+
 
     args = my_parser.parse_args()
     env_dict = {
@@ -66,12 +69,13 @@ if __name__ == '__main__':
         "map_05": map_05,
         "map_06": map_06,
         "map_10": map_10,
-        #"map_11": map_11,
-        #"map_12": map_12
+        "map_11": map_11,
+        "map_12": map_12
     }
 
     maps = [env_dict[args.map]]
     for map in maps:
         env = PedsMoveEnv(terrain=map, person_num=args.p_num, group_size=(args.g_size, args.g_size),
-                          maxStep=args.max_step, discrete=args.discrete, random_init_mode=args.random_init)
+                          maxStep=args.max_step, discrete=args.discrete, random_init_mode=args.random_init,
+                          frame_skipping=args.frame_skip)
         func1(env, n_rol_threads=args.threads, episodes=args.count, use_random=args.use_random, discrete=args.discrete)

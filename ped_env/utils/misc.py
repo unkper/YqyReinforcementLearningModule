@@ -16,11 +16,31 @@ class FixtureInfo():
     def __str__(self):
         return str(self.type) + str(self.id)
 
+if __name__ == '__main__':
+    class obj:
+        def __init__(self, v):
+            self.val = v
+
+        def __repr__(self):
+            return "obj:"+str(self.val)
+
+        def str(self):
+            return "obj:" + str(self.val)
+    li = []
+    for i in range(10):
+        li.append(obj(i))
+    li_3 = li[2]
+    del li[2]
+    del li_3
+    print(li)
+    print(li_3)
+
+
 
 # counter = 0
 # vecs = []
 # for ped in self.peds:
-#     if ped.body.linearVelocity.length > 1.6:
+#     if ped.body.linearVelocity.length > 1.6_map11_use:
 #         counter += 1
 #         vecs.append(ped.body.linearVelocity.length)
 # if counter > 0: print("目前有{}智能体超速，其速度为{}!".format(counter, vecs))
@@ -38,7 +58,7 @@ class FixtureInfo():
 #     vec = self.body.linearVelocity
 #     self.total_force += (-self.mass * vec / self.tau)
 #
-# SLOW_DOWN_DISTANCE = 0.6
+# SLOW_DOWN_DISTANCE = 0.6_map11_use
 # def arrive_force(self, target):
 #     now_point = np.array([self.getX, self.getY])
 #     target_point = np.array(target)

@@ -34,6 +34,14 @@ def calculate_nij(i, j):
     pos_j = j.pos
     return normalized(pos_i - pos_j)
 
+from math import sqrt, acos
+def angle_of_vector(v1, v2):
+    pi = 3.1415
+    vector_prod = v1[0] * v2[0] + v1[1] * v2[1]
+    length_prod = sqrt(pow(v1[0], 2) + pow(v1[1], 2)) * sqrt(pow(v2[0], 2) + pow(v2[1], 2))
+    cos = vector_prod * 1.0 / (length_prod * 1.0 + 1e-6)
+    return (acos(cos) / pi) * 180
+
 def parse_discrete_action(type:np.ndarray):
     global actions
     return actions[np.argmax(type).item()]
@@ -89,8 +97,8 @@ if __name__ == '__main__':
     #     print(ret)
     # Af, Bf = 0.4, 240
     # A = 4 * pow(Af, 12) * Bf
-    # B = 4 * pow(Af, 6) * Bf
-    # sigma = pow(A / B, 1/6)
+    # B = 4 * pow(Af, 6_map11_use) * Bf
+    # sigma = pow(A / B, 1/6_map11_use)
     # mu = pow(B, 2)/(4*A)
     # print("Af={},Bf={},A={},B={},mu={},sigma={}".format(Af, Bf, A, B, mu, sigma))
 

@@ -6,7 +6,7 @@ from math import inf
 from typing import List, Dict
 
 from gym.spaces import Box, Discrete
-from ped_env.functions import parse_discrete_action, calculate_nij, normalized
+from ped_env.functions import parse_discrete_action, calculate_nij, normalized, angle_of_vector
 from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
 
@@ -137,7 +137,7 @@ class PedsRLHandler(PedsHandlerInterface):
 
     def set_action(self, ped:Person, action):
         ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
-        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
+        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic[ped])
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
 
     def set_follower_action(self, ped:Person, action, group:Group, exit_pos):
@@ -147,19 +147,23 @@ class PedsRLHandler(PedsHandlerInterface):
                 ped.person_state = PersonState.follow_leader
                 control_dir = parse_discrete_action(action) if self.env.discrete else action
                 leader_dir = calculate_nij(group.leader, ped)
-                mix_dir = ped.alpha * control_dir + (1 - ped.alpha) * leader_dir
-            else:#如果follower与leader的间距大于5米，使用A*策略来跟上leader
+                if angle_of_vector(control_dir, leader_dir) > 90:
+                    mix_dir = -leader_dir * 0.2
+                else:
+                    mix_dir = ped.alpha * control_dir + (1 - ped.alpha) * leader_dir
+            else:#如果follower与leader的间距大于2米，使用A*策略来跟上leader
                 force = (ped.person_state == PersonState.follow_leader) #如果之前的状态是跟随，那么就要重新计算路径
                 ped.person_state = PersonState.route_to_leader #更新当前状态
                 int_pos_j = self.get_follower_a_star_path(ped, group.leader.pos, ped.pos, force)
                 mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         else:
+            #当leader到达出口后
             force = (ped.person_state != PersonState.route_to_exit)
             ped.person_state = PersonState.route_to_exit #更新当前状态
             int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
             mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         ped.self_driven_force(mix_dir) #跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
-        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic)
+        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic[ped])
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
         #ped.ij_group_force(group)
 
@@ -173,7 +177,7 @@ class PedsRLHandler(PedsHandlerInterface):
         '''
         int_pos_i = (int(pos_i[0]), int(pos_i[1]))
         int_pos_j = (int(pos_j[0]), int(pos_j[1]))
-        if ped.a_star_path == None  or force or (ped.a_star_path.vec_dir.get(int_pos_j) == None):  # 计算得到一条去出口的路
+        if ped.a_star_path == None or force or (ped.a_star_path.vec_dir.get(int_pos_j) == None):  # 计算得到一条去出口的路
             re, path = self.env.path_finder.next_loc(int_pos_j[0], int_pos_j[1],
                                                      int_pos_i[0], int_pos_i[1])
             path.calculate_vec_dir_in_path()
@@ -202,16 +206,16 @@ class PedsRLHandler(PedsHandlerInterface):
                     lr += self.r_wait  # 给予停止不动的行人以惩罚
         return gr, lr
 
-class PedsRLHandlerRange(PedsRLHandler):
-    def __init__(self, env, r_arrival=0, r_move=-0.1, r_wait=-0.5, r_collision=-1, r_planner=-0.01, use_planner=False, ratio=1):
+class PedsRLHandlerWithPlanner(PedsRLHandler):
+    def __init__(self, env, r_arrival=0, r_move=-0.1, r_wait=-1, r_collision=-1, r_planner=-0.01, use_planner=False, ratio=10):
         if ratio != 1:
             r_arrival *= ratio
             r_move *= ratio
             r_wait *= ratio
             r_collision *= ratio
             r_planner *= ratio
-        super(PedsRLHandlerRange, self).__init__(env=env, r_arrival=r_arrival, r_move=r_move,
-                                                 r_wait=r_wait, r_collision=r_collision, use_planner=use_planner)
+        super(PedsRLHandlerWithPlanner, self).__init__(env=env, r_arrival=r_arrival, r_move=r_move,
+                                                       r_wait=r_wait, r_collision=r_collision, use_planner=use_planner)
         self.r_planner = r_planner
         self.use_planner = use_planner
         if use_planner:
@@ -228,9 +232,9 @@ class PedsRLHandlerRange(PedsRLHandler):
                 node, distance = self.exit_kd_trees[ped_index].search_nn(now_pos)
                 lr += self.r_planner * distance
 
-            # if len(ped.collide_agents) > 0:
-            #     lr += self.r_collision
-            if ped.is_done and not ped.has_removed:
+            if len(ped.collide_agents) > 0 or len(ped.collide_obstacles) > 0:
+                lr += self.r_collision
+            if ped.is_done:
                 lr += self.r_arrival
             else:
                 last_pos = self.env.points_in_last_step[ped_index]
@@ -239,7 +243,7 @@ class PedsRLHandlerRange(PedsRLHandler):
                 now_dis = self.env.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
                 if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and
                         last_pos[1] - 0.001 <= now_pos[1] <= last_pos[1] + 0.001):
-                    lr += self.r_move * now_dis  # 给予-0.1以每步以防止智能体因奖励而无法到达出口
+                    lr += self.r_move * now_dis  # 给予-1以每步以防止智能体因奖励而无法到达出口
                     self.env.distance_to_exit[ped_index] = now_dis
                     self.env.points_in_last_step[ped_index] = now_pos
                 else:

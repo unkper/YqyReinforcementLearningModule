@@ -6,7 +6,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+from rl.utils.miscellaneous import CUDA_DEVICE_ID
+
+device = torch.device('cuda:'+str(CUDA_DEVICE_ID) if torch.cuda.is_available() else "cpu")
 
 class StandardScaler(object):
     def __init__(self):
@@ -118,12 +120,12 @@ class EnsembleModel(nn.Module):#其线性层为[s1, s2, ensemble_size]等于将�
         # Add variance output
         self.nn5 = EnsembleFC(hidden_size, self.output_dim * 2, ensemble_size)
 
-        self.max_logvar = nn.Parameter((torch.ones((1, self.output_dim)).float() / 2).to(device), requires_grad=False)
-        self.min_logvar = nn.Parameter((torch.ones((1, self.output_dim)).float() * 10).to(device), requires_grad=False)
+        self.max_logvar = nn.Parameter((torch.ones((1, self.output_dim)).float() * -2).to(device), requires_grad=False)
+        self.min_logvar = nn.Parameter((torch.ones((1, self.output_dim)).float() * -5).to(device), requires_grad=False)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
         #self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate, weight_decay=0.001, amsgrad=True)
         self.apply(init_weights)
-        self.no_linear = Swish()#torch.nn.LeakyReLU()
+        self.no_linear = Swish()
 
     def forward(self, x, ret_log_var=False):
 
@@ -244,13 +246,13 @@ class EnsembleDynamicsModel():
                 train_input = torch.from_numpy(train_inputs[idx]).float().to(device)
                 train_label = torch.from_numpy(train_labels[idx]).float().to(device)
                 losses = []
-                mean, logvar = self.ensemble_model(train_input, ret_log_var=True)
-                loss, mse_loss = self.ensemble_model.loss(mean, logvar, train_label)
+                mean, logvar = self.ensemble_model(train_input, ret_log_var=False)
+                loss, mse_loss = self.ensemble_model.loss(mean, logvar, train_label, inc_var_loss=False)
                 self.ensemble_model.train(loss)
                 losses.append(loss)
 
             with torch.no_grad():
-                holdout_mean, holdout_logvar = self.ensemble_model(holdout_inputs, ret_log_var=True)
+                holdout_mean, holdout_logvar = self.ensemble_model(holdout_inputs, ret_log_var=False)
                 _, holdout_mse_losses = self.ensemble_model.loss(holdout_mean, holdout_logvar, holdout_labels, inc_var_loss=False)
                 holdout_mse_losses = holdout_mse_losses.detach().cpu().numpy()
                 sorted_loss_idx = np.argsort(holdout_mse_losses)

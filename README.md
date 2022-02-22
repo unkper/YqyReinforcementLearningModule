@@ -5,10 +5,10 @@
 </div>
 
 # 结果
-<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/heatmap.jpg" height=300 width=300 alt="探索空间频次热度图"/>
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/heatmap.jpg" height=300 alt="探索空间频次热度图"/>
 
 # GD-MAMBPO框架简图
-<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/framework.jpg" height=300 width=300 alt="GD_MAMBPO"/>
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/framework.jpg" height=300 alt="GD_MAMBPO"/>
 
 代码结构
 ---

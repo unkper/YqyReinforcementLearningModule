@@ -1,6 +1,8 @@
 # PedestrainSimlationModule
 ## 该模块是我开发的行人集结疏散仿真模块，目前期望能够利用强化学习算法结合社会力模型等人群控制方法来实现出行人集结疏散效果。
-<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/environments.gif" height=300 width=300/>
+<div align="center">
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/environments.gif" height=300 width=300 alt="疏散场景演示"/>
+</div>
 
 代码结构
 ----
@@ -30,7 +32,9 @@
         5.Put file A and B in rl/, and you can use eval.py in rl/ to watch simuations based on trained policy.
            But the map and person num must be correct.
 #结果
-![探索空间频次热度图](https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/3.eps)
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/heatmap.jpg" height=300 width=300 alt="探索空间频次热度图"/>
+
 #GD-MAMBPO框架简图
-![GD_MAMBPO](https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/framework.pdf)
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/framework.jpg" height=300 width=300 alt="GD_MAMBPO"/>
+
 

@@ -1,7 +1,7 @@
 # PedestrainSimlationModule
 ## 该模块是我开发的行人集结疏散仿真模块，目前期望能够利用强化学习算法结合社会力模型等人群控制方法来实现出行人集结疏散效果。
-![行人疏散效果](https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/environments.gif)
-#项目配置
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/environments.gif" height=300 width=300/>
+
 代码结构
 ----
         ped_env: 耦合了社会力模型(Social Force Model,SFM)的行人粒子仿真系统, 使用 _pybox2d_ 作为物理引擎, 

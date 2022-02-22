@@ -31,6 +31,7 @@
         4.Change path to A and B locations and use draw_plot.py in rl/analyse/ to generate statistical charts.
         5.Put file A and B in rl/, and you can use eval.py in rl/ to watch simuations based on trained policy.
            But the map and person num must be correct.
+           
 #结果
 <img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/heatmap.jpg" height=300 width=300 alt="探索空间频次热度图"/>
 

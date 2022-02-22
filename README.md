@@ -4,6 +4,12 @@
 <img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/environments.gif" height=300 width=300 alt="疏散场景演示"/>
 </div>
 
+#结果
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/heatmap.jpg" height=300 width=300 alt="探索空间频次热度图"/>
+
+#GD-MAMBPO框架简图
+<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/framework.jpg" height=300 width=300 alt="GD_MAMBPO"/>
+
 代码结构
 ---
         ped_env: 耦合了社会力模型(Social Force Model,SFM)的行人粒子仿真系统, 使用 _pybox2d_ 作为物理引擎, 
@@ -31,11 +37,4 @@
         4.Change path to A and B locations and use draw_plot.py in rl/analyse/ to generate statistical charts.
         5.Put file A and B in rl/, and you can use eval.py in rl/ to watch simuations based on trained policy.
            But the map and person num must be correct.
-           
-#结果
-<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/heatmap.jpg" height=300 width=300 alt="探索空间频次热度图"/>
-
-#GD-MAMBPO框架简图
-<img src="https://github.com/unkper/PedestrainSimulationModule/blob/main/pic/framework.jpg" height=300 width=300 alt="GD_MAMBPO"/>
-
 

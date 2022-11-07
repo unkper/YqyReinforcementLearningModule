@@ -109,8 +109,8 @@ def test4():
 
     debug = False
     # test1()
-    person_num = 1
-    env = Env(map_simple, person_num, group_size=(1, 1), maxStep=10000, discrete=False)
+    person_num = 40
+    env = Env(map_11, person_num, group_size=(1, 1), maxStep=10000, discrete=False)
     leader_num = env.agent_count
     for epoch in range(1):
         starttime = time.time()
@@ -171,7 +171,7 @@ def test5():
 
 
 if __name__ == '__main__':
-    test2()
+    test4()
 
 
 

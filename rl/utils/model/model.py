@@ -8,7 +8,8 @@ import numpy as np
 
 from rl.utils.miscellaneous import CUDA_DEVICE_ID
 
-device = torch.device('cuda:'+str(CUDA_DEVICE_ID) if torch.cuda.is_available() else "cpu")
+device = torch.device('cuda:' + str(CUDA_DEVICE_ID) if torch.cuda.is_available() else "cpu")
+
 
 class StandardScaler(object):
     def __init__(self):
@@ -42,6 +43,7 @@ class StandardScaler(object):
         """
         return self.std * data + self.mu
 
+
 def init_weights(m):
     def truncated_normal_init(t, mean=0.0, std=0.01):
         torch.nn.init.normal_(t, mean=mean, std=std)
@@ -65,7 +67,8 @@ class EnsembleFC(nn.Module):
     ensemble_size: int
     weight: torch.Tensor
 
-    def __init__(self, in_features: int, out_features: int, ensemble_size: int, weight_decay: float = 0, bias: bool = True) -> None:
+    def __init__(self, in_features: int, out_features: int, ensemble_size: int, weight_decay: float = 0,
+                 bias: bool = True) -> None:
         '''
         普通的线性层
         :param in_features:
@@ -99,15 +102,17 @@ class EnsembleFC(nn.Module):
         )
 
     def save(self, model_dir, name):
-        torch.save(self.weight, os.path.join(model_dir, name+"_weight.pkl"))
-        torch.save(self.weight, os.path.join(model_dir, name+"_bias.pkl"))
+        torch.save(self.weight, os.path.join(model_dir, name + "_weight.pkl"))
+        torch.save(self.weight, os.path.join(model_dir, name + "_bias.pkl"))
 
     def load(self, model_dir, name):
         self.weight = torch.load(os.path.join(model_dir, name + "_weight.pkl"))
         self.bias = torch.load(os.path.join(model_dir, name + "_bias.pkl"))
 
-class EnsembleModel(nn.Module):#其线性层为[s1, s2, ensemble_size]等于将多个model分线性层整合起来
-    def __init__(self, state_size, action_size, reward_size, ensemble_size, hidden_size=200, learning_rate=0.01, use_decay=False):
+
+class EnsembleModel(nn.Module):  # 其线性层为[s1, s2, ensemble_size]等于将多个model分线性层整合起来
+    def __init__(self, state_size, action_size, reward_size, ensemble_size, hidden_size=200, learning_rate=0.01,
+                 use_decay=False):
         super(EnsembleModel, self).__init__()
         self.hidden_size = hidden_size
         self.nn1 = EnsembleFC(state_size + action_size, hidden_size, ensemble_size, weight_decay=0.000025)
@@ -123,7 +128,7 @@ class EnsembleModel(nn.Module):#其线性层为[s1, s2, ensemble_size]等于将�
         self.max_logvar = nn.Parameter((torch.ones((1, self.output_dim)).float() * -2).to(device), requires_grad=False)
         self.min_logvar = nn.Parameter((torch.ones((1, self.output_dim)).float() * -5).to(device), requires_grad=False)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
-        #self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate, weight_decay=0.001, amsgrad=True)
+        # self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate, weight_decay=0.001, amsgrad=True)
         self.apply(init_weights)
         self.no_linear = Swish()
 
@@ -174,7 +179,7 @@ class EnsembleModel(nn.Module):#其线性层为[s1, s2, ensemble_size]等于将�
     def train(self, loss):
         self.optimizer.zero_grad()
 
-        loss += 0.01 * torch.sum(self.max_logvar) - 0.01 * torch.sum(self.min_logvar) ###
+        loss += 0.01 * torch.sum(self.max_logvar) - 0.01 * torch.sum(self.min_logvar)  ###
         # print('loss:', loss.item())
         if self.use_decay:
             loss += self.get_decay_loss()
@@ -194,6 +199,7 @@ class EnsembleModel(nn.Module):#其线性层为[s1, s2, ensemble_size]等于将�
         for ele in elements:
             ele[0].load(model_dir, ele[1])
 
+
 class Swish(nn.Module):
     def __init__(self):
         super(Swish, self).__init__()
@@ -202,8 +208,10 @@ class Swish(nn.Module):
         x = x * F.sigmoid(x)
         return x
 
+
 class EnsembleDynamicsModel():
-    def __init__(self, network_size, elite_size, state_size, action_size, reward_size=1, hidden_size=200, use_decay=False):
+    def __init__(self, network_size, elite_size, state_size, action_size, reward_size=1, hidden_size=200,
+                 use_decay=False):
         self.network_size = network_size
         self.elite_size = elite_size
         self.model_list = []
@@ -212,7 +220,8 @@ class EnsembleDynamicsModel():
         self.reward_size = reward_size
         self.network_size = network_size
         self.elite_model_idxes = []
-        self.ensemble_model = EnsembleModel(state_size, action_size, reward_size, network_size, hidden_size, use_decay=use_decay).to(device)
+        self.ensemble_model = EnsembleModel(state_size, action_size, reward_size, network_size, hidden_size,
+                                            use_decay=use_decay).to(device)
         self.scaler = StandardScaler()
 
     def train(self, inputs, labels, batch_size=256, holdout_ratio=0., max_epochs_since_update=5):
@@ -237,7 +246,6 @@ class EnsembleDynamicsModel():
         holdout_inputs = holdout_inputs[None, :, :].repeat([self.network_size, 1, 1])
         holdout_labels = holdout_labels[None, :, :].repeat([self.network_size, 1, 1])
 
-
         for epoch in itertools.count():
             train_idx = np.vstack([np.random.permutation(train_inputs.shape[0]) for _ in range(self.network_size)])
             # train_idx = np.vstack([np.arange(train_inputs.shape[0])] for _ in range(self.network_size))
@@ -253,14 +261,15 @@ class EnsembleDynamicsModel():
 
             with torch.no_grad():
                 holdout_mean, holdout_logvar = self.ensemble_model(holdout_inputs, ret_log_var=False)
-                _, holdout_mse_losses = self.ensemble_model.loss(holdout_mean, holdout_logvar, holdout_labels, inc_var_loss=False)
+                _, holdout_mse_losses = self.ensemble_model.loss(holdout_mean, holdout_logvar, holdout_labels,
+                                                                 inc_var_loss=False)
                 holdout_mse_losses = holdout_mse_losses.detach().cpu().numpy()
                 sorted_loss_idx = np.argsort(holdout_mse_losses)
                 self.elite_model_idxes = sorted_loss_idx[:self.elite_size].tolist()
                 break_train = self._save_best(epoch, holdout_mse_losses)
                 if break_train:
                     break
-            #print('epoch: {}, holdout mse losses: {}'.format(epoch, holdout_mse_losses))
+            # print('epoch: {}, holdout mse losses: {}'.format(epoch, holdout_mse_losses))
         return np.mean(holdout_mse_losses), loss.cpu(), mse_loss.cpu()
 
     def _save_best(self, epoch, holdout_losses):

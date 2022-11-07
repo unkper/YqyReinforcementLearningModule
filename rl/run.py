@@ -21,7 +21,8 @@ from rl.utils.miscellaneous import save_experiment_data, save_parameter_setting
 
 from rl.config import *
 
-def test1(useEnv, envName, config:Config, lock=None):
+
+def test1(useEnv, envName, config: Config, lock=None):
     alg_name = "MATD3"
     config.update_parameter(alg_name)
     offline_data = useEnv.terrain.name + "_exp"
@@ -31,27 +32,30 @@ def test1(useEnv, envName, config:Config, lock=None):
     d_exp = None
     if config.use_init_bc:
         d_exp = load_offline_train(useEnv, "./utils/data/exp/{}/experience.pkl".format(offline_data), lock=lock)
-    agent = MATD3Agent(env,n_rol_threads=config.n_rol_threads,capacity=config.capacity,batch_size=config.batch_size,
-                       learning_rate=config.learning_rate,update_frequent=config.update_frequent,debug_log_frequent=config.debug_log_frequent,
-                       gamma=config.gamma,tau=config.tau,K = config.K,log_dir=config.log_dir,actor_network=config.actor_network,
-                       critic_network=config.critic_network,actor_hidden_dim=config.actor_hidden_dim,
-                       critic_hidden_dim=config.critic_hidden_dim,n_steps_train=config.n_steps_train,
-                       env_name=envName,demo_experience=d_exp,batch_size_d=config.batch_size_d,
+    agent = MATD3Agent(env, n_rol_threads=config.n_rol_threads, capacity=config.capacity, batch_size=config.batch_size,
+                       learning_rate=config.learning_rate, update_frequent=config.update_frequent,
+                       debug_log_frequent=config.debug_log_frequent,
+                       gamma=config.gamma, tau=config.tau, K=config.K, log_dir=config.log_dir,
+                       actor_network=config.actor_network,
+                       critic_network=config.critic_network, actor_hidden_dim=config.actor_hidden_dim,
+                       critic_hidden_dim=config.critic_hidden_dim, n_steps_train=config.n_steps_train,
+                       env_name=envName, demo_experience=d_exp, batch_size_d=config.batch_size_d,
                        lambda_1=config.lambda1, lambda_2=config.lambda2)
-    save_parameter_setting(agent.log_dir,alg_name,config)
+    save_parameter_setting(agent.log_dir, alg_name, config)
     data = agent.learning(
-                  decaying_epsilon=config.decaying_epsilon,
-                  epsilon_high=config.epsilon_high,
-                  epsilon_low=config.epsilon_low,
-                  max_episode_num=config.max_episode,
-                  explore_episodes_percent=0.8,
-                 )
+        decaying_epsilon=config.decaying_epsilon,
+        epsilon_high=config.epsilon_high,
+        epsilon_low=config.epsilon_low,
+        max_episode_num=config.max_episode,
+        explore_episodes_percent=0.8,
+    )
     for i in range(agent.env.agent_count):
-        agent.save(agent.log_dir,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
+        agent.save(agent.log_dir, "Actor{}".format(i), agent.agents[i].actor, config.max_episode)
     save_experiment_data(data, 2, 1, step_index=0, title="{}Agent performance on {}".format(alg_name, envName),
                          x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName=alg_name)
 
-def test2(useEnv, envName, config:Config, debug=False, lock=None):
+
+def test2(useEnv, envName, config: Config, debug=False, lock=None):
     alg_name = "GD_MAMBPO" if config.use_init_bc else "MAMBPO"
     if not debug:
         offline_data = useEnv.terrain.name + "_exp"
@@ -64,31 +68,38 @@ def test2(useEnv, envName, config:Config, debug=False, lock=None):
     if config.use_init_bc:
         d_exp = load_offline_train(useEnv, "./utils/data/exp/{}/experience.pkl".format(offline_data), lock=lock)
     agent = MAMBPOAgent(env, n_rol_threads=config.n_rol_threads, capacity=config.capacity, batch_size=config.batch_size,
-                        learning_rate=config.learning_rate, update_frequent=config.update_frequent, debug_log_frequent=config.debug_log_frequent,
-                        gamma=config.gamma, tau=config.tau, K = config.K, log_dir=config.log_dir, actor_network=config.actor_network,
-                        critic_network=config.critic_network, actor_hidden_dim=config.actor_hidden_dim, model_hidden_dim=config.model_hidden_dim,
+                        learning_rate=config.learning_rate, update_frequent=config.update_frequent,
+                        debug_log_frequent=config.debug_log_frequent,
+                        gamma=config.gamma, tau=config.tau, K=config.K, log_dir=config.log_dir,
+                        actor_network=config.actor_network,
+                        critic_network=config.critic_network, actor_hidden_dim=config.actor_hidden_dim,
+                        model_hidden_dim=config.model_hidden_dim,
                         critic_hidden_dim=config.critic_hidden_dim, n_steps_train=config.n_steps_train,
                         env_name=envName, init_train_steps=config.init_train_steps,
                         network_size=config.network_size, elite_size=config.elite_size, use_decay=config.use_decay,
-                        model_batch_size=config.model_batch_size, model_train_freq=config.model_train_freq, n_steps_model=config.n_steps_model,
-                        rollout_length_range=config.rollout_length_range, rollout_epoch_range=config.rollout_epoch_range,
+                        model_batch_size=config.model_batch_size, model_train_freq=config.model_train_freq,
+                        n_steps_model=config.n_steps_model,
+                        rollout_length_range=config.rollout_length_range,
+                        rollout_epoch_range=config.rollout_epoch_range,
                         rollout_batch_size=config.rollout_batch_size, real_ratio=config.real_ratio,
-                        model_retain_epochs=config.model_retain_epochs, demo_experience=d_exp, batch_size_d=config.batch_size_d,
+                        model_retain_epochs=config.model_retain_epochs, demo_experience=d_exp,
+                        batch_size_d=config.batch_size_d,
                         lambda_1=config.lambda1, lambda_2=config.lambda2)
-    save_parameter_setting(agent.log_dir,alg_name,config)
+    save_parameter_setting(agent.log_dir, alg_name, config)
     data = agent.learning(
-                  decaying_epsilon=config.decaying_epsilon,
-                  epsilon_high=config.epsilon_high,
-                  epsilon_low=config.epsilon_low,
-                  max_episode_num=config.max_episode,
-                  explore_episodes_percent=0.8,
-                  init_exp_file="./utils/data/exp/{}/experience.pkl".format(random_data),
-                  lock=lock
-                 )
+        decaying_epsilon=config.decaying_epsilon,
+        epsilon_high=config.epsilon_high,
+        epsilon_low=config.epsilon_low,
+        max_episode_num=config.max_episode,
+        explore_episodes_percent=0.8,
+        init_exp_file="./utils/data/exp/{}/experience.pkl".format(random_data),
+        lock=lock
+    )
     for i in range(agent.env.agent_count):
-        agent.save(agent.log_dir,"Actor{}".format(i),agent.agents[i].actor, config.max_episode)
+        agent.save(agent.log_dir, "Actor{}".format(i), agent.agents[i].actor, config.max_episode)
     save_experiment_data(data, 2, 1, step_index=0, title="{}Agent performance on {}".format(alg_name, envName),
                          x_name="episodes", y_name="rewards of episode", save_dir=agent.log_dir, saveName=alg_name)
+
 
 def run_experiment_once(args, id, lock=None):
     env_dict = {
@@ -99,11 +110,12 @@ def run_experiment_once(args, id, lock=None):
         "map_11": map_11,
         "map_12": map_12
     }
-    envName, env = ("PedsMoveEnv",my_env.PedsMoveEnv(terrain=env_dict[args.map], person_num=args.p_num,
-                                                     group_size=(args.g_size, args.g_size), maxStep=args.max_step,
-                                                     random_init_mode=args.random_init, frame_skipping=args.frame_skip))
+    envName, env = ("PedsMoveEnv", my_env.PedsMoveEnv(terrain=env_dict[args.map], person_num=args.p_num,
+                                                      group_size=(args.g_size, args.g_size), maxStep=args.max_step,
+                                                      random_init_mode=args.random_init,
+                                                      frame_skipping=args.frame_skip))
 
-    #config = DebugConfig()
+    # config = DebugConfig()
 
     config = PedsMoveConfig(n_rol_threads=args.threads, max_episode=args.train_step, use_decay_epsilon=args.use_decay)
 
@@ -130,6 +142,7 @@ def run_experiment_once(args, id, lock=None):
 
     # config.n_steps_train = 1
     # test1(env, envName, config=config)  # Matd3 1Step No BC(MATD3-1)
+
 
 # xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 400  --max_step 250 --threads 2 --p_num=8 --g_size=1
 # xvfb-run -a python run.py --dir train_05 --map map_05 --train_step 400  --max_step 250 --threads 2
@@ -159,7 +172,7 @@ if __name__ == '__main__':
 
     if args.dir != './':
         os.mkdir("./" + args.dir)
-    if args.count == 1:#采用单线程的形式
+    if args.count == 1:  # 采用单线程的形式
         run_experiment_once(args, "1")
     else:
         torch.multiprocessing.set_start_method("spawn")
@@ -172,4 +185,3 @@ if __name__ == '__main__':
         for p in sub_processes:
             p.join()
         print("主进程结束!")
-

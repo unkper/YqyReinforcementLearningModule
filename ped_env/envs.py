@@ -1,4 +1,5 @@
 import copy
+import math
 import random
 from collections import defaultdict
 from math import sqrt, pow
@@ -23,8 +24,10 @@ from ped_env.functions import calculate_each_group_num
 TICKS_PER_SEC = 50
 vel_iters, pos_iters = 6, 2
 
+
 class PedsMoveEnvFactory():
     GROUP_SIZE = 0.5
+
     def __init__(self, world: b2World, l1, l2):
         self.world = world
         self.l1 = l1
@@ -65,25 +68,23 @@ class PedsMoveEnvFactory():
         for member in group:
             member.group = group_obj
         groups.append(group_obj)
-        group_dic.update({per : group_obj for per in group})  # 将leader和follow的映射关系添加
+        group_dic.update({per: group_obj for per in group})  # 将leader和follow的映射关系添加
         persons.extend(group)
 
-    def create_group_persons_in_radius(self, terrain:Map, idx, person_num, groups, group_dic:Dict, group_size, test_mode=False):
+    def create_group_persons_in_radius(self, terrain: Map, idx, person_num, groups, group_dic: Dict, group_size,
+                                       test_mode=False):
         each_group_num = calculate_each_group_num(group_size, person_num)
         persons = []
         for num in each_group_num:
-            group_center_node = (terrain.start_points[idx][0] + terrain.create_radius * random.random(), terrain.start_points[idx][1] + terrain.create_radius * random.random())
-            group = self.inner_create_persons_in_radius(group_center_node, self.GROUP_SIZE, num, terrain.get_random_exit(idx), test_mode)
+            group_center_node = (terrain.start_points[idx][0] + terrain.create_radius * random.random(),
+                                 terrain.start_points[idx][1] + terrain.create_radius * random.random())
+            group = self.inner_create_persons_in_radius(group_center_node, self.GROUP_SIZE, num,
+                                                        terrain.get_random_exit(idx), test_mode)
             self.set_group_process(group, groups, group_dic, persons)
         return persons
 
-    def create_group_persons_in_rect(self):
-        pass
-
-    def create_group_persons_in_rect_neat(self):
-        pass
-
-    def random_create_persons(self, terrain:Map, idx, person_num, groups, group_dic, group_size, start_point_dic, test_mode=False):
+    def random_create_persons(self, terrain: Map, idx, person_num, groups, group_dic, group_size, start_point_dic,
+                              test_mode=False):
         # h, w = terrain.map.shape[0], terrain.map.shape[1]
         each_group_num = calculate_each_group_num(group_size, person_num)
         persons = []
@@ -100,6 +101,7 @@ class PedsMoveEnvFactory():
             self.set_group_process(group, groups, group_dic, persons)
         return persons
 
+
 class PedsMoveEnv(gym.Env):
     viewer = None
     peds = []
@@ -108,16 +110,16 @@ class PedsMoveEnv(gym.Env):
 
     def __init__(self,
                  terrain: Map,
-                 person_num = 10,
-                 group_size:Tuple = (1,6),
-                 discrete = True,
-                 frame_skipping = 8,
-                 maxStep = 3000,
-                 person_handler = PedsRLHandlerWithPlanner,
-                 use_planner = False,
-                 random_init_mode:bool = False,
-                 train_mode:bool = True,
-                 debug_mode:bool = False):
+                 person_num=10,
+                 group_size: Tuple = (1, 6),
+                 discrete=True,
+                 frame_skipping=8,
+                 maxStep=3000,
+                 person_handler=PedsRLHandlerWithPlanner,
+                 use_planner=False,
+                 random_init_mode: bool = False,
+                 train_mode: bool = True,
+                 debug_mode: bool = False):
         '''
         一个基于Box2D和pyglet的多行人强化学习仿真环境
         对于一个有N个人的环境，其状态空间为：[o1,o2,...,oN]，每一个o都是一个长度为14的list，其代表的意义为：
@@ -158,38 +160,40 @@ class PedsMoveEnv(gym.Env):
         # 由PersonHandler类提供的属性代替，从而使用策略模式来加强灵活性
         self.observation_space = self.person_handler.observation_space
         self.action_space = self.person_handler.action_space
-        self.agent_count = self.person_handler.agent_count #agent_count是一个团队里leader的数量
+        self.agent_count = self.person_handler.agent_count  # agent_count是一个团队里leader的数量
 
         self.left_leader_num = self.agent_count
 
         self.col_with_agent = 0
         self.col_with_wall = 0
 
-        #for raycast and aabb_query debug
+        # for raycast and aabb_query debug
         self.train_mode = train_mode
         self.debug_mode = debug_mode
         self.vec = [0.0 for _ in range(self.agent_count)]
 
         self.path_finder = AStar(self.terrain)
-        #assert group_size[1] <= 6_map11_use
+        # assert group_size[1] <= 6_map11_use
 
     def start(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
+        # 创建物理引擎
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.listener = MyContactListener(self)  # 现在使用aabb_query的方式来判定
         self.world.contactListener = self.listener
-
+        # 创建渲染所需
         self.batch = pyglet.graphics.Batch()
         self.display_level = pyglet.graphics.OrderedGroup(0)
         self.debug_level = pyglet.graphics.OrderedGroup(1)
+        # 创建一个行人工厂以供生成行人调用
         self.factory = PedsMoveEnvFactory(self.world, self.display_level, self.debug_level)
-
+        # 是否按照地图生成墙
         if not self.init_map_points:
             # 根据shape为50*50的map来构建1*1的墙，当该处值为1代表是墙
             self.start_nodes_obs = []
             self.start_nodes_wall = []
             self.start_nodes_exit = []
 
-            #按照从左往右，从上到下的遍历顺序
+            # 按照从左往右，从上到下的遍历顺序
             for j in range(maps.shape[1]):
                 for i in range(maps.shape[0]):
                     if maps[i, j] == 1:
@@ -206,8 +210,9 @@ class PedsMoveEnv(gym.Env):
                         self.start_point_dic[spawn_maps[i, j]].append((i + 0.5, j + 0.5))
             self.init_map_points = True
 
-        self.obstacles = self.factory.create_walls(self.start_nodes_obs, (1, 1),  ObjectType.Obstacle, color=ColorBlue)
-        self.exits = self.factory.create_walls(self.start_nodes_exit, (1, 1),  ObjectType.Exit, color=ColorRed, CreateClass=Exit)  # 创建出口
+        self.obstacles = self.factory.create_walls(self.start_nodes_obs, (1, 1), ObjectType.Obstacle, color=ColorBlue)
+        self.exits = self.factory.create_walls(self.start_nodes_exit, (1, 1), ObjectType.Exit, color=ColorRed,
+                                               CreateClass=Exit)  # 创建出口
         self.walls = self.factory.create_walls(self.start_nodes_wall, (1, 1), ObjectType.Wall)  # 建造围墙
 
         # 随机初始化行人点，给每个生成点平均分配到不同出口的人群,并根据平均数来计算需要的领队数
@@ -222,9 +227,13 @@ class PedsMoveEnv(gym.Env):
         person_num[-1] += reminder
         for i, num in enumerate(person_num):
             if not self.debug_mode and not self.random_init_mode:
-                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.debug_mode))
+                self.peds.extend(
+                    self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic,
+                                                                self.group_size, self.debug_mode))
             elif not self.debug_mode and self.random_init_mode:
-                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic, self.group_size, self.start_point_dic, self.debug_mode))
+                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic,
+                                                                    self.group_size, self.start_point_dic,
+                                                                    self.debug_mode))
             else:
                 exit_type = self.terrain.get_random_exit(i)
                 group = self.factory.create_people(self.terrain.start_points, exit_type, self.debug_mode)
@@ -237,7 +246,7 @@ class PedsMoveEnv(gym.Env):
         # 得到一开始各个智能体距离出口的距离
         self.distance_to_exit.clear()
         self.get_peds_distance_to_exit()
-        #添加leader数组以供planner使用
+        # 添加leader数组以供planner使用
         self.leaders = []
         for ped in self.peds:
             if ped.is_leader:
@@ -274,7 +283,7 @@ class PedsMoveEnv(gym.Env):
 
     def get_ped_nearest_exit_dis(self, person_pos):
         x, y = person_pos
-        min = 100
+        min = math.inf
         for exit_point in self.terrain.exits:
             ex, ey = exit_point
             dis = sqrt(pow(ex - x, 2) + pow(ey - y, 2))
@@ -292,7 +301,7 @@ class PedsMoveEnv(gym.Env):
         return (ex - x, ey - y)
 
     def reset(self):
-        # reset ped_env
+        # reset ped_env,清空所有全局变量以供下一次使用
         Person.counter = 0
         BoxWall.counter = 0
         Exit.counter = 0
@@ -302,9 +311,10 @@ class PedsMoveEnv(gym.Env):
         self.peds.clear()
         self.not_arrived_peds.clear()
         self.elements.clear()
+        # 开始初始化环境
         self.start(self.terrain.map, self.terrain.map_spawn, person_num_sum=self.person_num)
         if self.person_handler.use_planner:
-            self.person_handler.init_exit_kd_trees() #初始化KDTree以供后续使用
+            self.person_handler.init_exit_kd_trees()  # 初始化KDTree以供后续使用
         # 添加初始观察状态
         init_obs = []
         for ped in self.peds:
@@ -328,7 +338,7 @@ class PedsMoveEnv(gym.Env):
                     continue
                 belong_group = self.group_dic[ped]
                 if ped.is_leader:
-                    #是leader用强化学习算法来控制
+                    # 是leader用强化学习算法来控制
                     self.person_handler.set_action(ped, actions[belong_group.id])
                 else:
                     # 是follower用社会力模型来控制
@@ -336,7 +346,7 @@ class PedsMoveEnv(gym.Env):
                                                             actions[belong_group.id],
                                                             belong_group,
                                                             self.terrain.exits[ped.exit_type - 3])
-                #施加合力给行人
+                # 施加合力给行人
                 ped.body.ApplyForceToCenter(b2Vec2(ped.total_force), wake=True)
                 ped.total_force = np.zeros([2])
             self.world.Step(1 / TICKS_PER_SEC, vel_iters, pos_iters)
@@ -350,7 +360,7 @@ class PedsMoveEnv(gym.Env):
         # 该环境中智能体是合作关系，因此使用统一奖励为好
         obs, rewards = self.person_handler.step(self.peds, self.group_dic, int(self.step_in_env / self.frame_skipping))
 
-        for ped in self.peds:#在get_rewards之后进行以使到达状态可以被检查
+        for ped in self.peds:  # 在get_rewards之后进行以使到达状态可以被检查
             if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
                 self.delete_person(ped)
                 continue
@@ -368,7 +378,7 @@ class PedsMoveEnv(gym.Env):
         leader_pos = []
         leader_step = []
         for group in self.groups:
-            leader_pos.append(group.leader.pos.tolist()) #添加leader在最后一帧的位置
+            leader_pos.append(group.leader.pos.tolist())  # 添加leader在最后一帧的位置
             leader_step.append(group.leader.exit_in_step)
         info = [
             leader_step,
@@ -380,7 +390,7 @@ class PedsMoveEnv(gym.Env):
 
     def debug_step(self):
         if not self.once:
-            for i,ped in enumerate(self.peds):
+            for i, ped in enumerate(self.peds):
                 print("Agent{}:".format(i))
                 # ped.raycast(self.world, b2Vec2(1,0), test_mode=True)
                 ped.aabb_query(self.world, 1, test_mode=True)

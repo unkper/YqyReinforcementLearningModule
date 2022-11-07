@@ -36,14 +36,14 @@ class Config:
         self.real_ratio = 0.3
         self.model_retain_epochs = 1
 
-        #init bc learn parameter
+        # init bc learn parameter
         self.use_init_bc = True
         self.init_bc_steps = 0
         self.batch_size_d = 128
-        self.lambda1 = 1#0.001
-        self.lambda2 = 1#0.078
+        self.lambda1 = 1# 0.001
+        self.lambda2 = 1# 0.078
 
-        #epsilon-greedy explore param
+        # epsilon-greedy explore param
         self.decaying_epsilon = True
         self.epsilon_high = 1.0
         self.epsilon_low = 0.01
@@ -57,7 +57,8 @@ class Config:
             self.actor_network = MLPNetworkActor
             self.critic_network = MLPNetworkCritic
 
-#从0.1-0.8时刻使用rollout
+
+# 从0.1-0.8时刻使用rollout
 class MPEConfig(Config):
     def __init__(self, n_rol_threads=8, max_episode=100, test=100):
         super().__init__()

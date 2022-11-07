@@ -60,7 +60,7 @@ class PedsRLHandler(PedsHandlerInterface):
             # 定义动作空间为[不动，向左，左上，向上，...]施加相应方向的力
             self.action_space = [Discrete(ACTION_DIM) for _ in range(self.agent_count)]
         else:
-            #定义连续动作空间为[分量x，分量y]施加相应方向的力
+            # 定义连续动作空间为[分量x，分量y]施加相应方向的力
             self.action_space = [Box(-1, 1, (2,)) for _ in range(self.agent_count)]
 
         self.r_arrival = r_arrival
@@ -70,7 +70,7 @@ class PedsRLHandler(PedsHandlerInterface):
         if use_planner:
             self.planner = AStar(self.env.terrain)
             self.planner.calculate_dir_vector()
-            self.exit_kd_trees = dict() #键是leader的id，值是使用A*策略产生的路径
+            self.exit_kd_trees = dict() # 键是leader的id，值是使用A*策略产生的路径
             self.use_planner = False
 
         self.last_observation = {}
@@ -79,7 +79,7 @@ class PedsRLHandler(PedsHandlerInterface):
         for le in self.env.leaders:
             # 得到当前leader起始点到终点的路径，并将其存放在一KDTree中供查询
             pos_x, pos_y = int(le.getX), int(le.getY)
-            exit_pos = self.env.terrain.exits[le.exit_type - 3] #-3的原因是出口从3开始编号
+            exit_pos = self.env.terrain.exits[le.exit_type - 3] # -3的原因是出口从3开始编号
             pa = self.planner.path_matrix_dic[exit_pos][(pos_x, pos_y)]
             if pa == None:
                 raise Exception("Leader 生成点存在问题!")

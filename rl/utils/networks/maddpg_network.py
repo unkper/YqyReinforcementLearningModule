@@ -218,7 +218,7 @@ class MaddpgLstmActor(nn.Module):
             self.fc2.weight.data.uniform_(-EPS, EPS)
             self.out_fc = torch.tanh
 
-    def forward(self,state):
+    def forward(self, state):
         '''
         前向运算，根据状态的特征表示得到具体的行为值
         :param state: 状态的特征表示 Tensor [n,state_dim]

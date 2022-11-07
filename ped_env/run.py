@@ -1,10 +1,12 @@
 import Box2D as b2d
 
+from ped_env.utils.new_map import NewMap
 from ped_env.envs import PedsMoveEnv as Env
 from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
 from ped_env.classes import PedsRLHandler, PedsRLHandlerWithPlanner
+
 
 def HelloWorldProject():
     world = b2d.b2World()
@@ -31,15 +33,16 @@ def HelloWorldProject():
             body.angle
         ))
 
+# 使用随机策略来前往目的地
 def test2():
     import time
     import numpy as np
 
     debug = False
-    save = True
 
     person_num = 40
-    env = Env(map_12, person_num, group_size=(5, 5), frame_skipping=12, maxStep=250, debug_mode=debug, random_init_mode=True)
+    env = Env(map_12, person_num, group_size=(5, 5), frame_skipping=12, maxStep=250, debug_mode=debug,
+              random_init_mode=True)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
 
@@ -98,17 +101,17 @@ def test3():
         endtime = time.time()
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
+
 def test4():
-    #使用连续动作空间的范例（随机策略）
+    # 使用连续动作空间的范例（随机策略）
     import time
     import numpy as np
 
     debug = False
     # test1()
-    person_num = 40
-    env = Env(map_02, person_num, group_size=(5, 5), maxStep=10000, discrete=False, test_mode=debug)
+    person_num = 1
+    env = Env(map_simple, person_num, group_size=(1, 1), maxStep=10000, discrete=False)
     leader_num = env.agent_count
-    # print(obs)
     for epoch in range(1):
         starttime = time.time()
         step = 0
@@ -132,6 +135,8 @@ def test4():
               .format(env.col_with_agent, env.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
+
+# 使用A*策略来前往目的地
 def test5():
     import time
     import numpy as np
@@ -139,7 +144,8 @@ def test5():
     debug = False
 
     person_num = 32
-    env = Env(map_12, person_num, group_size=(4, 4), frame_skipping=8, maxStep=300, debug_mode=debug, random_init_mode=True)
+    env = Env(map_12, person_num, group_size=(4, 4), frame_skipping=8, maxStep=300, debug_mode=debug,
+              random_init_mode=True)
     leader_num = env.agent_count
     policy = AStarPolicy(env.terrain)
 
@@ -163,8 +169,11 @@ def test5():
               .format(env.col_with_agent, env.col_with_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
+
 if __name__ == '__main__':
-    test5()
+    test2()
+
+
 
     # import kdtree
     # points = []

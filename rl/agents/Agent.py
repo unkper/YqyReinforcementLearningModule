@@ -5,7 +5,6 @@ import time
 import gym
 import random
 
-import keyboard
 import numpy as np
 
 from gym import Env
@@ -88,7 +87,6 @@ class Agent():
         self.info_callback_ = None
         self.loss_callback_ = None
         self.save_callback_ = None
-        self.early_stop_callback_ = early_stop_callback
 
         self.init_train_steps = int(init_train_steps)
         self.total_steps_in_train = 0
@@ -108,7 +106,7 @@ class Agent():
         '''
         return random.sample(self.A,k=1)[0]
 
-    def perform_policy(self, s, Q = None,epsilon = 0.05):
+    def perform_policy(self, s, Q = None, epsilon = 0.05):
         '''
         执行自定义的policy后返回动作，通常用于下一状态的估值使用\n
         :param s:
@@ -119,7 +117,7 @@ class Agent():
         action = self.policy(self.A,s,Q,epsilon)
         return int(action)
 
-    def act(self,a0)->tuple:
+    def act(self, a0)->tuple:
         '''
         给出行动a0，执行相应动作并返回参数
         :param a0:
@@ -239,9 +237,6 @@ class Agent():
                 self.loss_callback_(self, loss)
             if self.save_callback_:
                 self.save_callback_(self, num_episode)
-            if self.early_stop_callback_ != None and self.early_stop_callback_(self, episode_reward, i):
-                print("Early stop in {} episode!".format(i))
-                break
 
         #在训练完成后关闭训练环境
         self.env.close()

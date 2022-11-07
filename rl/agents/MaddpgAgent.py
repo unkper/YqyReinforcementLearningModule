@@ -90,7 +90,7 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
                  env_name="training_env",
                  n_steps_train = 3
                  ):
-        '''
+        """
         环境的输入有以下几点变化，设此时有N个智能体：
         状态为(o1,o2,...,oN)
         每个状态o的形状暂定为一样，对于Actor有如下几种情况：
@@ -105,7 +105,7 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
         :param update_frequent:
         :param debug_log_frequent:
         :param gamma:
-        '''
+        """
         if env is None:
             raise Exception("agent should have an environment!")
         super(MADDPGAgent, self).__init__(env, capacity, env_name=env_name, gamma=gamma, n_rol_threads=n_rol_threads)
@@ -133,9 +133,7 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.agents = []
         self.experience = Experience(capacity)
-
         self.n_steps_train = n_steps_train
-
         for i in range(self.env.agent_count):
             ag = DDPGAgent(self.state_dims[i], self.action_dims[i],
                            self.learning_rate, self.discrete, self.device, self.state_dims,
@@ -197,11 +195,11 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
             # 反向梯度下降
             if BC:
                 Q = self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
-                lmbda = self.alpha / Q.abs().mean().detach()
+                _lambda = self.alpha / Q.abs().mean().detach()
                 if self.discrete:
-                    actor_loss = -lmbda * Q.mean() + F.cross_entropy(pred_a, int_a0)
+                    actor_loss = -_lambda * Q.mean() + F.cross_entropy(pred_a, int_a0)
                 else:
-                    actor_loss = -lmbda * Q.mean() + F.mse_loss(pred_a, a0)
+                    actor_loss = -_lambda * Q.mean() + F.mse_loss(pred_a, a0)
                 actor_loss += (curr_pol_out ** 2).mean() * 1e-3
             else:
                 actor_loss = -1 * self.agents[i].critic.forward(s0_critic_in, pred_a).mean()
@@ -213,16 +211,10 @@ class MADDPGAgent(MAAgentMixin, SaveNetworkMixin, Agent):
             self.agents[i].actor_optimizer.step()
             total_actor_loss += actor_loss.item()
 
-            # if self.writer is not None:
-            #     self.writer.add_scalars('agent/losses i' % i,
-            #                        {'vf_loss': critic_loss,
-            #                         'pol_loss': actor_loss},
-            #                        self.total_steps_in_train)
-
             soft_update(self.agents[i].target_actor, self.agents[i].actor, self.tau)
             soft_update(self.agents[i].target_critic, self.agents[i].critic, self.tau)
 
-        return (total_critic_loss, total_actor_loss)
+        return total_critic_loss, total_actor_loss
 
 
 

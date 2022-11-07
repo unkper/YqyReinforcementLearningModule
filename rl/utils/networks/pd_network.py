@@ -67,9 +67,9 @@ class NetApproximator(nn.Module):
             y_pred = self.forward(x)
             loss = criterion(y_pred, y)
 
-    def fit(self,x,y,criterion = None,optimizer = None,
+    def fit(self, x, y, criterion= None, optimizer= None,
             epochs=1, learning_rate=1e-4):
-        '''
+        """
         通过训练更新权值w来拟合给定的输入x和输出y
         :param x:
         :param y:
@@ -78,7 +78,7 @@ class NetApproximator(nn.Module):
         :param epochs:
         :param learning_rate:
         :return:
-        '''
+        """
         if criterion is None:
             self.criterion = torch.nn.MSELoss(size_average=False)
         if optimizer is None:
@@ -204,12 +204,12 @@ class Critic(nn.Module):
         self.action_dim = action_dim
         self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-        self.fcs1 = nn.Linear(state_dim,256) #状态的第一次线性变换
+        self.fcs1 = nn.Linear(state_dim, 256) #状态的第一次线性变换
         self.fcs1.weight.data = random_init(self.fcs1.weight.data.size())
-        self.fcs2 = nn.Linear(256,128) #状态第二次线性变换
+        self.fcs2 = nn.Linear(256, 128) #状态第二次线性变换
         self.fcs2.weight.data = random_init(self.fcs2.weight.data.size())
 
-        self.fca1 = nn.Linear(action_dim,128) # 行为第一次线性变换
+        self.fca1 = nn.Linear(action_dim, 128) # 行为第一次线性变换
         self.fca1.weight.data = fanin_init(self.fca1.weight.data.size())
 
         self.fc2 = nn.Linear(256, 128)  # (􀀎 􀀏+􀀴 􀀕)􀂕 􀁶 􀀉 􀂑 􀂒 􀁊 􀂓 􀀒 􀂖 􀂗 􀁽 􀁾 􀂘
@@ -297,13 +297,13 @@ class SimpleCritic(nn.Module):
 
         self.fc3 = nn.Linear(96, 1)  # (􀀎 􀀏+􀀴 􀀕)􀂕 􀁶 􀀉 􀂑 􀂒 􀁊 􀂓
 
-    def forward(self,state,action:Tensor)-> Tensor:
-        '''
+    def forward(self, state, action: Tensor) -> Tensor:
+        """
         前向运算，根据状态和行为的特征得到评判家给出的价值
         :param state: 状态的特征表示 Tensor [n,state_dim]
         :param action: 行为的特征表示 Tensor [n,action_dim]
         :return: Q(s,a) Tensor [n,1]
-        '''
+        """
         s1 = F.relu(self.fcs1(state))
         a1 = F.relu(self.fca1(action))
         #将状态与行为连接起来
@@ -312,7 +312,7 @@ class SimpleCritic(nn.Module):
         return x
 
 class MLPNetworkCritic(nn.Module):
-    def __init__(self,state_dims:list,action_dims:list):
+    def __init__(self, state_dims:list, action_dims:list):
         super(MLPNetworkCritic, self).__init__()
         input_dim = sum(state_dims) + sum(action_dims)
 
@@ -329,7 +329,7 @@ class MLPNetworkCritic(nn.Module):
         return h3
 
 class MLPNetworkActor(nn.Module):
-    def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64,norm_in = True):
+    def __init__(self, state_dim, action_dim, discrete, hidden_dim = 64, norm_in = True):
         '''
         构建一个演员模型
         :param state_dim: 状态的特征数量 (int)

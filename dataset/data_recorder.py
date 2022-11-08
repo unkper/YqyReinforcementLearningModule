@@ -1,3 +1,4 @@
+import copy
 import os.path
 import pickle
 import time
@@ -8,6 +9,7 @@ import gym
 import numpy as np
 from d3rlpy.datasets import MDPDataset
 from tqdm import tqdm
+from multiprocessing import Process, Manager
 
 
 class DataRecorder:
@@ -46,6 +48,41 @@ class DataRecorder:
         is_terminal = np.array(is_terminal)
         return MDPDataset(next_observations, all_actions, all_rewards, is_terminal)
 
+    def save(self, path="./"):
+        if self.dataset is None:
+            raise Exception()
+        now = datetime.now()
+        if not os.path.exists("./datasets"):
+            os.mkdir("./datasets")
+        with open(path + "datasets/dataset_" + now.strftime("%Y_%m_%d_%H_%M_%S") + ".pkl", "wb") as f:
+            pickle.dump(self.dataset, f)
+
+
+def wrapper_func(recorder: DataRecorder, episode, manager):
+    manager.append(recorder.collect(episode))
+
+
+
+class MultiProcessRecorder:
+    def __init__(self, data_recorder, num_of_process):
+        self.recorders = []
+        self.data_recorder = data_recorder
+        self.num_of_process = num_of_process
+
+    def collect(self, episode):
+        with Manager() as manager:
+            datasets = manager.list()
+            for i in range(self.num_of_process):
+                p = Process(target=wrapper_func, args=(copy.deepcopy(self.data_recorder), episode, datasets))
+                p.start()
+                self.recorders.append(p)
+            for process in self.recorders:
+                process.join()
+            ans = []
+            for ele in datasets:
+                ans.append(ele)
+        return ans
+
     def save(self, datasets: List[MDPDataset], path="./"):
         if len(datasets) > 1:
             dataset = datasets[0]
@@ -54,14 +91,12 @@ class DataRecorder:
         else:
             dataset = datasets[0]
         now = datetime.now()
-        if os.path.exists("./datasets"):
+        if not os.path.exists("./datasets"):
             os.mkdir("./datasets")
-        with open(path + "./datasets/dataset_" + now.strftime("%Y_%m_%d_%H_%M_%S") + ".pkl", "wb") as f:
+        with open(path + "datasets/dataset_" + now.strftime("%Y_%m_%d_%H_%M_%S") + ".pkl", "wb") as f:
             pickle.dump(dataset, f)
 
 
 def load_dataset(path) -> MDPDataset:
     f = open(path, "rb")
     return pickle.load(f)
-
-

@@ -12,12 +12,22 @@ def test1():
     from data_recorder import DataRecorder
     policy = RandomPolicy(np.array([2]))
     recorder = DataRecorder(env, policy, 40)
-    dataset = [recorder.collect(1)]
-    recorder.save(dataset)
+    recorder.save()
+
+
+def test3():
+    env = PedsMoveEnv(map_11, 40, (1, 1), discrete=False)
+    from random_policy import RandomPolicy
+    from data_recorder import DataRecorder, MultiProcessRecorder
+    policy = RandomPolicy(np.array([2]))
+    recorder = DataRecorder(env, policy, 40)
+    mult = MultiProcessRecorder(recorder, 5)
+    dataset = mult.collect(1)
+    mult.save(dataset)
 
 
 def test2():
-    dataset = load_dataset("./dataset_2022_11_07_21_34_05.pkl")
+    dataset = load_dataset("./datasets/dataset_2022_11_08_21_09_49.pkl")
 
     # prepare algorithm
     cql = d3rlpy.algos.CQL(use_gpu=False)
@@ -33,5 +43,5 @@ def test2():
 
     cql.save_model("model")
 
-
-test2()
+if __name__ == '__main__':
+    test2()

@@ -38,6 +38,7 @@ def test2():
         n_epochs=100,
         scorers={
             'td_error': d3rlpy.metrics.td_error_scorer,
+            'value_scale':d3rlpy.metrics.average_value_estimation_scorer
         },
     )
 

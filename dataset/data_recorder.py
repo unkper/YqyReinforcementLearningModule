@@ -46,7 +46,7 @@ class DataRecorder:
         next_observations = np.array(next_observations)
         all_rewards = np.array(all_rewards)
         is_terminal = np.array(is_terminal)
-        return MDPDataset(next_observations, all_actions, all_rewards, is_terminal)
+        return MDPDataset(observations, all_actions, all_rewards, is_terminal)
 
     def save(self, path="./"):
         if self.dataset is None:
@@ -54,8 +54,8 @@ class DataRecorder:
         now = datetime.now()
         if not os.path.exists("./datasets"):
             os.mkdir("./datasets")
-        with open(path + "datasets/dataset_" + now.strftime("%Y_%m_%d_%H_%M_%S") + ".pkl", "wb") as f:
-            pickle.dump(self.dataset, f)
+        save_path = path + "datasets/dataset_" + now.strftime("%Y_%m_%d_%H_%M_%S") + ".h5"
+        self.dataset.dump(save_path)
 
 
 def wrapper_func(recorder: DataRecorder, episode, manager):
@@ -98,5 +98,4 @@ class MultiProcessRecorder:
 
 
 def load_dataset(path) -> MDPDataset:
-    f = open(path, "rb")
-    return pickle.load(f)
+    return MDPDataset.load(path)

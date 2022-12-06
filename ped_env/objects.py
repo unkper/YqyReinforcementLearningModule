@@ -17,6 +17,7 @@ from ped_env.utils.colors import ColorRed, exit_type_to_color, ColorYellow
 from ped_env.functions import transfer_to_render, normalized, ij_power
 from ped_env.utils.misc import FixtureInfo, ObjectType
 
+
 class Agent():
 
     @property
@@ -30,11 +31,13 @@ class Agent():
     def self_driven_force(self, force):
         raise NotImplemented
 
+
 class PersonState(enum.Enum):
     walk_to_goal = 1
     follow_leader = 2
     route_to_leader = 3
     route_to_exit = 4
+
 
 # 通过射线得到8个方向上的其他行人与障碍物
 # 修复bug:未按照弧度值进行旋转
@@ -48,13 +51,14 @@ for angle in range(0, 360, int(360 / 8)):
     vec = b2Mul(mat, identity)
     DIRECTIONS.append(vec)
 
+
 class Person(Agent):
     body = None
     box = None
 
     radius = 0.4 / 2  # 设置所有行人直径为0.4米
-    mass = 64 # 设置所有行人的质量为64kg
-    alpha = 0.5 # alpha * control_dir + (1 - alpha) * leader_dir
+    mass = 64  # 设置所有行人的质量为64kg
+    alpha = 0.5  # alpha * control_dir + (1 - alpha) * leader_dir
     A = 2000
     B = -0.08
     tau = 0.5
@@ -64,7 +68,7 @@ class Person(Agent):
     counter = 0  # 用于记录智能体编号
     body_pic = None
 
-    a_star_path = None # 用于follow在找不到路时的A*策略使用
+    a_star_path = None  # 用于follow在找不到路时的A*策略使用
 
     def __init__(self,
                  env: b2World,
@@ -73,9 +77,9 @@ class Person(Agent):
                  exit_type,
                  display_level,
                  debug_level,
-                 desired_velocity = 2.4,
-                 view_length = 5.0):
-        '''
+                 desired_velocity=2.4,
+                 view_length=5.0):
+        """
 
         暂定观察空间为8个方向的射线传感器（只探测墙壁）与8个方向的射线传感器（只探测其他行人）与导航力的方向以及与终点的距离，类型为Box(-inf,inf,(18,))，
         动作空间当为离散空间时为类型为Discrete(5)代表不移动，向左，向右，向上，向下走，奖励的设置为碰到墙壁
@@ -91,7 +95,7 @@ class Person(Agent):
         :param max_velocity:
         :param view_length: 智能体最远能观察到的距离
         :param tau: 社会力模型中关于地面摩擦和自驱动力的参数
-        '''
+        """
         super(Person, self).__init__()
         self.body = env.CreateDynamicBody(position=(new_x, new_y))
         self.exit_type = exit_type
@@ -104,14 +108,14 @@ class Person(Agent):
         fixtureDef = b2FixtureDef()
         fixtureDef.shape = b2CircleShape(radius=self.radius)
         fixtureDef.density = self.mass / (math.pi * self.radius ** 2)
-        fixtureDef.friction = 0.1 #指的是行人与墙以及其他行人间的摩擦
+        fixtureDef.friction = 0.1  # 指的是行人与墙以及其他行人间的摩擦
         fixtureDef.userData = FixtureInfo(Person.counter, self, ObjectType.Agent)
         self.id = Person.counter
         Person.counter += 1
         self.box = self.body.CreateFixture(fixtureDef)
-        #添加传感器用于社会力控制
+        # 添加传感器用于社会力控制
         sensorDef = b2FixtureDef()
-        sensorDef.shape = b2CircleShape(radius=self.radius+1) #探测范围为1m
+        sensorDef.shape = b2CircleShape(radius=self.radius + 1)  # 探测范围为1m
         sensorDef.isSensor = True
         sensorDef.userData = FixtureInfo(self.id, self, ObjectType.Sensor)
         self.sensor = self.body.CreateFixture(sensorDef)
@@ -124,13 +128,13 @@ class Person(Agent):
 
         self.collide_obstacles = {}
         self.collide_agents = {}
-        #此处指智能体的检测器和墙相撞
+        # 此处指智能体的检测器和墙相撞
         self.detected_obstacles = {}
         self.detected_agents = {}
 
         self.is_leader = False
 
-        #利用以空间换时间的方法，x,y每step更新一次
+        # 利用以空间换时间的方法，x,y每step更新一次
         self.x = self.body.position.x
         self.y = self.body.position.y
         self.pos = np.array([self.getX, self.getY])
@@ -151,7 +155,7 @@ class Person(Agent):
 
         self.exit_in_step = -1
 
-    def update(self, exits, step_in_env, map:ndarray):
+    def update(self, exits, step_in_env, map: ndarray):
         if self.is_done and self.has_removed:
             self.x, self.y = 0, 0
             self.pos = np.array([0, 0])
@@ -174,7 +178,8 @@ class Person(Agent):
 
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
-        #print("Agent angle:{}".format(math.degrees(self.body.angle) % 360))
+
+        # print("Agent angle:{}".format(math.degrees(self.body.angle) % 360))
         if test_mode:
             pass
         self.body_pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
@@ -189,18 +194,20 @@ class Person(Agent):
         # self.head = pyglet.shapes.Triangle(x1 * render_scale, y1 * render_scale, x2 * render_scale, y2 * render_scale,
         #                                    x3 * render_scale, y3 * render_scale, batch=batch, group=self.debug_level, color=self.color)
         if self.is_leader:
-            self.leader_pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
-                                        self.radius * 0.3 * render_scale,
-                                        color=ColorYellow if self.color != ColorYellow else ColorRed,
-                                        batch=batch, group=self.debug_level)
+            self.leader_pic = pyglet.shapes.Star(x * render_scale, y * render_scale,
+                                                   self.radius * 0.6 * render_scale,
+                                                   self.radius * 0.4 * render_scale,
+                                                   5,
+                                                   color=ColorYellow if self.color != ColorYellow else ColorRed,
+                                                   batch=batch, group=self.debug_level)
 
     def self_driven_force(self, direction):
-        #给行人施加自驱动力，力的大小为force * self.desired_velocity * self.mass / self.tau
+        # 给行人施加自驱动力，力的大小为force * self.desired_velocity * self.mass / self.tau
         d_v = direction * self.desired_velocity
         applied_force = (d_v - self.vec) * self.mass / self.tau
         self.total_force += applied_force
 
-    #社会力模型添加
+    # 社会力模型添加
     def fij_force(self, peds, group):
         detect_persons = list(self.detected_agents.values())
         total_force = b2Vec2(0, 0)
@@ -209,7 +216,7 @@ class Person(Agent):
                 continue
             pos, next_pos = (self.getX, self.getY), (ped.getX, ped.getY)
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
-            fij = self.A * math.exp((dis - self.radius - ped.radius)/self.B)
+            fij = self.A * math.exp((dis - self.radius - ped.radius) / self.B)
             if ped in group:
                 fij *= 0.2
             total_force += b2Vec2(fij * (pos[0] - next_pos[0]), fij * (pos[1] - next_pos[1]))
@@ -222,7 +229,7 @@ class Person(Agent):
         for obs in detect_things:
             pos, next_pos = (self.getX, self.getY), (obs.getX, obs.getY)
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
-            fiw = self.A * math.exp((dis - self.radius - 0.5) / self.B) #因为每块墙的大小都为1*1m
+            fiw = self.A * math.exp((dis - self.radius - 0.5) / self.B)  # 因为每块墙的大小都为1*1m
             total_force += b2Vec2(fiw * (pos[0] - next_pos[0]), fiw * (pos[1] - next_pos[1]))
         self.fiw_force_last_eps = total_force
         self.total_force += total_force
@@ -233,13 +240,13 @@ class Person(Agent):
         total_ij_group_f = group.get_group_force(self)
         self.total_force += total_ij_group_f
 
-    def aabb_query(self, world, size, detect_type:ObjectType = ObjectType.Agent, test_mode=False):
-        '''
+    def aabb_query(self, world, size, detect_type: ObjectType = ObjectType.Agent, test_mode=False):
+        """
         进行以自己为中心，size大小的正方形区域检测
         :param world:
         :param size:
         :return:
-        '''
+        """
         x, y = self.getX, self.getY
 
         callback = self.aabb_callback
@@ -248,12 +255,12 @@ class Person(Agent):
         callback.detect_objects = []
 
         aabb = b2AABB()
-        aabb.lowerBound = b2Vec2(x - size/2,y - size/2) #左上角坐标
-        aabb.upperBound = b2Vec2(x + size/2,y + size/2) #右下角坐标
+        aabb.lowerBound = b2Vec2(x - size / 2, y - size / 2)  # 左上角坐标
+        aabb.upperBound = b2Vec2(x + size / 2, y + size / 2)  # 右下角坐标
         world.QueryAABB(callback, aabb)
         return callback.detect_objects
 
-    def objects_query(self, objects:List, size, conditionFunc = lambda self, obj:True):
+    def objects_query(self, objects: List, size, conditionFunc=lambda self, obj: True):
         pos = (self.getX, self.getY)
         detect_objects = []
         for obj in objects:
@@ -263,7 +270,7 @@ class Person(Agent):
                 detect_objects.append(obj)
         return detect_objects
 
-    def raycast(self, world:b2World, direction: b2Vec2, length = 5.0, test_mode=False):
+    def raycast(self, world: b2World, direction: b2Vec2, length=5.0, test_mode=False):
         x, y = self.getX, self.getY
         start_point = b2Vec2(x, y)
         end_point = start_point + direction * length
@@ -274,13 +281,13 @@ class Person(Agent):
         world.RayCast(callback, start_point, end_point)
         return callback.obs
 
-    def delete(self, env:b2World):
+    def delete(self, env: b2World):
         if self.body_pic != None:
             self.body_pic.delete()
-            del (self.body_pic)
+            del self.body_pic
             if self.is_leader:
                 self.leader_pic.delete()
-                del (self.leader_pic)
+                del self.leader_pic
         env.DestroyBody(self.body)
         self.has_removed = True
 
@@ -299,8 +306,9 @@ class Person(Agent):
     def getY(self):
         return self.y
 
+
 class AABBCallBack(b2QueryCallback):
-    def __init__(self, agent:Person):
+    def __init__(self, agent: Person):
         super(AABBCallBack, self).__init__()
         self.agent = agent
         self.d_type = None
@@ -308,11 +316,12 @@ class AABBCallBack(b2QueryCallback):
         self.detect_objects = []
 
     def ReportFixture(self, fixture: b2Fixture):
-        query_agent = (self.d_type == ObjectType.Agent and fixture.userData.id != self.agent.id and fixture.userData.type == ObjectType.Agent)
+        query_agent = (
+                    self.d_type == ObjectType.Agent and fixture.userData.id != self.agent.id and fixture.userData.type == ObjectType.Agent)
         query_obstacle = (self.d_type == ObjectType.Obstacle and fixture.userData.type == ObjectType.Obstacle)
         query_wall = (self.d_type == ObjectType.Wall and fixture.userData.type == ObjectType.Wall)
         query_exit = ((self.d_type == ObjectType.Exit and fixture.userData.type == ObjectType.Exit
-                       and self.agent.exit_type != fixture.userData.env.exit_type)) #当出口不是自己的才有排斥力
+                       and self.agent.exit_type != fixture.userData.env.exit_type))  # 当出口不是自己的才有排斥力
         if query_agent or query_obstacle or query_wall or query_exit:  # 当
             pos = (self.agent.getX, self.agent.getY)
             next_pos = (fixture.userData.env.getX, fixture.userData.env.getY)
@@ -321,8 +330,9 @@ class AABBCallBack(b2QueryCallback):
                 self.detect_objects.append(fixture.userData.env)
         return True
 
+
 class RaycastCallBack(b2RayCastCallback):
-    def __init__(self, agent:Person):
+    def __init__(self, agent: Person):
         super().__init__()
         self.obs = None
         self.agent = agent
@@ -334,6 +344,7 @@ class RaycastCallBack(b2RayCastCallback):
         obs = ((point[0] - pos[0]) ** 2 + (point[1] - pos[1]) ** 2) ** 0.5
         self.obs = min(5.0, self.obs, obs)
         return fraction
+
 
 class BoxWall():
     body = None
@@ -369,7 +380,7 @@ class BoxWall():
         self.pic = pyglet.shapes.Rectangle(x, y, width, height, self.color, batch, group=self.display_level)
 
     def delete(self):
-        del(self)
+        del (self)
 
     @property
     def getX(self):
@@ -381,6 +392,7 @@ class BoxWall():
 
     def __repr__(self):
         return "BoxWall{}".format(self.id)
+
 
 class Exit(BoxWall):
     counter = 0
@@ -399,10 +411,15 @@ class Exit(BoxWall):
 
         self.exit_type = exit_type
 
-class Group():
+    def __repr__(self):
+        return "Exit{}".format(self.id)
+
+
+class Group:
     counter = 0
     group_force_magnitude_dic = defaultdict(float)
-    def __init__(self, leader:Person, followers:List[Person]):
+
+    def __init__(self, leader: Person, followers: List[Person]):
         self.id = Group.counter
         Group.counter += 1
         Group.get_gp_magnitude()
@@ -413,7 +430,7 @@ class Group():
         self.members = followers.copy()
         self.members.append(leader)
         self.members_set = set(self.members)
-        self.dir_force_dic = defaultdict(lambda : defaultdict(float))
+        self.dir_force_dic = defaultdict(lambda: defaultdict(float))
         self.group_center = self.__get_group_center()
         self._get_group_force_dis_nij()
 
@@ -425,6 +442,9 @@ class Group():
             Group.group_force_magnitude_dic[r] = ij_power(r)
 
     def is_done(self):
+        """
+        判断智能体是否到达终点
+        """
         is_done = True and self.leader.is_done
         for ped in self.followers:
             is_done = is_done and ped.is_done
@@ -439,10 +459,11 @@ class Group():
         self.followers.append(last_leader)
         last_leader.is_leader = False
 
-    def __get_distance(self, a, b):
+    @classmethod
+    def __get_distance(cls, a, b):
         ax, ay = a.getX, a.getY
         bx, by = b[0], b[1]
-        return ((ax - bx)**2 + (ay - by)**2)**0.5
+        return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
 
     def __get_group_center(self):
         center_x, center_y = self.leader.getX, self.leader.getY
@@ -456,14 +477,16 @@ class Group():
     def __get_nij(self, target, now):
         return normalized(target - now.pos)
 
-    def get_distance_to_leader(self, ped:Person):
+    def get_distance_to_leader(self, ped: Person):
         lx, ly = self.leader.getX, self.leader.getY
         gx, gy = ped.getX, ped.getY
         return ((lx - gx) ** 2 + (ly - gy) ** 2) ** 0.5
 
+    #通过设置这个值来决定智能体跟随leader的点位
     LEADER_BEHIND_DIST = 0.25
+
     def _get_group_force_dis_nij(self):
-        #先计算leader身后一定间距的点与各个follower的间距
+        # 先计算leader身后一定间距的点与各个follower的间距
         lv, lpos = self.leader.vec, self.leader.pos
         fpos = lpos - lv * Group.LEADER_BEHIND_DIST
         for follower in self.followers:
@@ -474,7 +497,7 @@ class Group():
         self.group_center = self.__get_group_center()
         self._get_group_force_dis_nij()
 
-    def get_group_force(self, follower:Person):
+    def get_group_force(self, follower: Person):
         if follower not in self.followers_set:
             raise Exception("跟随者")
         nij, dis = self.dir_force_dic[follower][self.leader]
@@ -484,15 +507,8 @@ class Group():
     def __contains__(self, item):
         return item in self.members_set
 
+    def __repr__(self):
+        return "Group{}".format(self.id)
+
     # def setup(self, batch, render_scale):
     #     self.pic = pyglet.shapes.Circle(self.group_center[0], self.group_center[1], 0.5, color=(0, 0, 255), batch=batch)
-
-
-
-
-
-
-
-
-
-

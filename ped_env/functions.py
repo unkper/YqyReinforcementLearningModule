@@ -1,10 +1,21 @@
 import random
+from typing import List
 
 import numpy as np
 
 from math import cos, sin
 
 ACTION_DIM = 8
+
+
+def calculate_groups_person_num(env, person_num_sum) -> List:
+    reminder = person_num_sum % len(env.terrain.start_points)
+    person_num_in_every_spawn = person_num_sum // len(env.terrain.start_points) \
+        if person_num_sum >= len(env.terrain.start_points) else 1
+    person_num = [person_num_in_every_spawn
+                  for _ in range(len(env.terrain.start_points))]
+    person_num[-1] += reminder
+    return person_num
 
 
 def transfer_to_render(x, y, X, Y, scale=10.0):

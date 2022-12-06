@@ -1,5 +1,6 @@
 import enum
 
+
 class ObjectType(enum.Enum):
     Agent = 1
     Wall = 2
@@ -7,8 +8,9 @@ class ObjectType(enum.Enum):
     Exit = 4
     Sensor = 5
 
+
 class FixtureInfo():
-    def __init__(self, id:int, model:object, type:ObjectType):
+    def __init__(self, id: int, model: object, type: ObjectType):
         self.id = id
         self.model = model
         self.type = type
@@ -16,16 +18,19 @@ class FixtureInfo():
     def __str__(self):
         return str(self.type) + str(self.id)
 
+
 if __name__ == '__main__':
     class obj:
         def __init__(self, v):
             self.val = v
 
         def __repr__(self):
-            return "obj:"+str(self.val)
+            return "obj:" + str(self.val)
 
         def str(self):
             return "obj:" + str(self.val)
+
+
     li = []
     for i in range(10):
         li.append(obj(i))
@@ -34,8 +39,6 @@ if __name__ == '__main__':
     del li_3
     print(li)
     print(li_3)
-
-
 
 # counter = 0
 # vecs = []
@@ -50,7 +53,6 @@ if __name__ == '__main__':
 # if self.step_in_env % 200 == 0:
 #     print("智能体平均速度为{}".format([x/200 for x in self.vec]))
 #     self.vec = [0.0 for _ in range(len(self.peds))]
-
 
 
 # def fraction_force(self):
@@ -369,4 +371,3 @@ if __name__ == '__main__':
 #                 else:
 #                     lr += self.r_wait  # 给予停止不动的行人以惩罚
 #         return gr, lr
-

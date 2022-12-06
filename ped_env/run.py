@@ -5,7 +5,7 @@ from ped_env.envs import PedsMoveEnv as Env
 from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
-from ped_env.classes import PedsRLHandler, PedsRLHandlerWithPlanner
+from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner
 
 
 def HelloWorldProject():
@@ -41,7 +41,7 @@ def test2():
     debug = False
 
     person_num = 40
-    env = Env(map_12, person_num, group_size=(5, 5), frame_skipping=12, maxStep=250, debug_mode=debug,
+    env = Env(map_12, person_num, group_size=(1, 1), frame_skipping=12, maxStep=3000, debug_mode=debug,
               random_init_mode=True)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
@@ -66,7 +66,7 @@ def test2():
         handler.reset(info)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.col_with_agent, env.col_with_wall))
+              .format(env.collision_between_agents, env.collide_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
     handler.save("./")
 
@@ -132,7 +132,7 @@ def test4():
             # print(obs, reward, is_done)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.col_with_agent, env.col_with_wall))
+              .format(env.collision_between_agents, env.collide_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 
@@ -166,12 +166,12 @@ def test5():
                 step += env.frame_skipping
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.col_with_agent, env.col_with_wall))
+              .format(env.collision_between_agents, env.collide_wall))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
 
 
 if __name__ == '__main__':
-    test4()
+    test2()
 
 
 

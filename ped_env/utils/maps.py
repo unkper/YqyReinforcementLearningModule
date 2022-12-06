@@ -3,7 +3,7 @@ from numpy import flipud
 from random import sample
 
 
-class Map():
+class Map:
     def __init__(self, map: np.ndarray, exits: list, start_points: list, random_exits: list, name, radius,
                  map_spawn: np.ndarray):
         # 对地图进行翻转操作

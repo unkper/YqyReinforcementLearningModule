@@ -9,9 +9,9 @@ import pyglet
 import numpy as np
 
 from Box2D import (b2World, b2Vec2)
-from typing import List, Tuple, Dict
+from typing import Tuple, Dict
 
-from ped_env.classes import ACTION_DIM, PedsRLHandler, PedsRLHandlerWithPlanner
+from ped_env.mdp import ACTION_DIM, PedsHandlerInterface, PedsRLHandlerWithPlanner, PedsRLHandlerWithoutForce
 from ped_env.pathfinder import AStar
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
@@ -19,7 +19,7 @@ from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
 from ped_env.utils.misc import ObjectType
 from ped_env.utils.maps import Map
 from ped_env.utils.viewer import PedsMoveEnvViewer
-from ped_env.functions import calculate_each_group_num
+from ped_env.functions import calculate_each_group_num, calculate_groups_person_num
 
 TICKS_PER_SEC = 50
 vel_iters, pos_iters = 6, 2
@@ -111,16 +111,16 @@ class PedsMoveEnv(gym.Env):
     def __init__(self,
                  terrain: Map,
                  person_num=10,
-                 group_size: Tuple = (1, 6),
+                 group_size: Tuple = (1, 1),
                  discrete=True,
                  frame_skipping=8,
                  maxStep=3000,
-                 person_handler=PedsRLHandlerWithPlanner,
+                 person_handler: PedsHandlerInterface = PedsRLHandlerWithoutForce,
                  use_planner=False,
                  random_init_mode: bool = False,
                  train_mode: bool = True,
                  debug_mode: bool = False):
-        '''
+        """
         一个基于Box2D和pyglet的多行人强化学习仿真环境
         对于一个有N个人的环境，其状态空间为：[o1,o2,...,oN]，每一个o都是一个长度为14的list，其代表的意义为：
         [智能体编号,8个方向的传感器值,智能体当前位置,智能体当前速度,当前步数]，动作空间为[a1,a2,...,aN]，其中a为Discrete(9)
@@ -132,12 +132,12 @@ class PedsMoveEnv(gym.Env):
         :param discrete: 动作空间是否离散，连续时针对每一个智能体必须输入一个二维单位方向向量（注意！）
         :param frame_skipping: 一次step跳过的帧数，等于一次step环境经过frame_skipping * 1 / TICKS_PER_SEC(50)秒
         :param maxStep: 经过多少次step后就强行结束环境，所有行人到达终点时也会结束环境
-        :param PersonHandler: 用于处理有关于行人状态空间，动作与返回奖励的类
+        :param person_handler: 用于处理有关于行人状态空间，动作与返回奖励的类
         :param random_init_mode:用于planner的规划时使用，主要区别是在全场随机生成智能体
         :param train_mode: 当为False时，直到所有行人到达出口才会重置环境，当为True时，一旦所有leader到达出口才会重置环境
         :param debug_mode: 是否debug
         :param group_size:一个团体的人数，其中至少包含1个leader和多个follower
-        '''
+        """
         super(PedsMoveEnv, self).__init__()
 
         self.random_init_mode = random_init_mode
@@ -164,8 +164,8 @@ class PedsMoveEnv(gym.Env):
 
         self.left_leader_num = self.agent_count
 
-        self.col_with_agent = 0
-        self.col_with_wall = 0
+        self.collision_between_agents = 0
+        self.collide_wall = 0
 
         # for raycast and aabb_query debug
         self.train_mode = train_mode
@@ -173,7 +173,6 @@ class PedsMoveEnv(gym.Env):
         self.vec = [0.0 for _ in range(self.agent_count)]
 
         self.path_finder = AStar(self.terrain)
-        # assert group_size[1] <= 6_map11_use
 
     def start(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
         # 创建物理引擎
@@ -219,12 +218,7 @@ class PedsMoveEnv(gym.Env):
         self.peds = []
         self.group_dic = {}
         self.groups = []
-        reminder = person_num_sum % len(self.terrain.start_points)
-        person_num_in_every_spawn = person_num_sum // len(self.terrain.start_points) \
-            if person_num_sum >= len(self.terrain.start_points) else 1
-        person_num = [person_num_in_every_spawn
-                      for _ in range(len(self.terrain.start_points))]
-        person_num[-1] += reminder
+        person_num = calculate_groups_person_num(self, person_num_sum)
         for i, num in enumerate(person_num):
             if not self.debug_mode and not self.random_init_mode:
                 self.peds.extend(
@@ -298,7 +292,7 @@ class PedsMoveEnv(gym.Env):
     def get_ped_rel_pos_to_exit(self, person_pos, exit_type):
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
         x, y = person_pos
-        return (ex - x, ey - y)
+        return ex - x, ey - y
 
     def reset(self):
         # reset ped_env,清空所有全局变量以供下一次使用
@@ -306,7 +300,7 @@ class PedsMoveEnv(gym.Env):
         BoxWall.counter = 0
         Exit.counter = 0
         Group.counter = 0
-        self.col_with_wall = self.col_with_agent = 0
+        self.collide_wall = self.collision_between_agents = 0
         self.step_in_env = 0
         self.peds.clear()
         self.not_arrived_peds.clear()
@@ -360,12 +354,17 @@ class PedsMoveEnv(gym.Env):
         # 该环境中智能体是合作关系，因此使用统一奖励为好
         obs, rewards = self.person_handler.step(self.peds, self.group_dic, int(self.step_in_env / self.frame_skipping))
 
+        for idx, group in enumerate(self.groups):
+            if group.leader.is_done:
+                is_done[idx] = True
+
         for ped in self.peds:  # 在get_rewards之后进行以使到达状态可以被检查
             if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
                 self.delete_person(ped)
                 continue
 
         if planning_mode and self.left_leader_num < self.agent_count:
+            # 在planning_mode下，一旦有leader到达出口就终止
             is_done = [True for _ in range(self.agent_count)]
 
         if (not self.train_mode and self.left_person_num == 0) or (self.train_mode and self.left_leader_num == 0):
@@ -382,8 +381,8 @@ class PedsMoveEnv(gym.Env):
             leader_step.append(group.leader.exit_in_step)
         info = [
             leader_step,
-            self.col_with_wall,
-            self.col_with_agent,
+            self.collide_wall,
+            self.collision_between_agents,
             leader_pos
         ]
         return obs, rewards, is_done, info
@@ -406,4 +405,3 @@ class PedsMoveEnv(gym.Env):
         if self.viewer is not None:
             self.viewer.close()
             self.viewer = None
-

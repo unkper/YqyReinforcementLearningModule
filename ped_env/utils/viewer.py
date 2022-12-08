@@ -5,7 +5,8 @@ import Box2D as b2d
 
 import pyglet
 
-TICKS_PER_SEC = 50
+from ped_env.settings import TICKS_PER_SEC
+
 
 class PedsMoveEnvViewer(pyglet.window.Window):
     def __init__(self, env):
@@ -30,7 +31,7 @@ class PedsMoveEnvViewer(pyglet.window.Window):
         self.switch_to()
         self.dispatch_events()
         self.dispatch_event('on_draw')
-        #self.dispatch_event('on_key_press')
+        # self.dispatch_event('on_key_press')
         self.flip()
 
     def on_key_press(self, symbol, modifiers):
@@ -49,6 +50,7 @@ class PedsMoveEnvViewer(pyglet.window.Window):
         else:
             self.set_caption("行人行走模拟环境,当前时间:{}".format(time_in_env))
             time.sleep(self.cor_frame_time - dt)
+
 
 class PedsMoveEnvViewerWithBuffer(pyglet.window.Window):
     def __init__(self, model):

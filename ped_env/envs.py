@@ -1,17 +1,19 @@
 import copy
 import math
 import random
-from collections import defaultdict
-from math import sqrt, pow
+
 
 import gym
 import pyglet
 import numpy as np
 
+from math import sqrt, pow
+
 from Box2D import (b2World, b2Vec2)
 from typing import Tuple, Dict
+from collections import defaultdict
 
-from ped_env.mdp import ACTION_DIM, PedsHandlerInterface, PedsRLHandlerWithPlanner, PedsRLHandlerWithoutForce
+from ped_env.mdp import PedsHandlerInterface, PedsRLHandlerWithPlanner, PedsRLHandlerWithoutForce
 from ped_env.pathfinder import AStar
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
@@ -20,13 +22,10 @@ from ped_env.utils.misc import ObjectType
 from ped_env.utils.maps import Map
 from ped_env.utils.viewer import PedsMoveEnvViewer
 from ped_env.functions import calculate_each_group_num, calculate_groups_person_num
-
-TICKS_PER_SEC = 50
-vel_iters, pos_iters = 6, 2
+from ped_env.settings import TICKS_PER_SEC, vel_iters, pos_iters, ACTION_DIM, GROUP_SIZE
 
 
-class PedsMoveEnvFactory():
-    GROUP_SIZE = 0.5
+class Spawner:
 
     def __init__(self, world: b2World, l1, l2):
         self.world = world
@@ -42,6 +41,72 @@ class PedsMoveEnvFactory():
             return [CreateClass(self.world, start_nodes[i][0],
                                 start_nodes[i][1], width_height[0],
                                 width_height[1], self.l1, object_type, color) for i in range(len(start_nodes))]
+
+    def create_wall_extra(self, wall_info, color=ColorWall):
+        walls = []
+        for info in wall_info:
+            if len(info) == 2:
+                start_node, type = info
+            else:
+                start_node, next_start_node, type = info
+            if type == 'box':
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.BOX_WALL_WIDTH, BoxWall.BOX_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "lwall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_WIDTH, BoxWall.PIECE_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "rwall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_WIDTH, BoxWall.PIECE_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "uwall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_HEIGHT, BoxWall.PIECE_WALL_WIDTH,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "dwall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_HEIGHT, BoxWall.PIECE_WALL_WIDTH,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "midrow_wall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_HEIGHT, BoxWall.PIECE_WALL_WIDTH,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "midcolumn_wall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_WIDTH, BoxWall.PIECE_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "cornor_left_up_wall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_WIDTH, BoxWall.PIECE_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+                walls.append(BoxWall(self.world, next_start_node[0], next_start_node[1],
+                                     BoxWall.PIECE_WALL_HEIGHT, BoxWall.PIECE_WALL_WIDTH,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "cornor_left_down_wall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_WIDTH, BoxWall.PIECE_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+                walls.append(BoxWall(self.world, next_start_node[0], next_start_node[1],
+                                     BoxWall.PIECE_WALL_HEIGHT, BoxWall.PIECE_WALL_WIDTH,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "cornor_right_up_wall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_WIDTH, BoxWall.PIECE_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+                walls.append(BoxWall(self.world, next_start_node[0], next_start_node[1],
+                                     BoxWall.PIECE_WALL_HEIGHT, BoxWall.PIECE_WALL_WIDTH,
+                                     self.l1, ObjectType.Wall, color))
+            elif type == "cornor_right_down_wall":
+                walls.append(BoxWall(self.world, start_node[0], start_node[1],
+                                     BoxWall.PIECE_WALL_WIDTH, BoxWall.PIECE_WALL_HEIGHT,
+                                     self.l1, ObjectType.Wall, color))
+                walls.append(BoxWall(self.world, next_start_node[0], next_start_node[1],
+                                     BoxWall.PIECE_WALL_HEIGHT, BoxWall.PIECE_WALL_WIDTH,
+                                     self.l1, ObjectType.Wall, color))
+        return walls
+
 
     def create_people(self, start_nodes, exit_type, test_mode=False):
         '''
@@ -60,17 +125,6 @@ class PedsMoveEnvFactory():
             start_pos.append((new_x, new_y))
         return self.create_people(start_pos, exit_type, test_mode)
 
-    def set_group_process(self, group, groups, group_dic, persons):
-        leader = random.sample(group, 1)[0]  # 随机选取一人作为leader
-        followers = copy.copy(group)
-        followers.remove(leader)
-        group_obj = Group(leader, followers)
-        for member in group:
-            member.group = group_obj
-        groups.append(group_obj)
-        group_dic.update({per: group_obj for per in group})  # 将leader和follow的映射关系添加
-        persons.extend(group)
-
     def create_group_persons_in_radius(self, terrain: Map, idx, person_num, groups, group_dic: Dict, group_size,
                                        test_mode=False):
         each_group_num = calculate_each_group_num(group_size, person_num)
@@ -78,9 +132,9 @@ class PedsMoveEnvFactory():
         for num in each_group_num:
             group_center_node = (terrain.start_points[idx][0] + terrain.create_radius * random.random(),
                                  terrain.start_points[idx][1] + terrain.create_radius * random.random())
-            group = self.inner_create_persons_in_radius(group_center_node, self.GROUP_SIZE, num,
+            group = self.inner_create_persons_in_radius(group_center_node, GROUP_SIZE, num,
                                                         terrain.get_random_exit(idx), test_mode)
-            self.set_group_process(group, groups, group_dic, persons)
+            Group.set_group_process(group, groups, group_dic, persons)
         return persons
 
     def random_create_persons(self, terrain: Map, idx, person_num, groups, group_dic, group_size, start_point_dic,
@@ -97,9 +151,57 @@ class PedsMoveEnvFactory():
             #         break
             exit_type = terrain.get_random_exit(idx)
             new_x, new_y = random.sample(start_point_dic[exit_type], 1)[0]
-            group = self.inner_create_persons_in_radius((new_x, new_y), self.GROUP_SIZE, num, exit_type, test_mode)
-            self.set_group_process(group, groups, group_dic, persons)
+            group = self.inner_create_persons_in_radius((new_x, new_y), GROUP_SIZE, num, exit_type, test_mode)
+            Group.set_group_process(group, groups, group_dic, persons)
         return persons
+
+
+class Parser():
+    def __init__(self):
+        self.start_point_dic = defaultdict(list)
+        self.start_nodes_wall = []
+        self.start_nodes_exit = []
+        self.start_nodes_obs = []
+
+    def parse_and_create(self, map, spawn_map):
+        from objects import BoxWall
+        inc = BoxWall.PIECE_WALL_WIDTH / 2
+        exit_symbol = set(str(ele) for ele in range(3, 10))
+        # 按照从左往右，从上到下的遍历顺序
+        for j in range(map.shape[1]):
+            for i in range(map.shape[0]):
+                if map[i, j] == '1':
+                    self.start_nodes_obs.append(((i + 0.5, j + 0.5), "box"))
+                elif map[i, j] == '2':
+                    self.start_nodes_wall.append((i + 0.5, j + 0.5))
+                elif map[i, j] in exit_symbol:
+                    self.start_nodes_exit.append((i + 0.5, j + 0.5, int(map[i, j])))
+                elif map[i, j] == 'lw':
+                    self.start_nodes_obs.append(((i + inc, j + 0.5), "lwall"))
+                elif map[i, j] == 'rw':
+                    self.start_nodes_obs.append(((i + 1 - inc, j + 0.5), "rwall"))
+                elif map[i, j] == 'uw':
+                    self.start_nodes_obs.append(((i + 0.5, j + 1 - inc), "uwall"))
+                elif map[i, j] == 'dw':
+                    self.start_nodes_obs.append(((i + 0.5, j + inc), "dwall"))
+                elif map[i, j] == 'mrw':
+                    self.start_nodes_obs.append(((i + 0.5, j + 0.5), "midrow_wall"))
+                elif map[i, j] == 'mcw':
+                    self.start_nodes_obs.append(((i + 0.5, j + 0.5), "midcolumn_wall"))
+                elif map[i, j] == 'cluw':
+                    self.start_nodes_obs.append(((i + inc, j + 0.5), (i + 0.5, j + 1 - inc), "cornor_left_up_wall"))
+                elif map[i, j] == 'cldw':
+                    self.start_nodes_obs.append(((i + inc, j + 0.5), (i + 0.5, j + inc), "cornor_left_down_wall"))
+                elif map[i, j] == 'cruw':
+                    self.start_nodes_obs.append(((i + 1 - inc, j + 0.5), (i + 0.5, j + 1 - inc), "cornor_right_up_wall"))
+                elif map[i, j] == 'crdw':
+                    self.start_nodes_obs.append(((i + 1 - inc, j + 0.5), (i + 0.5, j + inc), "cornor_right_down_wall"))
+
+        self.start_point_dic = defaultdict(list)
+        for j in range(spawn_map.shape[1]):
+            for i in range(spawn_map.shape[0]):
+                if 9 >= spawn_map[i, j] >= 3:
+                    self.start_point_dic[spawn_map[i, j]].append((i + 0.5, j + 0.5))
 
 
 class PedsMoveEnv(gym.Env):
@@ -174,7 +276,19 @@ class PedsMoveEnv(gym.Env):
 
         self.path_finder = AStar(self.terrain)
 
-    def start(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
+    def reset_property(self):
+        # reset ped_env,清空所有全局变量以供下一次使用
+        Person.counter = 0
+        BoxWall.counter = 0
+        Exit.counter = 0
+        Group.counter = 0
+        self.collide_wall = self.collision_between_agents = 0
+        self.step_in_env = 0
+        self.peds.clear()
+        self.not_arrived_peds.clear()
+        self.elements.clear()
+
+    def initialize_env(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
         # 创建物理引擎
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.listener = MyContactListener(self)  # 现在使用aabb_query的方式来判定
@@ -184,58 +298,42 @@ class PedsMoveEnv(gym.Env):
         self.display_level = pyglet.graphics.OrderedGroup(0)
         self.debug_level = pyglet.graphics.OrderedGroup(1)
         # 创建一个行人工厂以供生成行人调用
-        self.factory = PedsMoveEnvFactory(self.world, self.display_level, self.debug_level)
+        self.factory = Spawner(self.world, self.display_level, self.debug_level)
         # 是否按照地图生成墙
         if not self.init_map_points:
             # 根据shape为50*50的map来构建1*1的墙，当该处值为1代表是墙
-            self.start_nodes_obs = []
-            self.start_nodes_wall = []
-            self.start_nodes_exit = []
-
-            # 按照从左往右，从上到下的遍历顺序
-            for j in range(maps.shape[1]):
-                for i in range(maps.shape[0]):
-                    if maps[i, j] == 1:
-                        self.start_nodes_obs.append((i + 0.5, j + 0.5))
-                    elif maps[i, j] == 2:
-                        self.start_nodes_wall.append((i + 0.5, j + 0.5))
-                    elif 9 >= maps[i, j] >= 3:
-                        self.start_nodes_exit.append((i + 0.5, j + 0.5, maps[i, j]))
-
-            self.start_point_dic = defaultdict(list)
-            for j in range(spawn_maps.shape[1]):
-                for i in range(spawn_maps.shape[0]):
-                    if 9 >= spawn_maps[i, j] >= 3:
-                        self.start_point_dic[spawn_maps[i, j]].append((i + 0.5, j + 0.5))
+            self.parser = Parser()
+            self.parser.parse_and_create(maps, spawn_maps)
             self.init_map_points = True
 
-        self.obstacles = self.factory.create_walls(self.start_nodes_obs, (1, 1), ObjectType.Obstacle, color=ColorBlue)
-        self.exits = self.factory.create_walls(self.start_nodes_exit, (1, 1), ObjectType.Exit, color=ColorRed,
+        self.obstacles = self.factory.create_wall_extra(self.parser.start_nodes_obs, color=ColorBlue)
+        self.exits = self.factory.create_walls(self.parser.start_nodes_exit, (1, 1), ObjectType.Exit, color=ColorRed,
                                                CreateClass=Exit)  # 创建出口
-        self.walls = self.factory.create_walls(self.start_nodes_wall, (1, 1), ObjectType.Wall)  # 建造围墙
+        self.walls = self.factory.create_walls(self.parser.start_nodes_wall, (1, 1), ObjectType.Wall, ColorWall)  # 建造围墙
 
         # 随机初始化行人点，给每个生成点平均分配到不同出口的人群,并根据平均数来计算需要的领队数
         self.peds = []
-        self.group_dic = {}
+        self.ped_to_group_dic = {}
         self.groups = []
         person_num = calculate_groups_person_num(self, person_num_sum)
         for i, num in enumerate(person_num):
             if not self.debug_mode and not self.random_init_mode:
-                self.peds.extend(
-                    self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups, self.group_dic,
-                                                                self.group_size, self.debug_mode))
+                self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups,
+                                                                             self.ped_to_group_dic,
+                                                                             self.group_size, self.debug_mode))
             elif not self.debug_mode and self.random_init_mode:
-                self.peds.extend(self.factory.random_create_persons(self.terrain, i, num, self.groups, self.group_dic,
-                                                                    self.group_size, self.start_point_dic,
-                                                                    self.debug_mode))
+                self.peds.extend(
+                    self.factory.random_create_persons(self.terrain, i, num, self.groups, self.ped_to_group_dic,
+                                                       self.group_size, self.parser.start_point_dic, self.debug_mode))
             else:
                 exit_type = self.terrain.get_random_exit(i)
                 group = self.factory.create_people(self.terrain.start_points, exit_type, self.debug_mode)
-                self.factory.set_group_process(group, self.groups, self.group_dic, self.peds)
+                Group.set_group_process(group, self.groups, self.ped_to_group_dic, self.peds)
                 self.peds.extend(group)
         self.left_person_num = sum(person_num)
         self.left_leader_num = self.agent_count
         self.not_arrived_peds = copy.copy(self.peds)
+
         self.elements = self.exits + self.obstacles + self.walls + self.not_arrived_peds
         # 得到一开始各个智能体距离出口的距离
         self.distance_to_exit.clear()
@@ -295,25 +393,16 @@ class PedsMoveEnv(gym.Env):
         return ex - x, ey - y
 
     def reset(self):
-        # reset ped_env,清空所有全局变量以供下一次使用
-        Person.counter = 0
-        BoxWall.counter = 0
-        Exit.counter = 0
-        Group.counter = 0
-        self.collide_wall = self.collision_between_agents = 0
-        self.step_in_env = 0
-        self.peds.clear()
-        self.not_arrived_peds.clear()
-        self.elements.clear()
+        self.reset_property()
         # 开始初始化环境
-        self.start(self.terrain.map, self.terrain.map_spawn, person_num_sum=self.person_num)
+        self.initialize_env(self.terrain.map, self.terrain.map_spawn, person_num_sum=self.person_num)
         if self.person_handler.use_planner:
             self.person_handler.init_exit_kd_trees()  # 初始化KDTree以供后续使用
         # 添加初始观察状态
         init_obs = []
         for ped in self.peds:
             if ped.is_leader:
-                init_obs.append(self.person_handler.get_observation(ped, self.group_dic[ped], 0))
+                init_obs.append(self.person_handler.get_observation(ped, self.ped_to_group_dic[ped], 0))
         return init_obs
 
     def step(self, actions, planning_mode=False):
@@ -330,7 +419,7 @@ class PedsMoveEnv(gym.Env):
             for ped in self.not_arrived_peds:
                 if ped.is_done and ped.has_removed:
                     continue
-                belong_group = self.group_dic[ped]
+                belong_group = self.ped_to_group_dic[ped]
                 if ped.is_leader:
                     # 是leader用强化学习算法来控制
                     self.person_handler.set_action(ped, actions[belong_group.id])
@@ -352,7 +441,8 @@ class PedsMoveEnv(gym.Env):
                 group.update()
 
         # 该环境中智能体是合作关系，因此使用统一奖励为好
-        obs, rewards = self.person_handler.step(self.peds, self.group_dic, int(self.step_in_env / self.frame_skipping))
+        obs, rewards = self.person_handler.step(self.peds, self.ped_to_group_dic,
+                                                int(self.step_in_env / self.frame_skipping))
 
         for idx, group in enumerate(self.groups):
             if group.leader.is_done:

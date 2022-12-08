@@ -195,11 +195,11 @@ class Person(Agent):
         #                                    x3 * render_scale, y3 * render_scale, batch=batch, group=self.debug_level, color=self.color)
         if self.is_leader:
             self.leader_pic = pyglet.shapes.Star(x * render_scale, y * render_scale,
-                                                   self.radius * 0.6 * render_scale,
-                                                   self.radius * 0.4 * render_scale,
-                                                   5,
-                                                   color=ColorYellow if self.color != ColorYellow else ColorRed,
-                                                   batch=batch, group=self.debug_level)
+                                                 self.radius * 0.6 * render_scale,
+                                                 self.radius * 0.4 * render_scale,
+                                                 5,
+                                                 color=ColorYellow if self.color != ColorYellow else ColorRed,
+                                                 batch=batch, group=self.debug_level)
 
     def self_driven_force(self, direction):
         # 给行人施加自驱动力，力的大小为force * self.desired_velocity * self.mass / self.tau
@@ -317,7 +317,7 @@ class AABBCallBack(b2QueryCallback):
 
     def ReportFixture(self, fixture: b2Fixture):
         query_agent = (
-                    self.d_type == ObjectType.Agent and fixture.userData.id != self.agent.id and fixture.userData.type == ObjectType.Agent)
+                self.d_type == ObjectType.Agent and fixture.userData.id != self.agent.id and fixture.userData.type == ObjectType.Agent)
         query_obstacle = (self.d_type == ObjectType.Obstacle and fixture.userData.type == ObjectType.Obstacle)
         query_wall = (self.d_type == ObjectType.Wall and fixture.userData.type == ObjectType.Wall)
         query_exit = ((self.d_type == ObjectType.Exit and fixture.userData.type == ObjectType.Exit
@@ -346,11 +346,15 @@ class RaycastCallBack(b2RayCastCallback):
         return fraction
 
 
-class BoxWall():
+class BoxWall:
     body = None
     box = None
     height = 0.0
     width = 0.0
+
+    BOX_WALL_HEIGHT = BOX_WALL_WIDTH = 1
+    PIECE_WALL_HEIGHT = 1
+    PIECE_WALL_WIDTH = 0.2
 
     counter = 0
 
@@ -380,7 +384,7 @@ class BoxWall():
         self.pic = pyglet.shapes.Rectangle(x, y, width, height, self.color, batch, group=self.display_level)
 
     def delete(self):
-        del (self)
+        del self
 
     @property
     def getX(self):
@@ -418,6 +422,9 @@ class Exit(BoxWall):
 class Group:
     counter = 0
     group_force_magnitude_dic = defaultdict(float)
+
+    # 通过设置这个值来决定智能体跟随leader的点位
+    LEADER_BEHIND_DIST = 0.25
 
     def __init__(self, leader: Person, followers: List[Person]):
         self.id = Group.counter
@@ -482,9 +489,6 @@ class Group:
         gx, gy = ped.getX, ped.getY
         return ((lx - gx) ** 2 + (ly - gy) ** 2) ** 0.5
 
-    #通过设置这个值来决定智能体跟随leader的点位
-    LEADER_BEHIND_DIST = 0.25
-
     def _get_group_force_dis_nij(self):
         # 先计算leader身后一定间距的点与各个follower的间距
         lv, lpos = self.leader.vec, self.leader.pos
@@ -509,6 +513,18 @@ class Group:
 
     def __repr__(self):
         return "Group{}".format(self.id)
+
+    @classmethod
+    def set_group_process(cls, group, groups, group_dic, persons):
+        leader = random.sample(group, 1)[0]  # 随机选取一人作为leader
+        followers = copy.copy(group)
+        followers.remove(leader)
+        group_obj = Group(leader, followers)
+        for member in group:
+            member.group = group_obj
+        groups.append(group_obj)
+        group_dic.update({per: group_obj for per in group})  # 将leader和follow的映射关系添加
+        persons.extend(group)
 
     # def setup(self, batch, render_scale):
     #     self.pic = pyglet.shapes.Circle(self.group_center[0], self.group_center[1], 0.5, color=(0, 0, 255), batch=batch)

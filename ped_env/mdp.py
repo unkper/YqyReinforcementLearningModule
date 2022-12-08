@@ -9,17 +9,26 @@ from ped_env.functions import parse_discrete_action, calculate_nij, normalized, 
     calculate_groups_person_num
 from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
-
-ACTION_DIM = 9
+from ped_env.settings import ACTION_DIM
 
 
 class PedsHandlerInterface(abc.ABC):
     def __init__(self, env):
         pass
 
-    @abc.abstractmethod
     def step(self, peds: List[Person], group_dic: Dict[Person, Group], time):
-        pass
+        obs = []
+        rewards = []
+        global_reward = 0.0
+        for idx, ped in enumerate(peds):
+            if ped.is_leader:
+                obs.append(self.get_observation(ped, group_dic[ped], time))
+                gr, lr = self.get_reward(ped, idx, time)
+                global_reward += gr
+                rewards.append(lr)
+        for i in range(len(rewards)):
+            rewards[i] += global_reward
+        return obs, rewards
 
     @abc.abstractmethod
     def get_observation(self, ped: Person, group: Group, time):
@@ -42,6 +51,7 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
     """
     该奖励机制不再考虑行人间的社会力，并且将动作改为修改行人的行走速度和行走方向
     """
+
     def __init__(self, env, r_collision_person=-0.1, r_collision_wall=-2.0, r_reach=100, use_planner=False):
         super().__init__(env)
         self.last_observation = {}
@@ -66,20 +76,6 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         self.r_reach = r_reach
 
         self.use_planner = use_planner
-
-    def step(self, peds: List[Person], group_dic: Dict[Person, Group], time):
-        obs = []
-        rewards = []
-        global_reward = 0.0
-        for idx, ped in enumerate(peds):
-            if ped.is_leader:
-                obs.append(self.get_observation(ped, group_dic[ped], time))
-                gr, lr = self.get_reward(ped, idx, time)
-                global_reward += gr
-                rewards.append(lr)
-        for i in range(len(rewards)):
-            rewards[i] += global_reward
-        return obs, rewards
 
     def get_observation(self, ped: Person, group: Group, time):
         observation = []
@@ -162,6 +158,7 @@ class PedsRLHandler(PedsHandlerInterface):
     """
     合作的奖励机制
     """
+
     def __init__(self, env, r_arrival=10, r_move=-0.1, r_wait=-0.5, r_collision=-1, use_planner=False):
         super().__init__(env)
         self.env = env
@@ -198,29 +195,10 @@ class PedsRLHandler(PedsHandlerInterface):
             pos_x, pos_y = int(le.getX), int(le.getY)
             exit_pos = self.env.terrain.exits[le.exit_type - 3]  # -3的原因是出口从3开始编号
             pa = self.planner.path_matrix_dic[exit_pos][(pos_x, pos_y)]
-            if pa == None:
+            if pa is None:
                 raise Exception("Leader 生成点存在问题!")
             tree = kdtree.create(pa.path, 2)
             self.exit_kd_trees[le.id] = tree
-
-    def step(self, peds: List[Person], group_dic: Dict[Person, Group], time):
-        """
-        根据当前所有行人的状态，评估得到它们的奖励
-        :param peds:
-        :return: s',r
-        """
-        obs = []
-        rewards = []
-        global_reward = 0.0
-        for idx, ped in enumerate(peds):
-            if ped.is_leader:
-                obs.append(self.get_observation(ped, group_dic[ped], time))
-                gr, lr = self.get_reward(ped, idx, time)
-                global_reward += gr
-                rewards.append(lr)
-        for i in range(len(rewards)):
-            rewards[i] += global_reward
-        return obs, rewards
 
     def get_observation(self, ped: Person, group: Group, time):
         observation = []
@@ -254,7 +232,7 @@ class PedsRLHandler(PedsHandlerInterface):
 
     def set_action(self, ped: Person, action):
         ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
-        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic[ped])
+        ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
 
     def set_follower_action(self, ped: Person, action, group: Group, exit_pos):
@@ -280,7 +258,7 @@ class PedsRLHandler(PedsHandlerInterface):
             int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
             mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         ped.self_driven_force(mix_dir)  # 跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
-        ped.fij_force(self.env.not_arrived_peds, self.env.group_dic[ped])
+        ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
         # ped.ij_group_force(group)
 

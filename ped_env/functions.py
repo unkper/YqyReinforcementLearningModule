@@ -5,7 +5,7 @@ import numpy as np
 
 from math import cos, sin
 
-ACTION_DIM = 8
+from ped_env.settings import ACTION_DIM
 
 
 def calculate_groups_person_num(env, person_num_sum) -> List:
@@ -32,17 +32,6 @@ def transfer_to_render(x, y, X, Y, scale=10.0):
     return x_ * scale, y_ * scale, X * scale, Y * scale
 
 
-# 修复bug:未按照弧度值进行旋转
-identity = np.array([1.0, 0.0])
-actions = [np.array([0.0, 0.0])]
-for angle in range(0, 360, int(360 / ACTION_DIM)):  # 逆时针旋转angle的角度，初始为x轴向左
-    theta = np.radians(angle)
-    mat = np.array([[cos(theta), -sin(theta)],
-                    [sin(theta), cos(theta)]])
-    vec = np.squeeze((mat.dot(identity)).tolist())
-    actions.append(np.array(vec))
-
-
 def calculate_nij(i, j):
     pos_i = i.pos
     pos_j = j.pos
@@ -61,7 +50,7 @@ def angle_of_vector(v1, v2):
 
 
 def parse_discrete_action(type: np.ndarray):
-    global actions
+    from ped_env.settings import actions
     return actions[np.argmax(type).item()]
     # sum_probabilities = sum(type)
     # for i in range(len(type)):

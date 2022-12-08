@@ -12,7 +12,8 @@ from tqdm import tqdm
 import ped_env.envs
 from ped_env.utils.maps import *
 
-#https://github.com/lc6chang/Social_Force_Model
+
+# https://github.com/lc6chang/Social_Force_Model
 class Node:
     def __init__(self):
         #  初始化各个坐标点的g值、h值、f值、父节点
@@ -21,8 +22,9 @@ class Node:
         self.f = 0
         self.father = (0, 0)
 
+
 class Path:
-    def __init__(self, s_pos, e_pos, path:list):
+    def __init__(self, s_pos, e_pos, path: list):
         self.start_pos = s_pos
         self.end_pos = e_pos
         self.path = path
@@ -33,20 +35,21 @@ class Path:
         node_arr = self.path
         node_arr.append(self.end_pos)
         for i in range(len(node_arr) - 1):
-            po1, po2 = node_arr[i], node_arr[i+1]
+            po1, po2 = node_arr[i], node_arr[i + 1]
             po1 = (int(po1[0]), int(po1[1]))
             po2 = (int(po2[0]), int(po2[1]))
             dir = (po2[0] - po1[0], po2[1] - po1[1])
             self.vec_dir[po1] = dir
         return self.vec_dir
 
+
 class AStar:
-    def __init__(self, map:Map):
+    def __init__(self, map: Map):
         self.map = map
         self.barrier_list = []
         self.init_barrier_list()
-        self.dir_vector_matrix_dic = dict() #值是出口坐标(x,y)，键是ndarray
-        self.path_matrix_dic = defaultdict(dict) #键是出口坐标(x,y),值是一个字典(键是起始坐标(sx,sy),值是路径Path)
+        self.dir_vector_matrix_dic = dict()  # 值是出口坐标(x,y)，键是ndarray
+        self.path_matrix_dic = defaultdict(dict)  # 键是出口坐标(x,y),值是一个字典(键是起始坐标(sx,sy),值是路径Path)
 
     def init_barrier_list(self):
         terrain = self.map.map
@@ -55,7 +58,7 @@ class AStar:
                 if terrain[i, j] in (1, 2):
                     self.barrier_list.append((i, j))
 
-    def next_loc(self, x, y, dest_x, dest_y)->Tuple[Tuple, Path]:
+    def next_loc(self, x, y, dest_x, dest_y) -> Tuple[Tuple, Path]:
         # 初始化各种状态
         start_loc = (x, y)  # 初始化起始点
         aim_loc = [(dest_x, dest_y)]  # 初始化目标地点
@@ -88,7 +91,8 @@ class AStar:
             list_offset = [(-1, 0), (0, -1), (0, 1), (1, 0), (-1, 1), (1, -1), (1, 1), (-1, -1)]
             for temp in list_offset:
                 temp_loc = (now_loc[0] + temp[0], now_loc[1] + temp[1])
-                if temp_loc[0] < 0 or temp_loc[0] >= terrain.shape[0] or temp_loc[1] < 0 or temp_loc[1] >= terrain.shape[1]:
+                if temp_loc[0] < 0 or temp_loc[0] >= terrain.shape[0] or temp_loc[1] < 0 or temp_loc[1] >= \
+                        terrain.shape[1]:
                     continue
                 if temp_loc in self.barrier_list:  # 如果在障碍列表，则跳过
                     continue
@@ -99,9 +103,9 @@ class AStar:
                 if temp_loc not in open_list:
                     open_list.append(temp_loc)
                     node_matrix[temp_loc[0]][temp_loc[1]].g = (node_matrix[now_loc[0]][now_loc[1]].g +
-                                                             int(((temp[0]**2 + temp[1]**2)*100)**0.5))
-                    node_matrix[temp_loc[0]][temp_loc[1]].h = (abs(aim_loc[0][0]-temp_loc[0])
-                                                               + abs(aim_loc[0][1]-temp_loc[1]))*10
+                                                               int(((temp[0] ** 2 + temp[1] ** 2) * 100) ** 0.5))
+                    node_matrix[temp_loc[0]][temp_loc[1]].h = (abs(aim_loc[0][0] - temp_loc[0])
+                                                               + abs(aim_loc[0][1] - temp_loc[1])) * 10
                     node_matrix[temp_loc[0]][temp_loc[1]].f = (node_matrix[temp_loc[0]][temp_loc[1]].g +
                                                                node_matrix[temp_loc[0]][temp_loc[1]].h)
                     node_matrix[temp_loc[0]][temp_loc[1]].father = now_loc
@@ -109,9 +113,9 @@ class AStar:
 
                 #  如果在open列表中，比较，重新计算
                 if node_matrix[temp_loc[0]][temp_loc[1]].g > (node_matrix[now_loc[0]][now_loc[1]].g +
-                                                             int(((temp[0]**2+temp[1]**2)*100)**0.5)):
+                                                              int(((temp[0] ** 2 + temp[1] ** 2) * 100) ** 0.5)):
                     node_matrix[temp_loc[0]][temp_loc[1]].g = (node_matrix[now_loc[0]][now_loc[1]].g +
-                                                             int(((temp[0]**2+temp[1]**2)*100)**0.5))
+                                                               int(((temp[0] ** 2 + temp[1] ** 2) * 100) ** 0.5))
                     node_matrix[temp_loc[0]][temp_loc[1]].father = now_loc
                     node_matrix[temp_loc[0]][temp_loc[1]].f = (node_matrix[temp_loc[0]][temp_loc[1]].g +
                                                                node_matrix[temp_loc[0]][temp_loc[1]].h)
@@ -127,7 +131,7 @@ class AStar:
             path_arr = []
             while node_matrix[temp[0]][temp[1]].father != start_loc:
                 temp = node_matrix[temp[0]][temp[1]].father
-                _temp = (temp[0] + 0.5, temp[1] + 0.5) #这里加0.5是为了消除int带来的向下取整效果
+                _temp = (temp[0] + 0.5, temp[1] + 0.5)  # 这里加0.5是为了消除int带来的向下取整效果
                 path_arr.insert(0, _temp)
             start_loc_tmp = (start_loc[0] + 0.5, start_loc[1] + 0.5)
             path_arr.insert(0, start_loc_tmp)
@@ -147,20 +151,20 @@ class AStar:
             # 在一开始就计算好各个位置的下一步方向向量，并存储到矩阵中，以节省算力
             for j in range(terrain.shape[1]):
                 for i in range(terrain.shape[0]):
-                    if terrain[i, j] == 0:#空地
+                    if terrain[i, j] == 0:  # 空地
                         start_pos = (i, j)
                         end_pos = (exit[0], exit[1])
                         vector_matrix[i][j], pa = self.next_loc(i, j, int(exit[0]), int(exit[1]))
                         self.path_matrix_dic[end_pos][start_pos] = pa
             self.dir_vector_matrix_dic[exit] = vector_matrix
 
-    def print_dir_vector_map(self, matrix:List[List]):
+    def print_dir_vector_map(self, matrix: List[List]):
         terrain = self.map.map
         print_string = ""
         for j in range(terrain.shape[1]):
             for i in range(terrain.shape[0]):
-                if matrix[i][j] == 0: #没有方向向量
-                    if terrain[i][j] in (1,2):
+                if matrix[i][j] == 0:  # 没有方向向量
+                    if terrain[i][j] in (1, 2):
                         print_string += "▇"
                     elif 9 >= terrain[i][j] >= 3:
                         print_string += "$"
@@ -168,21 +172,23 @@ class AStar:
                         print_string += "%"
                 else:
                     vector_char = {
-                        (0, 0):"E",
-                        (-1, 0):"←",
-                        (0, -1):"↑",
-                        (0, 1):"↓",
-                        (1, 0):"→",
-                        (-1, 1):"↙",
-                        (1, -1):"↗",
-                        (1, 1):"↘",
-                        (-1, -1):"↖"
+                        (0, 0): "E",
+                        (-1, 0): "←",
+                        (0, -1): "↑",
+                        (0, 1): "↓",
+                        (1, 0): "→",
+                        (-1, 1): "↙",
+                        (1, -1): "↗",
+                        (1, 1): "↘",
+                        (-1, -1): "↖"
                     }
                     print_string += vector_char[matrix[i][j]]
             print_string += "\n"
         return print_string
 
+
 ACTION_DIM = 9
+
 
 class AStarController(gym.Env):
     vec_to_discrete_action_dic = {
@@ -196,6 +202,7 @@ class AStarController(gym.Env):
         (0, -1): 7,
         (1, -1): 8
     }
+
     def __init__(self, env, random_policy=False, discrete=True):
         '''
         利用了行人模拟环境，并使用AStar算法做自驱动力来控制行人的行走
@@ -227,7 +234,7 @@ class AStarController(gym.Env):
         for idx in range(len(obs)):
             ped = self.env.leaders[idx]
             pos_integer = [int(ped.getX), int(ped.getY)]
-            exit = self.env.terrain.exits[ped.exit_type - 3] #根据智能体的id得到智能体要去的出口,3是因为出口从3开始编号
+            exit = self.env.terrain.exits[ped.exit_type - 3]  # 根据智能体的id得到智能体要去的出口,3是因为出口从3开始编号
             dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
             if not self.random_policy:
                 action = np.zeros([ACTION_DIM])
@@ -242,7 +249,7 @@ class AStarController(gym.Env):
                     action = self.action_space[idx].sample()
             actions.append(action)
         next_obs, reward, is_done, info = self.env.step(actions, planning_mode=False)
-        #self.env.render()
+        # self.env.render()
         return next_obs, reward, is_done, actions
 
     def play(self, episodes, render=True):
@@ -261,14 +268,16 @@ class AStarController(gym.Env):
                 next_obs, reward, is_done, actions = self.step(obs)
                 total_reward += np.mean(reward)
                 obs = next_obs
-                step += 1#self.env.frame_skipping
+                step += 1  # self.env.frame_skipping
                 if render:
                     self.env.render()
             endtime = time.time()
             print("奖励为{}!".format(total_reward))
-            #print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
+            # print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
             #      .format(self.env.listener.col_with_agent, self.env.listener.col_with_wall))
-            print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+            print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
+                                                                                 step / (endtime - starttime)))
+
 
 class AStarPolicy():
     vec_to_discrete_action_dic = {
@@ -300,12 +309,12 @@ class AStarPolicy():
     def step(self, obs):
         actions = []
         for ob in obs:
-            pos_x, pos_y = ob[0:2] #得到智能体当前位置
+            pos_x, pos_y = ob[0:2]  # 得到智能体当前位置
             pos_integer = [int(pos_x), int(pos_y)]
-            rx, ry = ob[4:6] #得到相对于出口的距离
+            rx, ry = ob[4:6]  # 得到相对于出口的距离
             ex = pos_x + rx
             ey = pos_y + ry
-            exit = self.exit_tree.search_nn((ex, ey))[0].data #寻找相对最近的节点
+            exit = self.exit_tree.search_nn((ex, ey))[0].data  # 寻找相对最近的节点
             if self.is_pos_vaild(pos_integer):
                 dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
             else:
@@ -316,12 +325,12 @@ class AStarPolicy():
             actions.append(action)
         return actions
 
+
 def recoder_for_debug(*obj):
     pass
+
 
 if __name__ == '__main__':
     env = ped_env.envs.PedsMoveEnv(map_12, 32, (4, 4), random_init_mode=True)
     planner = AStarController(env)
     planner.play(20)
-
-

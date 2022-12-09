@@ -2,6 +2,7 @@ import copy
 
 import d3rlpy
 import numpy as np
+import pyglet
 
 from ped_env.envs import PedsMoveEnv
 from ped_env.utils.maps import map_11
@@ -40,33 +41,40 @@ def test2():
         n_epochs=100,
         scorers={
             'td_error': d3rlpy.metrics.td_error_scorer,
-            'value_scale':d3rlpy.metrics.average_value_estimation_scorer
+            'value_scale': d3rlpy.metrics.average_value_estimation_scorer
         },
     )
 
     cql.save_model("model")
 
-from train_muit_env import evaluate_on_muit_environment, train_mult_env
+
+from d3rlpy_multiEnv_extend import evaluate_on_muit_environment, train_mult_env
 from ped_env.envs import PedsMoveEnv
 from ped_env.utils.maps import map_simple
+import d3rlpy_multiEnv_extend as ex
+from ped_env.mdp import PedsRLHandler
+
 
 def test4():
-    env = PedsMoveEnv(map_simple, group_size=(1, 1))
+    env = PedsMoveEnv(map_simple, group_size=(1, 1), person_handler=PedsRLHandler)
 
     scorer = evaluate_on_muit_environment(env, 10, 3, render=True)
 
     dqn = d3rlpy.algos.DQN()
-    dqn.build_with_muit_env(env)
+    dqn.build_with_env(env)
+    dqn.load_model(
+        r"D:\projects\python\PedestrainSimulationModule\d3rl\d3rlpy_logs\DQN_online_20221209015145\model_100000.pt")
 
     print("Mean value is:{}".format(scorer(dqn)))
 
+
 def test5():
-    env = PedsMoveEnv(map_simple, group_size=(1, 1))
+    env = PedsMoveEnv(map_simple, group_size=(1, 1), person_handler=PedsRLHandler)
 
     eval_env = copy.deepcopy(env)
 
-    dqn = d3rlpy.algos.DQN()
-    dqn.build_with_muit_env(env)
+    dqn = d3rlpy.algos.DiscreteSAC(use_gpu=True)
+    dqn.build_with_env(env)
 
     # experience replay buffer
     buffer = d3rlpy.online.buffers.ReplayBuffer(maxlen=100000, env=env)
@@ -83,11 +91,26 @@ def test5():
         save_interval=10,
         n_steps=100000,  # train for 100K steps
         eval_env=eval_env,
-        n_steps_per_epoch=1000,  # evaluation is performed every 1K steps
+        n_steps_per_epoch=4000,  # evaluation is performed every 1K steps
         update_start_step=1000,  # parameter update starts after 1K steps
         tensorboard_dir="runs"
     )
 
+def test6():
+    window = pyglet.window.Window()
+    label = pyglet.text.Label('Hello, world',
+                              font_name='Times New Roman',
+                              font_size=36,
+                              x=window.width // 2, y=window.height // 2,
+                              anchor_x='center', anchor_y='center')
+
+    @window.event
+    def on_draw():
+        window.clear()
+        label.draw()
+
+    pyglet.app.run()
+
 
 if __name__ == '__main__':
-    test5()
+    test6()

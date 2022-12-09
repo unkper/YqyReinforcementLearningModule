@@ -2,7 +2,6 @@ import copy
 import math
 import random
 
-
 import gym
 import pyglet
 import numpy as np
@@ -10,7 +9,7 @@ import numpy as np
 from math import sqrt, pow
 
 from Box2D import (b2World, b2Vec2)
-from typing import Tuple, Dict
+from typing import Tuple, Dict, cast, List
 from collections import defaultdict
 
 from ped_env.mdp import PedsHandlerInterface, PedsRLHandlerWithPlanner, PedsRLHandlerWithoutForce
@@ -107,7 +106,6 @@ class Spawner:
                                      self.l1, ObjectType.Wall, color))
         return walls
 
-
     def create_people(self, start_nodes, exit_type, test_mode=False):
         '''
         根据start_nodes创建同等数量的行人
@@ -164,7 +162,7 @@ class Parser():
         self.start_nodes_obs = []
 
     def parse_and_create(self, map, spawn_map):
-        from objects import BoxWall
+        from ped_env.objects import BoxWall
         inc = BoxWall.PIECE_WALL_WIDTH / 2
         exit_symbol = set(str(ele) for ele in range(3, 10))
         # 按照从左往右，从上到下的遍历顺序
@@ -193,7 +191,8 @@ class Parser():
                 elif map[i, j] == 'cldw':
                     self.start_nodes_obs.append(((i + inc, j + 0.5), (i + 0.5, j + inc), "cornor_left_down_wall"))
                 elif map[i, j] == 'cruw':
-                    self.start_nodes_obs.append(((i + 1 - inc, j + 0.5), (i + 0.5, j + 1 - inc), "cornor_right_up_wall"))
+                    self.start_nodes_obs.append(
+                        ((i + 1 - inc, j + 0.5), (i + 0.5, j + 1 - inc), "cornor_right_up_wall"))
                 elif map[i, j] == 'crdw':
                     self.start_nodes_obs.append(((i + 1 - inc, j + 0.5), (i + 0.5, j + inc), "cornor_right_down_wall"))
 
@@ -260,8 +259,8 @@ class PedsMoveEnv(gym.Env):
         self.group_size = group_size
         self.person_handler = person_handler(self, use_planner=use_planner)
         # 由PersonHandler类提供的属性代替，从而使用策略模式来加强灵活性
-        self.observation_space = self.person_handler.observation_space
-        self.action_space = self.person_handler.action_space
+        self.observation_space = self.person_handler.observation_space[0]
+        self.action_space = self.person_handler.action_space[0]
         self.agent_count = self.person_handler.agent_count  # agent_count是一个团队里leader的数量
 
         self.left_leader_num = self.agent_count
@@ -391,6 +390,22 @@ class PedsMoveEnv(gym.Env):
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
         x, y = person_pos
         return ex - x, ey - y
+
+    def get_ped_nearest_elements(self, ped: Person, n: int, detect_range: float = 3.0,
+                                 detect_type: ObjectType = ObjectType.Agent):
+        detect_peds = ped.aabb_query(self.world, detect_range, detect_type)
+        detect_peds = cast(List[Person], detect_peds)
+        ret_elements = []
+        mx, my = ped.getX, ped.getY
+        for pe in detect_peds:
+            ox, oy = pe.getX, pe.getY
+            dis = ((ox - mx) ** 2 + (oy - my) ** 2) ** 0.5
+            if dis <= detect_range and n > 0:
+                ret_elements.append(pe)
+                n -= 1
+            if n <= 0:
+                break
+        return ret_elements
 
     def reset(self):
         self.reset_property()

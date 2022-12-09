@@ -3,3 +3,6 @@ data/
 __pycache__/
 *.ini
 *.pyc
+d3rl/d3rlpy_logs
+d3rl/runs
+d3rl/datasets

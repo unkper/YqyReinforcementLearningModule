@@ -11,9 +11,10 @@ GROUP_SIZE = 0.5  # 一个团体中的人在半径为多大(m)的区域生成
 # 修复bug:未按照弧度值进行旋转
 identity = np.array([1.0, 0.0])
 actions = [np.array([0.0, 0.0])]
-for angle in range(0, 360, int(360 / ACTION_DIM)):  # 逆时针旋转angle的角度，初始为x轴向左
+for angle in range(0, 360, int(360 / (ACTION_DIM - 1))):  # 逆时针旋转angle的角度，初始为x轴向左
     theta = np.radians(angle)
     mat = np.array([[cos(theta), -sin(theta)],
                     [sin(theta), cos(theta)]], dtype=np.float)
     vec = np.squeeze((mat.dot(identity)).tolist())
     actions.append(np.array(vec))
+print(actions)

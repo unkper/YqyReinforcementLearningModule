@@ -186,6 +186,9 @@ class Person(Agent):
                                              self.radius * render_scale,
                                              color=self.color,
                                              batch=batch, group=self.display_level)
+
+        self.No_pic = pyglet.text.Label(str(self.id), )
+
         # t_len = self.radius * 1.5
         # cos_30 = -0.8660254
         # x1, y1 = x, (y + self.radius)

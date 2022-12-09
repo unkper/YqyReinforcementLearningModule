@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, cast, Sequence
 
 import numpy as np
 from d3rlpy.logger import D3RLPyLogger
@@ -8,11 +8,38 @@ from d3rlpy.online.explorers import Explorer
 from d3rlpy.online.iterators import AlgoProtocol, _setup_algo
 import gym
 from d3rlpy.preprocessing.stack import StackedObservation
+from gym.spaces import Discrete
 from tqdm import trange
 
 
 def onehot_from_int(x: int, action_dim: int = 9) -> np.ndarray:
     return np.array([0 if i != x else 1 for i in range(action_dim)])
+
+
+def onehot_to_int(x, action_dim: int = 9):
+    for i in range(0, action_dim):
+        if i == 1:
+            return i
+
+
+def get_action_size_from_env(env: gym.Env) -> int:
+    if isinstance(env.action_space[0], Discrete):
+        return cast(int, env.action_space[0].n)
+    return cast(int, env.action_space[0].shape[0])
+
+
+def build_with_muit_env(alg, env: gym.Env) -> None:
+    """Instantiate implementation object with OpenAI Gym object.
+
+    Args:
+        env: gym-like environment.
+
+    """
+    observation_shape = env.observation_space[0].shape
+    alg.create_impl(
+        alg._process_observation_shape(observation_shape),
+        get_action_size_from_env(env),
+    )
 
 
 def evaluate_on_muit_environment(
@@ -55,7 +82,6 @@ def evaluate_on_muit_environment(
     """
 
     # for image observation
-    observation_shape = env.observation_space[0].shape
 
     def scorer(algo: AlgoProtocol, *args: Any) -> float:
 
@@ -163,8 +189,6 @@ def train_mult_env(
     # initialize algorithm parameters
     _setup_algo(algo, env)
 
-    observation_shape = env.observation_space[0].shape
-
     # save hyperparameters
     algo.save_params(logger)
 
@@ -184,52 +208,52 @@ def train_mult_env(
     for total_step in xrange(1, n_steps + 1):
         with logger.measure_time("step"):
             # stack observation if necessary
-            if is_image:
-                stacked_frame.append(observation)
-                fed_observation = stacked_frame.eval()
-            else:
-                observation = observation.astype("f4")
-                fed_observation = observation
+            new_observation = []
+            for ob in observation:
+                ob = np.array(ob).astype("f4")
+                new_observation.append(ob)
+            fed_observation = new_observation
 
+            actions = []
             # sample exploration action
             with logger.measure_time("inference"):
-                if total_step < random_steps:
-                    action = env.action_space.sample()
-                elif explorer:
-                    x = fed_observation.reshape((1,) + fed_observation.shape)
-                    action = explorer.sample(algo, x, total_step)[0]
-                else:
-                    action = algo.sample_action([fed_observation])[0]
+                for i in range(agent_num):
+                    if total_step < random_steps:
+                        action = env.action_space.sample()
+                    elif explorer:
+                        x = fed_observation[i].reshape((1,) + fed_observation[i].shape)
+                        action = explorer.sample(algo, x, total_step)[0]
+                    else:
+                        action = algo.sample_action([fed_observation[i]])[0]
+                    actions.append(onehot_from_int(action))
 
             # step environment
             with logger.measure_time("environment_step"):
-                next_observation, reward, terminal, info = env.step(action)
-                rollout_return += reward
+                next_observation, reward, terminal, info = env.step(actions)
+                rollout_return += sum(reward)
 
             # special case for TimeLimit wrapper
             if timelimit_aware and "TimeLimit.truncated" in info:
                 clip_episode = True
-                terminal = False
+                terminal = [False for _ in range(agent_num)]
             else:
-                clip_episode = terminal
+                clip_episode = any(terminal)  # 所有智能体都结束了才结束
 
-            # store observation
-            buffer.append(
-                observation=observation,
-                action=action,
-                reward=reward,
-                terminal=terminal,
-                clip_episode=clip_episode,
-            )
+            for i in range(agent_num):
+                # store observation
+                buffer.append(
+                    observation=np.array(observation[i]),
+                    action=onehot_to_int(actions[i]),
+                    reward=reward[i],
+                    terminal=terminal[i],
+                    clip_episode=clip_episode,
+                )
 
             # reset if terminated
             if clip_episode:
                 observation = env.reset()
                 logger.add_metric("rollout_return", rollout_return)
                 rollout_return = 0.0
-                # for image observation
-                if is_image:
-                    stacked_frame.clear()
             else:
                 observation = next_observation
 

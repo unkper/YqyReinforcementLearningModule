@@ -1,6 +1,7 @@
 import copy
 import random
 import enum
+import typing
 from collections import defaultdict
 from typing import List
 
@@ -13,6 +14,8 @@ from math import sin, cos
 
 from numpy import ndarray
 
+from ped_env.utils.misc import angle_between
+from ped_env.settings import DIRECTIONS, identity
 from ped_env.utils.colors import ColorRed, exit_type_to_color, ColorYellow
 from ped_env.functions import transfer_to_render, normalized, ij_power
 from ped_env.utils.misc import FixtureInfo, ObjectType
@@ -39,19 +42,6 @@ class PersonState(enum.Enum):
     route_to_exit = 4
 
 
-# 通过射线得到8个方向上的其他行人与障碍物
-# 修复bug:未按照弧度值进行旋转
-identity = b2Vec2(1, 0)
-DIRECTIONS = []
-DIRECTIONS.append(b2Vec2(0, 0))
-for angle in range(0, 360, int(360 / 8)):
-    theta = np.radians(angle)
-    mat = b2Mat22(cos(theta), -sin(theta),
-                  sin(theta), cos(theta))
-    vec = b2Mul(mat, identity)
-    DIRECTIONS.append(vec)
-
-
 class Person(Agent):
     body = None
     box = None
@@ -69,6 +59,8 @@ class Person(Agent):
     body_pic = None
 
     a_star_path = None  # 用于follow在找不到路时的A*策略使用
+
+    MAX_SPEED = 1.8  # 指定最大的行人速度(m/s)
 
     def __init__(self,
                  env: b2World,
@@ -98,6 +90,8 @@ class Person(Agent):
         """
         super(Person, self).__init__()
         self.body = env.CreateDynamicBody(position=(new_x, new_y))
+        self.body = typing.cast(b2BodyDef, self.body)
+        self.body.allowSleep = True
         self.exit_type = exit_type
         self.reward_in_episode = 0.0
         self.is_done = False
@@ -150,7 +144,6 @@ class Person(Agent):
         self.person_state = PersonState.walk_to_goal
         self.group = None
 
-        global DIRECTIONS
         self.directions = DIRECTIONS
 
         self.exit_in_step = -1
@@ -176,6 +169,25 @@ class Person(Agent):
             self.is_done = True
             self.exit_in_step = step_in_env
 
+    @property
+    def vec_norm(self):
+        return np.linalg.norm(self.vec)
+
+    @property
+    def vec_angle(self):
+        if self.vec_norm == 0.0:
+            return math.fmod(self.body.angle, math.pi * 2)
+        else:
+            return angle_between(identity, self.vec)
+
+    def relative_distence(self, rpos):
+        x, y = self.pos
+        rx, ry = rpos
+        return ((rx - x) ** 2 + (ry - y) ** 2) ** 0.5
+
+    def relative_angle(self, rpos):
+        return angle_between(self.pos, rpos)
+
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
 
@@ -195,7 +207,8 @@ class Person(Agent):
         # x2, y2 = x1 - t_len * 0.5, y1 + t_len * cos_30
         # x3, y3 = x1 + t_len * 0.5, y1 + t_len * cos_30
         # self.head = pyglet.shapes.Triangle(x1 * render_scale, y1 * render_scale, x2 * render_scale, y2 * render_scale,
-        #                                    x3 * render_scale, y3 * render_scale, batch=batch, group=self.debug_level, color=self.color)
+        #                                    x3 * render_scale, y3 * render_scale, batch=batch, group=self.debug_level,
+        #                                    color=self.color)
         if self.is_leader:
             self.leader_pic = pyglet.shapes.Star(x * render_scale, y * render_scale,
                                                  self.radius * 0.6 * render_scale,
@@ -203,6 +216,36 @@ class Person(Agent):
                                                  5,
                                                  color=ColorYellow if self.color != ColorYellow else ColorRed,
                                                  batch=batch, group=self.debug_level)
+
+    def set_velocity(self, action_type: int):
+        vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
+        c_speed_dictm = [0, -0.125, -0.25, -0.5, -1, 0.125, 0.25, 0.5, 1]
+        c_speed_dict = [0, -0.125, -0.25, 0.125, 0.25, 0.5, 1]
+        c_angle_dict = [(i * math.pi / 4) for i in c_speed_dictm]
+
+        assert 0 <= action_type < 63
+        delta_velocity = c_speed_dict[action_type // 9] * Person.MAX_SPEED / 2
+        delta_angle = c_angle_dict[action_type % 9]
+
+        old_velocity_norm = np.linalg.norm(vec)
+        if old_velocity_norm == 0.0:
+            old_angle_radian = self.body.angle  # 这里必须设置成当前朝向，不能为0.0否则出错！！！
+        else:
+            old_angle_radian = angle_between(identity, vec)
+
+        if math.isnan(old_angle_radian):
+            old_angle_radian = 0.0
+
+        new_velocity_norm = max(min(old_velocity_norm + delta_velocity, Person.MAX_SPEED), 0)
+        new_angle = old_angle_radian + delta_angle
+
+        # print("vx:{}, vy:{}".format(new_velocity_norm * np.cos(new_angle),
+        #                           new_velocity_norm * np.sin(new_angle)))
+
+        self.body.linearVelocity = b2Vec2(new_velocity_norm * np.cos(new_angle), new_velocity_norm * np.sin(new_angle))
+
+        # print("Agent {}:{}".format(self.id, self.body.linearVelocity))
+        # print("new_v:{}, new_a:{}".format(new_velocity_norm, new_angle))
 
     def self_driven_force(self, direction):
         # 给行人施加自驱动力，力的大小为force * self.desired_velocity * self.mass / self.tau
@@ -324,13 +367,13 @@ class AABBCallBack(b2QueryCallback):
         query_obstacle = (self.d_type == ObjectType.Obstacle and fixture.userData.type == ObjectType.Obstacle)
         query_wall = (self.d_type == ObjectType.Wall and fixture.userData.type == ObjectType.Wall)
         query_exit = ((self.d_type == ObjectType.Exit and fixture.userData.type == ObjectType.Exit
-                       and self.agent.exit_type != fixture.userData.env.exit_type))  # 当出口不是自己的才有排斥力
+                       and self.agent.exit_type != fixture.userData.model.exit_type))  # 当出口不是自己的才有排斥力
         if query_agent or query_obstacle or query_wall or query_exit:  # 当
             pos = (self.agent.getX, self.agent.getY)
-            next_pos = (fixture.userData.env.getX, fixture.userData.env.getY)
+            next_pos = (fixture.userData.model.getX, fixture.userData.model.getY)
             dis = ((pos[0] - next_pos[0]) ** 2 + (pos[1] - next_pos[1]) ** 2) ** 0.5
             if dis <= self.radius:
-                self.detect_objects.append(fixture.userData.env)
+                self.detect_objects.append(fixture.userData.model)
         return True
 
 
@@ -365,6 +408,8 @@ class BoxWall:
                  color=ColorRed):
         # new_x,new_y代表的是矩形墙的中心坐标
         self.body = env.CreateStaticBody(position=(new_x, new_y))
+        self.body: b2BodyDef
+        self.body.allowSleep = True
         self.x = self.body.position.x
         self.y = self.body.position.y
         self.width = new_width

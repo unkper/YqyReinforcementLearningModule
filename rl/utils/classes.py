@@ -356,16 +356,6 @@ class MAAgentMixin():
 
 from math import cos, sin
 
-identity = np.array([1, 0])
-DIRECTIONS = []
-DIRECTIONS.append(np.zeros([2]))
-for idx, angle in enumerate(range(0, 360, int(360 / 8))):
-    theta = np.radians(angle)
-    mat = np.array([cos(theta), -sin(theta),
-                    sin(theta), cos(theta)]).reshape([2, 2])
-    vec = np.matmul(mat, identity)
-    DIRECTIONS.append(vec)
-
 
 class ModelBasedMAAgentMixin():
     def policy_init_step(self):

@@ -31,7 +31,7 @@ class StandardScaler(object):
         """Transforms the input matrix data using the parameters of this scaler.
         Arguments:
         data (np.array): A numpy array containing the points to be transformed.
-        Returns: (np.array) The transformed d3rl.
+        Returns: (np.array) The transformed rl_platform.
         """
         return (data - self.mu) / self.std
 
@@ -39,7 +39,7 @@ class StandardScaler(object):
         """Undoes the transformation performed by this scaler.
         Arguments:
         data (np.array): A numpy array containing the points to be transformed.
-        Returns: (np.array) The transformed d3rl.
+        Returns: (np.array) The transformed rl_platform.
         """
         return self.std * data + self.mu
 

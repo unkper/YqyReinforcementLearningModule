@@ -4,6 +4,7 @@ import kdtree
 from math import inf
 from typing import List, Dict, cast
 
+import numpy as np
 from gym.spaces import Box, Discrete
 
 import ped_env.envs
@@ -11,27 +12,45 @@ from ped_env.functions import parse_discrete_action, calculate_nij, normalized, 
     calculate_groups_person_num
 from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
-from ped_env.settings import ACTION_DIM
-
+from ped_env.settings import ACTION_DIM, identity
+from ped_env.utils.misc import angle_between
 
 
 class PedsHandlerInterface(abc.ABC):
     def __init__(self, env):
         pass
 
-    def step(self, peds: List[Person], group_dic: Dict[Person, Group], time):
-        obs = []
-        rewards = []
+    def step(self, peds: List[Person], group_dic: Dict[Person, Group], agent_id_dict: Dict[Person, str], time):
+        obs = {}
+        rewards = {}
         global_reward = 0.0
         for idx, ped in enumerate(peds):
-            if ped.is_leader:
-                obs.append(self.get_observation(ped, group_dic[ped], time))
+            if ped.is_leader:  # 不针对到达出口的进行状态更新
+                obs[agent_id_dict[ped]] = (self.get_observation(ped, group_dic[ped], time))
                 gr, lr = self.get_reward(ped, idx, time)
                 global_reward += gr
-                rewards.append(lr)
-        for i in range(len(rewards)):
-            rewards[i] += global_reward
+                rewards[agent_id_dict[ped]] = (lr)
+        for key in rewards.keys():
+            rewards[key] += global_reward
         return obs, rewards
+
+    def init_exit_kd_trees(self):
+        if not hasattr(self, "planner"):
+            self.planner = AStar(self.env.terrain)
+            self.planner.calculate_dir_vector()
+            self.exit_kd_trees = dict()  # 键是leader的id，值是使用A*策略产生的路径
+            self.use_planner = True
+
+
+        for le in self.env.leaders:
+            # 得到当前leader起始点到终点的路径，并将其存放在一KDTree中供查询
+            pos_x, pos_y = int(le.getX), int(le.getY)
+            exit_pos = self.env.terrain.exits[le.exit_type - 3]  # -3的原因是出口从3开始编号
+            pa = self.planner.path_matrix_dic[exit_pos][(pos_x, pos_y)]
+            if pa is None:
+                raise Exception("Leader 生成点存在问题!")
+            tree = kdtree.create(pa.path, 2)
+            self.exit_kd_trees[le.id] = tree
 
     @abc.abstractmethod
     def get_observation(self, ped: Person, group: Group, time):
@@ -54,11 +73,13 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
     """
     该奖励机制不再考虑行人间的社会力，并且将动作改为修改行人的行走速度和行走方向
     """
+    ACTION_NUM = 63
 
     DETECT_PED_COUNT = 3
     DETECT_OBSTACLE_COUNT = 3
 
-    def __init__(self, env, r_collision_person=-0.1, r_collision_wall=-2.0, r_reach=100, use_planner=False):
+    def __init__(self, env, r_move=-0.1, r_wait=-0.1, r_collision_person=-0.1, r_collision_wall=-2.0, r_reach=100,
+                 use_planner=False):
         super().__init__(env)
         self.last_observation = {}
         self.env = env
@@ -68,16 +89,19 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         self.agent_count = sum([int(num / int(sum(self.env.group_size) / 2)) for num in person_num])
 
         # 强化学习MDP定义区域
-        # 定义观察空间为[智能体当前位置(x,y), 智能体当前速度(dx,dy), 相对目标的位置(rx,ry), 三个最近智能体的位置, 三个最近障碍物的位置]一共12个值
-        self.observation_space = [Box(-inf, inf, (6 + PedsRLHandlerWithoutForce.DETECT_PED_COUNT * 2 +
-                                                  PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT * 2,)) for _ in range(self.agent_count)]
+        # 定义观察空间为[, 三个最近智能体的位置, 三个最近障碍物的位置]一共16个值
+        self.observation_space = [Box(-inf, inf, (4 + PedsRLHandlerWithoutForce.DETECT_PED_COUNT * 2 +
+                                                  PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT * 2,)) for _ in
+                                  range(self.agent_count)]
         if self.env.discrete:
-            # 定义动作空间为[不动，向左，左上，向上，...]施加相应方向的力
-            self.action_space = [Discrete(ACTION_DIM) for _ in range(self.agent_count)]
+            # 定义动作空间为修改智能体速度和角度，具体参见论文的动作空间设计
+            self.action_space = [Discrete(PedsRLHandlerWithoutForce.ACTION_NUM) for _ in range(self.agent_count)]
         else:
             # 定义连续动作空间为[分量x，分量y]施加相应方向的力
             self.action_space = [Box(-1, 1, (2,)) for _ in range(self.agent_count)]
 
+        self.r_move = r_move
+        self.r_wait = r_wait
         self.r_collision_person = r_collision_person
         self.r_collision_wall = r_collision_wall
         self.r_reach = r_reach
@@ -89,54 +113,46 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         observation = []
         self.env = cast(ped_env.envs.PedsMoveEnv, self.env)
         if ped.is_done:
-            # 为了防止模型预测时的loss过大，这里返回完成前的上一步观察状态加将智能体速度与距离出口的位置置为0
-            self.last_observation[ped.id][2:6] = [0.0, 0.0, 0.0, 0.0]
-            # 由于采用上述方式无法走出出口，改为全部为0
-            # self.last_observation[ped.id][:] = [0.0 for _ in range(16)]
             return self.last_observation[ped.id]
-        # 给予智能体当前位置
-        observation.append(ped.getX)
-        observation.append(ped.getY)
-        # 给予智能体当前速度
-        vec = ped.body.linearVelocity
-        observation.append(vec.x)
-        observation.append(vec.y)
-        # 给予智能体相对目标的位置
+        # 给予智能体当前速度大小，速度相对于参考向量的夹角
+        observation.append(ped.vec_norm)
+        observation.append(ped.vec_angle)
+        # 给予智能体相对目标的距离和夹角
         rx, ry = self.env.get_ped_rel_pos_to_exit((ped.getX, ped.getY), ped.exit_type)
-        observation.append(rx)
-        observation.append(ry)
+        distence = (rx ** 2 + ry ** 2) ** 0.5
+        observation.append(distence)
+        if distence == 0.0:
+            observation.append(0.0)
+        else:
+            observation.append(angle_between(identity, np.array([rx, ry])))
         # 给予附近3m内的所有智能体位置信息
-        persons = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithoutForce.DETECT_PED_COUNT, detect_type=ObjectType.Agent)
-        cx, cy = 0, 0
+        persons = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithoutForce.DETECT_PED_COUNT,
+                                                    detect_type=ObjectType.Agent)
         for pe in persons:
-            observation.append(pe.getX)
-            observation.append(pe.getY)
-            cx += pe.getX
-            cy += pe.getY
+            observation.append(ped.relative_distence(pe.pos))
+            observation.append(ped.relative_angle(pe.pos))
         left = PedsRLHandlerWithoutForce.DETECT_PED_COUNT - len(persons)
-        if left > 0:
+        if left > 0:  # 以0值作为填充
             for i in range(left):
-                observation.append(cx / left)
-                observation.append(cy / left)
+                observation.append(0.0)
+                observation.append(0.0)
 
-        obstacles = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT, detect_type=ObjectType.Obstacle)
-        cx, cy = 0, 0
+        obstacles = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT,
+                                                      detect_type=ObjectType.Obstacle)
         for ob in obstacles:
-            observation.append(ob.getX)
-            observation.append(ob.getY)
-            cx += ob.getX
-            cy += ob.getY
-        left = PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT - len(persons)
+            observation.append(ped.relative_distence(ob.pos))
+            observation.append(ped.relative_angle(ob.pos))
+        left = PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT - len(obstacles)
         if left > 0:
             for i in range(left):
-                observation.append(cx / left)
-                observation.append(cy / left)
+                observation.append(0.0)
+                observation.append(0.0)
 
         self.last_observation[ped.id] = observation
         return observation
 
     def set_action(self, ped: Person, action):
-        ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
+        ped.set_velocity(action)
 
     def set_follower_action(self, ped: Person, action, group: Group, exit_pos):
         diff = group.get_distance_to_leader(ped)
@@ -186,7 +202,21 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         if ped.is_done and ped.has_removed:
             pass
         else:
-            lr = 0
+            if len(ped.collide_agents) > 0:
+                lr += self.r_collision_person
+            if len(ped.collide_obstacles) > 0:
+                lr += self.r_collision_wall
+            if ped.is_done and not ped.has_removed:
+                lr += self.r_reach
+            else:
+                last_pos = self.env.points_in_last_step[ped_index]
+                now_pos = (ped.getX, ped.getY)
+                if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and last_pos[1] - 0.001 <= now_pos[
+                    1] <= last_pos[1] + 0.001):
+                    lr += self.r_move  # 给予-0.1以每步
+                    self.env.points_in_last_step[ped_index] = now_pos
+                else:
+                    lr += self.r_wait
         return gr, lr
 
 

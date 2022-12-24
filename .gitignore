@@ -3,6 +3,7 @@ data/
 __pycache__/
 *.ini
 *.pyc
-d3rl/d3rlpy_logs
-d3rl/runs
-d3rl/datasets
+rl_platform/d3rl_case/d3rlpy_logs
+rl_platform/tianshou_case/log
+rl_platform/tianshou_case/chromedata
+venv

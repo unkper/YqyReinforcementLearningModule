@@ -12,6 +12,7 @@ class PedsMoveEnvViewer(pyglet.window.Window):
     def __init__(self, env):
         super().__init__(width=500,
                          height=500,
+                         resizable=True,
                          caption="行人行走模拟环境",
                          config=pyglet.gl.Config(double_buffer=True),
                          visible=True)

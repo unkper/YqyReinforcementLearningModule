@@ -19,7 +19,7 @@ class MyContactListener(b2ContactListener):
             # 只有exit_type匹配时，才将agent的is_done置为true，删除刚体的流程放在循环中进行
             if agent.model.exit_type == exit.model.exit_type:
                 agent.model.is_done = True
-            # print("One Agent{} has reached exit{}!!!".format(agent.id, exit.id))
+                #print("One Agent{} has reached exit{}!!!".format(agent.id, exit.id))
         elif infoA.type == ObjectType.Agent and infoB.type == ObjectType.Agent:
             if infoB.model in infoA.model.group:
                 return

@@ -18,3 +18,12 @@ for angle in range(0, 360, int(360 / (ACTION_DIM - 1))):  # 逆时针旋转angle
     vec = np.squeeze((mat.dot(identity)).tolist())
     actions.append(np.array(vec))
 print(actions)
+
+identity = np.array([1, 0])
+DIRECTIONS = [np.zeros([2])]
+for idx, angle in enumerate(range(0, 360, int(360 / 8))):
+    theta = np.radians(angle)
+    mat = np.array([cos(theta), -sin(theta),
+                    sin(theta), cos(theta)]).reshape([2, 2])
+    vec = np.matmul(mat, identity)
+    DIRECTIONS.append(vec)

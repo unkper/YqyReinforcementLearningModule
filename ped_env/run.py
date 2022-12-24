@@ -1,4 +1,8 @@
+import pprint
+import random
+
 import Box2D as b2d
+from gym.spaces import Discrete
 
 from ped_env.utils.new_map import NewMap
 from ped_env.envs import PedsMoveEnv as Env
@@ -33,6 +37,7 @@ def HelloWorldProject():
             body.angle
         ))
 
+
 # 使用随机策略来前往目的地
 def test2():
     import time
@@ -40,8 +45,8 @@ def test2():
 
     debug = False
 
-    person_num = 40
-    env = Env(map_12, person_num, group_size=(1, 1), frame_skipping=12, maxStep=3000, debug_mode=debug,
+    person_num = 100
+    env = Env(map_10, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
@@ -50,24 +55,32 @@ def test2():
         starttime = time.time()
         step = 0
         obs = env.reset()
-        is_done = [False]
-        while not is_done[0]:
-            if not debug:
-                action = np.random.random([leader_num, 9])
-            else:
-                action = np.zeros([leader_num, 9])
-                action[:, 0] = 1
-            obs, reward, is_done, info = env.step(action)
-            handler.step(info)
+        is_done = {env.agents[0]: False}
+        speed_action = random.sample([1], 1)[0]
+
+        def get_single_action(agent):
+            return env.action_space(agent).sample()
+            # return 18
+
+        while not all(is_done.values()):
+            # if not debug:
+            #     action = np.random.random([leader_num, 9])
+            # else:
+            #     action = np.zeros([leader_num, 9])
+            #     action[:, 0] = 1
+            # action = {agent: env.action_space(agent).sample() for agent in env.agents}
+            action = {agent: get_single_action(agent) for agent in env.agents}
+            obs, reward, is_done, truncated, info = env.step(action)
+            # pprint.pprint(obs)
             if debug:
                 env.debug_step()
             step += env.frame_skipping
             env.render()
-        handler.reset(info)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collision_between_agents, env.collide_wall))
-        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
+                                                                             step / (endtime - starttime)))
     handler.save("./")
 
 
@@ -80,7 +93,7 @@ def test3():
     person_num = 8
     n_rol_counts = 4
     total_epochs = 4
-    _env = Env(map_05, person_num, group_size=(1, 1), maxStep=500, test_mode=debug)
+    _env = Env(map_05, person_num, group_size=(1, 1), maxStep=500)
     parallel_envs = make_parallel_env(_env, n_rol_counts)
     leader_num = parallel_envs.agent_count
     for epoch in range(total_epochs):
@@ -99,7 +112,8 @@ def test3():
             # parallel_envs.render()
             # print(obs, reward, is_done)
         endtime = time.time()
-        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
+                                                                             step / (endtime - starttime)))
 
 
 def test4():
@@ -133,7 +147,8 @@ def test4():
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collision_between_agents, env.collide_wall))
-        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
+                                                                             step / (endtime - starttime)))
 
 
 # 使用A*策略来前往目的地
@@ -167,14 +182,13 @@ def test5():
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collision_between_agents, env.collide_wall))
-        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime, step / (endtime - starttime)))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
+                                                                             step / (endtime - starttime)))
 
 
 if __name__ == '__main__':
-    #HelloWorldProject()
+    # HelloWorldProject()
     test2()
-
-
 
     # import kdtree
     # points = []

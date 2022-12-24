@@ -5,4 +5,15 @@
 其中地图含有数种元素，代表的意思是：
 ## 注意：地图必须是ndarray的str类型，而spawn_map必须是int类型！
 '1':方形1m*1m的墙
-'2':
+'2':外围的墙
+'3'-'9':代表一种类型的智能体与其对应的出口
+'lw': left wall,代表0.2m宽，占方格左边的围墙
+'rw': right wall
+'uw': up wall
+'dw': down wall
+'mrw': mid-row wall,代表0.2m宽，占方格中间的横向的墙
+'mcw': mid-column wall
+'cluw': corner left up wall,代表0.2m宽，占左边和上边的形成一个拐角的墙
+'cldw': corner left down wall
+'cruw':
+'crdw':

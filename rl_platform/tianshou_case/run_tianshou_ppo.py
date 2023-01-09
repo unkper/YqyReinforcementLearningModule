@@ -247,7 +247,8 @@ if __name__ == "__main__":
     # parser.add_argument("file", type=str, default=None)
     # parser.add_argument("max_step", type=int, default=5000)
     # args = parser.parse_args()
-    train(r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_13_09_16\checkpoint_33.pth")
+    # train()
+    train(r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2023_01_01_21_24_54\checkpoint_14.pth")
     # test()
 
     #python run_tianshou_ppo.py --file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_01_48_33\checkpoint_17.pth

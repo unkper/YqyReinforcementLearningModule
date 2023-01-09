@@ -189,7 +189,6 @@ class AStar:
 
 ACTION_DIM = 9
 
-
 class AStarController(gym.Env):
     vec_to_discrete_action_dic = {
         (0, 0): 0,

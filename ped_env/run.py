@@ -45,7 +45,7 @@ def test2():
 
     debug = False
 
-    person_num = 100
+    person_num = 4
     env = Env(map_10, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True)
     leader_num = env.agent_count
@@ -71,7 +71,7 @@ def test2():
             # action = {agent: env.action_space(agent).sample() for agent in env.agents}
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
-            # pprint.pprint(obs)
+            pprint.pprint(obs)
             if debug:
                 env.debug_step()
             step += env.frame_skipping

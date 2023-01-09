@@ -186,7 +186,9 @@ class Person(Agent):
         return ((rx - x) ** 2 + (ry - y) ** 2) ** 0.5
 
     def relative_angle(self, rpos):
-        return angle_between(self.pos, rpos)
+        x, y = self.pos
+        rx, ry = rpos
+        return angle_between(identity, np.array([rx - x, ry - y]))
 
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY

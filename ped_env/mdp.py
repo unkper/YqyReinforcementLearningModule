@@ -41,7 +41,6 @@ class PedsHandlerInterface(abc.ABC):
             self.exit_kd_trees = dict()  # 键是leader的id，值是使用A*策略产生的路径
             self.use_planner = True
 
-
         for le in self.env.leaders:
             # 得到当前leader起始点到终点的路径，并将其存放在一KDTree中供查询
             pos_x, pos_y = int(le.getX), int(le.getY)
@@ -118,13 +117,9 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         observation.append(ped.vec_norm)
         observation.append(ped.vec_angle)
         # 给予智能体相对目标的距离和夹角
-        rx, ry = self.env.get_ped_rel_pos_to_exit((ped.getX, ped.getY), ped.exit_type)
-        distence = (rx ** 2 + ry ** 2) ** 0.5
-        observation.append(distence)
-        if distence == 0.0:
-            observation.append(0.0)
-        else:
-            observation.append(angle_between(identity, np.array([rx, ry])))
+        dis, angle = self.env.terrain.get_ped_to_exit_dis_and_dir(ped)
+        observation.append(dis)
+        observation.append(angle)
         # 给予附近3m内的所有智能体位置信息
         persons = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithoutForce.DETECT_PED_COUNT,
                                                     detect_type=ObjectType.Agent)

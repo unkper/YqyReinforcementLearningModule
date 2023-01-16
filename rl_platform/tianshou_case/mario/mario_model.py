@@ -1,5 +1,5 @@
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple, Any
 
 import torch
 from ding.model import FCEncoder, ConvEncoder, DuelingHead, DiscreteHead, MultiHead
@@ -18,7 +18,8 @@ class DQN(nn.Module):
             head_hidden_size: Optional[int] = None,
             head_layer_num: int = 1,
             activation: Optional[nn.Module] = nn.ReLU(),
-            norm_type: Optional[str] = None
+            norm_type: Optional[str] = None,
+            device = "cuda" if torch.cuda.is_available() else "cpu"
     ) -> None:
         """
         Overview:
@@ -70,8 +71,11 @@ class DQN(nn.Module):
             self.head = head_cls(
                 head_hidden_size, action_shape, head_layer_num, activation=activation, norm_type=norm_type
             )
+        self.device = device
+        self.encoder.to(device)
+        self.head.to(device)
 
-    def forward(self, x: torch.Tensor) -> Dict:
+    def forward(self, x: torch.Tensor, state, info) -> Tuple[torch.Tensor, Any]:
         r"""
         Overview:
             DQN forward computation graph, input observation tensor to predict q_value.
@@ -90,6 +94,7 @@ class DQN(nn.Module):
             >>> outputs = model(inputs)
             >>> assert isinstance(outputs, dict) and outputs['logit'].shape == torch.Size([4, 6])
         """
+        x = torch.tensor(x).to(self.device)
         x = self.encoder(x)
         x = self.head(x)
-        return x
+        return x['logit'].to("cpu"), state

@@ -9,11 +9,10 @@ import numpy as np
 from math import sqrt, pow
 
 from Box2D import (b2World, b2Vec2)
-from typing import Tuple, Dict, cast, List, Optional
+from typing import Tuple, Dict, cast, List, Optional, Any
 from collections import defaultdict
 
 from gym import Space
-from pettingzoo.utils.env import ObsType
 
 from ped_env.mdp import PedsHandlerInterface, PedsRLHandlerWithPlanner, PedsRLHandlerWithoutForce
 from ped_env.pathfinder import AStar
@@ -441,7 +440,7 @@ class PedsMoveEnv(gym.Env):
         return ret_elements
 
     def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> Dict[
-        str, ObsType]:
+        str, Any]:
         self.seed(seed)
         self.reset_property()
         # 开始初始化环境

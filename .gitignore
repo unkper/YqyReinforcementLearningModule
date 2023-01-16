@@ -6,4 +6,5 @@ __pycache__/
 rl_platform/d3rl_case/d3rlpy_logs
 rl_platform/tianshou_case/log
 rl_platform/tianshou_case/chromedata
+rl_platform/tianshou_case/mario/log
 venv

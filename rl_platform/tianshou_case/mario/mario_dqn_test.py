@@ -10,12 +10,10 @@ import torch
 from ding.config import compile_config
 from ding.envs import DingEnvWrapper, MaxAndSkipWrapper, WarpFrameWrapper, ScaledFloatFrameWrapper, FrameStackWrapper, \
     EvalEpisodeReturnEnv, SyncSubprocessEnvManager
-from ding.worker import BaseLearner, SampleSerialCollector, InteractionSerialEvaluator, AdvancedReplayBuffer
 from nes_py.wrappers import JoypadSpace
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.env import DummyVectorEnv, SubprocVectorEnv
-from tianshou.env.pettingzoo_env import PettingZooEnv
 from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy
 from tianshou.trainer import offpolicy_trainer
 from tianshou.utils.net.common import Net
@@ -62,6 +60,8 @@ def get_policy(env, optim=None):
     #     device="cuda" if torch.cuda.is_available() else "cpu",
     # ).to("cuda" if torch.cuda.is_available() else "cpu")
     net = DQN(**cfg.policy.model)
+    if torch.cuda.is_available():
+        net.cuda()
 
     from rl_platform.tianshou_case.net.utils import layer_init
 
@@ -79,7 +79,7 @@ def get_policy(env, optim=None):
     return agent_learn, optim
 
 
-def _get_agents(
+def _get_agent(
         agent_learn: Optional[BasePolicy] = None,
         agent_count: int = 1,
         optim: Optional[torch.optim.Optimizer] = None,
@@ -90,30 +90,24 @@ def _get_agents(
         # model
         agent_learn, optim = get_policy(env, optim)
 
-    agents = [agent_learn for _ in range(agent_count)]
-    if file_path is not None:
-        state_dicts = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
-        for ag, state_dict in zip(agents, state_dicts.values()):
-            ag.load_state_dict(state_dict)
-    policy = MultiAgentPolicyManager(agents, env)
-    return policy, optim, env.agents
+    return agent_learn, optim, None
 
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
     def wrapped_mario_env():
         return DingEnvWrapper(
-            JoypadSpace(gym_super_mario_bros.make("SuperMarioBros-1-4-v0"), [["right"], ["right", "A"]]),
-            cfg={
-                'env_wrapper': [
-                    lambda env: MaxAndSkipWrapper(env, skip=4),
-                    lambda env: WarpFrameWrapper(env, size=84),
-                    lambda env: ScaledFloatFrameWrapper(env),
-                    lambda env: FrameStackWrapper(env, n_frames=4),
-                    lambda env: EvalEpisodeReturnEnv(env),
-                ]
-            }
-        )
+                JoypadSpace(gym_super_mario_bros.make("SuperMarioBros-1-1-v0"), [["right"], ["right", "A"]]),
+                cfg={
+                    'env_wrapper': [
+                        lambda env: MaxAndSkipWrapper(env, skip=4),
+                        lambda env: WarpFrameWrapper(env, size=84),
+                        lambda env: ScaledFloatFrameWrapper(env),
+                        lambda env: FrameStackWrapper(env, n_frames=4),
+                        lambda env: EvalEpisodeReturnEnv(env),
+                    ]
+                }
+            )
     return wrapped_mario_env()
 
 
@@ -131,12 +125,11 @@ def train(load_check_point=None):
         test_envs.seed(seed)
 
         # ======== Step 2: Agent setup =========
-        policy, optim, agents = _get_agents(agent_count=1)
+        policy, optim, agents = _get_agent(agent_count=1)
 
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location="cuda" if torch.cuda.is_available() else "cpu")
-            for agent in agents:
-                policy.policies[agent].load_state_dict(load_data[agent])
+            policy.load_state_dict(load_data["agent"])
             optim.load_state_dict(load_data["optim"])
 
         # ======== Step 3: Collector setup =========
@@ -144,10 +137,9 @@ def train(load_check_point=None):
             policy,
             train_envs,
             VectorReplayBuffer(buffer_size, len(train_envs)),
-            exploration_noise=True,
-            reset_when_all_done=True
+            exploration_noise=True
         )
-        test_collector = Collector(policy, test_envs, exploration_noise=True, reset_when_all_done=True)
+        test_collector = Collector(policy, test_envs, exploration_noise=True)
 
         train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
 
@@ -159,34 +151,29 @@ def train(load_check_point=None):
         def save_best_fn(policy):
             model_save_path = os.path.join('log/' + file_name, "policy.pth")
             os.makedirs(os.path.join('log/' + file_name), exist_ok=True)
-            save_data = {}
-            for agent in agents:
-                save_data[agent] = policy.policies[agent].state_dict()
+            save_data = policy.state_dict()
             torch.save(save_data, model_save_path)
 
         def save_checkpoint_fn(epoch, env_step, gradient_step):
             # see also: https://pytorch.org/tutorials/beginner/saving_loading_models.html
             ckpt_path = os.path.join('log/' + file_name, "checkpoint_{}.pth".format(epoch))
             save_data = {}
-            for agent in agents:
-                save_data[agent] = policy.policies[agent].state_dict()
+            save_data["agent"] = policy.state_dict()
             save_data["optim"] = optim.state_dict()
             torch.save(save_data, ckpt_path)
             return ckpt_path
 
         def stop_fn(mean_rewards):
-            return mean_rewards >= 0.6
+            return mean_rewards >= 2500
 
         def train_fn(epoch, env_step):
-            for agent in agents:
-                policy.policies[agent].set_eps(eps_train)
+            policy.set_eps(eps_train)
 
         def test_fn(epoch, env_step):
-            for agent in agents:
-                policy.policies[agent].set_eps(eps_test)
+            policy.set_eps(eps_test)
 
         def reward_metric(rews):
-            return rews[:, 1]
+            return rews[:]
 
         # ======== Step 5: Run the trainer =========
         result = offpolicy_trainer(
@@ -216,8 +203,8 @@ def test():
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     env = _get_env()
     policy = get_policy(env)
-    policy, optim, agents = _get_agents(policy, 8,
-                                        file_path=r"/rl_platform/log/PedsMoveEnv_DQN_2022_12_17_14_54_15/policy.pth")
+    policy, optim, agents = _get_agent(policy, 8,
+                                       file_path=r"/rl_platform/log/PedsMoveEnv_DQN_2022_12_17_14_54_15/policy.pth")
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 

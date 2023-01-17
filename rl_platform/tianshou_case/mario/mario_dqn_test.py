@@ -89,7 +89,9 @@ def _get_agent(
     if agent_learn is None:
         # model
         agent_learn, optim = get_policy(env, optim)
-
+    if file_path is not None:
+        state_dict = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
+        agent_learn.load_state_dict(state_dict)
     return agent_learn, optim, None
 
 

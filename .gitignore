@@ -5,6 +5,6 @@ __pycache__/
 *.pyc
 rl_platform/d3rl_case/d3rlpy_logs
 rl_platform/tianshou_case/log
-rl_platform/tianshou_case/chromedata
+rl_platform/tianshou_case/derk/chromedata
 rl_platform/tianshou_case/mario/log
 venv

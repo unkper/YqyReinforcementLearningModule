@@ -26,7 +26,7 @@ def derk_env():
         actions = []
         for i in range(len(env.action_space)):
             actions.append(env.action_space[i].sample())
-        env.step(actions)
+        env.step(np.array(actions))
 
 
 

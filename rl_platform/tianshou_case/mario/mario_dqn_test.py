@@ -220,8 +220,8 @@ if __name__ == "__main__":
 
     parmas = parser.parse_args()
 
-    # train()
+    train()
     # train(r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-2-v0_DQN_2023_01_17_19_22_53\checkpoint_23.pth")
-    test()
+    # test()
 
     # python run_tianshou.py --load_file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_DQN_2022_12_21_08_13_37\checkpoint_35.pth

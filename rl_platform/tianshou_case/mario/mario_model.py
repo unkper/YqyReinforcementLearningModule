@@ -72,10 +72,11 @@ class DQN(nn.Module):
                 head_hidden_size, action_shape, head_layer_num, activation=activation, norm_type=norm_type
             )
         self.device = device
+        self.output_dim = action_shape
         # self.encoder.to(device)
         # self.head.to(device)
 
-    def forward(self, x: torch.Tensor, state, info) -> Tuple[torch.Tensor, Any]:
+    def forward(self, x: torch.Tensor, state, info=None) -> Tuple[torch.Tensor, Any]:
         r"""
         Overview:
             DQN forward computation graph, input observation tensor to predict q_value.

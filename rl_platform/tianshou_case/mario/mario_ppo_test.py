@@ -7,9 +7,8 @@ import gym
 import gym_super_mario_bros
 import numpy as np
 import torch
-from ding.config import compile_config
 from ding.envs import DingEnvWrapper, MaxAndSkipWrapper, WarpFrameWrapper, ScaledFloatFrameWrapper, FrameStackWrapper, \
-    EvalEpisodeReturnEnv, SyncSubprocessEnvManager
+    EvalEpisodeReturnEnv
 from nes_py.wrappers import JoypadSpace
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
@@ -74,8 +73,6 @@ def get_policy(env, optim=None):
     if torch.cuda.is_available():
         net.cuda()
 
-    if optim is None:
-        optim = torch.optim.Adam(net.parameters(), lr=lr)
     actor = Actor(net, env.action_space.n, device=set_device, softmax_output=False)
     critic = Critic(net, device=set_device)
     optim = torch.optim.Adam(
@@ -180,7 +177,7 @@ def train(load_check_point=None):
 
         # ======== Step 4: Callback functions setup =========
         task = "Mario_{}".format(env_name)
-        file_name = task + "_DQN_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         logger = ts.utils.TensorboardLogger(SummaryWriter('log/' + file_name))  # TensorBoard is supported!
 
         def save_best_fn(policy):
@@ -221,8 +218,8 @@ def train(load_check_point=None):
             repeat_per_collect = 4,
             episode_per_test=episode_per_test,
             batch_size=batch_size,
-            train_fn=train_fn,
-            test_fn=test_fn,
+            # train_fn=train_fn,
+            # test_fn=test_fn,
             stop_fn=stop_fn,
             save_best_fn=save_best_fn,
             save_checkpoint_fn=save_checkpoint_fn,

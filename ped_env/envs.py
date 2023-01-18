@@ -13,6 +13,7 @@ from typing import Tuple, Dict, cast, List, Optional, Any
 from collections import defaultdict
 
 from gym import Space
+from numba import njit
 
 from ped_env.mdp import PedsHandlerInterface, PedsRLHandlerWithPlanner, PedsRLHandlerWithoutForce
 from ped_env.pathfinder import AStar
@@ -163,6 +164,7 @@ class Parser():
         self.start_nodes_exit = []
         self.start_nodes_obs = []
 
+    @njit
     def parse_and_create(self, map, spawn_map):
         from ped_env.objects import BoxWall
         inc = BoxWall.PIECE_WALL_WIDTH / 2
@@ -404,6 +406,7 @@ class PedsMoveEnv(gym.Env):
             self.distance_to_exit.append(dis)
             self.points_in_last_step.append((ped.getX, ped.getY))
 
+    @njit
     def get_ped_nearest_exit_dis(self, person_pos):
         x, y = person_pos
         min = math.inf
@@ -413,6 +416,7 @@ class PedsMoveEnv(gym.Env):
             min = dis if min > dis else min
         return min
 
+    @njit
     def get_ped_to_exit_dis(self, person_pos, exit_type):
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
         x, y = person_pos

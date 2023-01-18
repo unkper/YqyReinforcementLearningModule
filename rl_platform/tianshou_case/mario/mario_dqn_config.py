@@ -47,3 +47,41 @@ mario_dqn_create_config = dict(
 mario_dqn_create_config = EasyDict(mario_dqn_create_config)
 create_config = mario_dqn_create_config
 # you can run `python3 -u mario_dqn_main.py`
+
+# actions for the simple run right environment
+RIGHT_ONLY = [
+    ['NOOP'],
+    ['right'],
+    ['right', 'A'],
+    ['right', 'B'],
+    ['right', 'A', 'B'],
+]
+
+
+# actions for very simple movement
+SIMPLE_MOVEMENT = [
+    ['NOOP'],
+    ['right'],
+    ['right', 'A'],
+    ['right', 'B'],
+    ['right', 'A', 'B'],
+    ['A'],
+    ['left'],
+]
+
+
+# actions for more complex movement
+COMPLEX_MOVEMENT = [
+    ['NOOP'],
+    ['right'],
+    ['right', 'A'],
+    ['right', 'B'],
+    ['right', 'A', 'B'],
+    ['A'],
+    ['left'],
+    ['left', 'A'],
+    ['left', 'B'],
+    ['left', 'A', 'B'],
+    ['down'],
+    ['up'],
+]

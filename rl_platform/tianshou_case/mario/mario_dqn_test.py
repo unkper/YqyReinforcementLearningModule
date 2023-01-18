@@ -23,7 +23,7 @@ import tianshou as ts
 
 import sys
 
-from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config
+from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
 from rl_platform.tianshou_case.mario.mario_model import DQN
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
@@ -34,15 +34,17 @@ buffer_size = 200000
 batch_size = 256
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 100
-max_step = 10000  # 环境的最大步数
+max_step = 20000  # 环境的最大步数
 step_per_epoch = max_step
 step_per_collect = 50
 episode_per_test = 5
 update_per_step = 0.1
 seed = 1
-train_env_num, test_env_num = 10, 10
+train_env_num, test_env_num = 5, 5
 
 cfg = mario_dqn_config
+env_name = "SuperMarioBros-1-1-v0"
+action_type = [["right"], ["right", "A"]]
 
 
 def get_policy(env, optim=None):
@@ -62,10 +64,6 @@ def get_policy(env, optim=None):
     net = DQN(**cfg.policy.model)
     if torch.cuda.is_available():
         net.cuda()
-
-    from rl_platform.tianshou_case.net.utils import layer_init
-
-    #layer_init(net)
 
     if optim is None:
         optim = torch.optim.Adam(net.parameters(), lr=lr)
@@ -99,7 +97,7 @@ def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
     def wrapped_mario_env():
         return DingEnvWrapper(
-                JoypadSpace(gym_super_mario_bros.make("SuperMarioBros-1-1-v0"), [["right"], ["right", "A"]]),
+                JoypadSpace(gym_super_mario_bros.make(env_name), action_type),
                 cfg={
                     'env_wrapper': [
                         lambda env: MaxAndSkipWrapper(env, skip=4),
@@ -111,6 +109,9 @@ def _get_env():
                 }
             )
     return wrapped_mario_env()
+
+def _get_test_env():
+    return gym_super_mario_bros.make(env_name)
 
 
 def train(load_check_point=None):
@@ -146,7 +147,7 @@ def train(load_check_point=None):
         train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
 
         # ======== Step 4: Callback functions setup =========
-        task = "Mario_{}".format("1-4")
+        task = "Mario_{}".format(env_name)
         file_name = task + "_DQN_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         logger = ts.utils.TensorboardLogger(SummaryWriter('log/' + file_name))  # TensorBoard is supported!
 
@@ -202,11 +203,11 @@ def train(load_check_point=None):
 
 
 def test():
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_DQN_2023_01_18_12_00_34\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     env = _get_env()
-    policy = get_policy(env)
-    policy, optim, agents = _get_agent(policy, 8,
-                                       file_path=r"/rl_platform/log/PedsMoveEnv_DQN_2022_12_17_14_54_15/policy.pth")
+    policy, optim, agents = _get_agent(None, 8,
+                                       file_path=policy_path)
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 
@@ -219,7 +220,8 @@ if __name__ == "__main__":
 
     parmas = parser.parse_args()
 
-    train(parmas.load_file)
-    # test()
+    # train()
+    # train(r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-2-v0_DQN_2023_01_17_19_22_53\checkpoint_23.pth")
+    test()
 
     # python run_tianshou.py --load_file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_DQN_2022_12_21_08_13_37\checkpoint_35.pth

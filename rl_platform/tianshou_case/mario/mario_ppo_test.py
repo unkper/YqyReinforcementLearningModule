@@ -173,7 +173,7 @@ def train(load_check_point=None):
         )
         test_collector = Collector(policy, test_envs, exploration_noise=True)
 
-        train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
+        # train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
 
         # ======== Step 4: Callback functions setup =========
         task = "Mario_{}".format(env_name)

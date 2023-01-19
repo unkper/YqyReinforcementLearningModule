@@ -95,7 +95,7 @@ class DQN(nn.Module):
             >>> outputs = model(inputs)
             >>> assert isinstance(outputs, dict) and outputs['logit'].shape == torch.Size([4, 6])
         """
-        x = torch.tensor(x).to(self.device)
+        x = torch.as_tensor(x, dtype=torch.float32).to(self.device)
         x = self.encoder(x)
         x = self.head(x)
         return x['logit'].to("cpu"), state

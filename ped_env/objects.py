@@ -12,6 +12,7 @@ import numpy as np
 from Box2D import *
 from math import sin, cos
 
+from numba import njit
 from numpy import ndarray
 
 from ped_env.utils.misc import angle_between
@@ -308,6 +309,7 @@ class Person(Agent):
         world.QueryAABB(callback, aabb)
         return callback.detect_objects
 
+    @njit
     def objects_query(self, objects: List, size, conditionFunc=lambda self, obj: True):
         pos = (self.getX, self.getY)
         detect_objects = []

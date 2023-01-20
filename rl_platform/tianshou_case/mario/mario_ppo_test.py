@@ -1,6 +1,7 @@
 import copy
 import datetime
 import os
+import pprint
 from typing import Optional, Tuple
 
 import gym
@@ -229,7 +230,7 @@ def train(load_check_point=None):
             logger=logger
         )
 
-        print(result)
+        pprint.pprint(result)
 
 
 def test():
@@ -238,6 +239,7 @@ def test():
     env = _get_env()
     policy, optim, agents = _get_agent(None, 8,
                                        file_path=policy_path)
+    policy.eval()
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 

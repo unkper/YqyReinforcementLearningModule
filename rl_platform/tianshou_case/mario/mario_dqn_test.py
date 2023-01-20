@@ -1,6 +1,7 @@
 import copy
 import datetime
 import os
+import pprint
 from typing import Optional, Tuple
 
 import gym
@@ -199,15 +200,16 @@ def train(load_check_point=None):
             logger=logger
         )
 
-        print(result)
+        pprint.pprint(result)
 
 
 def test():
     policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_DQN_2023_01_18_12_00_34\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
-    env = _get_env()
+
     policy, optim, agents = _get_agent(None, 8,
                                        file_path=policy_path)
+    policy.eval()
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 

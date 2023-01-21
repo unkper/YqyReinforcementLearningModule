@@ -60,7 +60,12 @@ def get_policy(env, optim=None):
     state_shape = env.observation_space.shape or env.observation_space.n
     action_shape = env.action_space.shape or env.action_space.n
 
-    net = DQN(**cfg.policy.model)
+    #net = DQN(**cfg.policy.model)
+    net = TDQN(*state_shape,
+               action_shape,
+               device=device,
+               features_only=True,
+               output_dim=hidden_size)
     if torch.cuda.is_available():
         net.cuda()
 

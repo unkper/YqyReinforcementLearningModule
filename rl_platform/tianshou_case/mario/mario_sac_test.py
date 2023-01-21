@@ -19,7 +19,6 @@ from torch.utils.tensorboard import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.policy import DiscreteSACPolicy, ICMPolicy, BasePolicy
 from tianshou.trainer import offpolicy_trainer, onpolicy_trainer
-from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.mario.mario_model import DQN, TDQN
@@ -29,10 +28,10 @@ buffer_size = 100000
 actor_lr, critic_lr = 1e-5, 1e-5
 gamma, tau, alpha = 0.99, 0.005, 0.05
 n_step = 3
-auto_alpha = False
+auto_alpha = True
 alpha_lr = 3e-4
 epoch = 100
-step_per_epoch = 100000
+step_per_epoch = 10000
 step_per_collect = 10
 epoch_per_test = 5
 update_per_epoch = 0.1
@@ -48,9 +47,10 @@ icm_forward_loss_weight = 0.2
 env_name = "SuperMarioBros-1-1-v0"
 action_type = [["right"], ["right", "A"]]
 
-from .mario_dqn_config import mario_dqn_config as cfg
+from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config as cfg
 
 def get_policy(env, optim=None):
+    global alpha
     observation_space = (
         env.observation_space["observation"]
         if isinstance(env.observation_space, gym.spaces.Dict)
@@ -71,12 +71,15 @@ def get_policy(env, optim=None):
     critic2 = Critic(net, last_size=action_shape, device=device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=critic_lr)
 
+    optims = [actor_optim, critic1_optim, critic2_optim]
+
     # define policy
     if auto_alpha:
         target_entropy = 0.98 * np.log(np.prod(action_shape))
         log_alpha = torch.zeros(1, requires_grad=True, device=device)
         alpha_optim = torch.optim.Adam([log_alpha], lr=alpha_lr)
         alpha = (target_entropy, log_alpha, alpha_optim)
+        optims.append(alpha_optim)
 
     policy = DiscreteSACPolicy(
         actor,
@@ -109,8 +112,9 @@ def get_policy(env, optim=None):
             policy, icm_net, icm_optim, icm_lr_scale, icm_reward_scale,
             icm_forward_loss_weight
         ).to(device)
+        optims.append(icm_optim)
 
-    return policy, optim
+    return policy, optims
 
 
 def _get_agent(
@@ -194,7 +198,7 @@ def train(load_check_point=None):
             ckpt_path = os.path.join('log/' + file_name, "checkpoint_{}.pth".format(epoch))
             save_data = {}
             save_data["agent"] = policy.state_dict()
-            save_data["optim"] = optim.state_dict()
+            save_data["optim"] = optim
             torch.save(save_data, ckpt_path)
             return ckpt_path
 
@@ -234,9 +238,8 @@ def train(load_check_point=None):
         pprint.pprint(result)
 
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_DQN_2023_01_18_12_00_34\policy.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_01_20_17_25_16\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
-    env = _get_env()
     policy, optim, agents = _get_agent(None, 8,
                                        file_path=policy_path)
     policy.eval()
@@ -246,3 +249,4 @@ def test():
 
 if __name__ == "__main__":
     train()
+    # test()

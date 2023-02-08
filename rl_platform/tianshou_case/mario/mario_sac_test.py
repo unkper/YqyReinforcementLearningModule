@@ -23,6 +23,7 @@ from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.mario.mario_model import DQN, TDQN
 from rl_platform.tianshou_case.net.network import ICMFeatureHead, PolicyHead
+from rl_platform.tianshou_case.utils.wrapper import DisableRewardWrapper
 
 scale_obs = 0
 buffer_size = 100000
@@ -150,6 +151,7 @@ def _get_env():
                         lambda env: ScaledFloatFrameWrapper(env),
                         lambda env: FrameStackWrapper(env, n_frames=4),
                         lambda env: EvalEpisodeReturnEnv(env),
+                        lambda env: DisableRewardWrapper(env),  # 为了验证ICM机制的有效性而加
                     ]
                 }
             )

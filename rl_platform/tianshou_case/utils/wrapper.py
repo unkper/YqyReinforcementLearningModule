@@ -31,3 +31,29 @@ class DisableRewardWrapper(gym.RewardWrapper):
             - reward(:obj:`Float`): Zero Reward
         """
         return 0
+
+
+class MarioRewardWrapper(gym.RewardWrapper):
+
+    def __init__(self, env):
+        """
+        Overview:
+            Initialize ``self.`` See ``help(type(self))`` for accurate signature; setup the properties.
+        Arguments:
+            - env (:obj:`gym.Env`): the environment to wrap.
+        """
+        super().__init__(env)
+        self.env = env
+        from gym_super_mario_bros import SuperMarioBrosEnv
+        self.env: SuperMarioBrosEnv
+
+    def reward(self, reward):
+        """
+        Overview:
+            Disable Env reward to Zero.
+        Arguments:
+            - reward(:obj:`Float`): Raw Reward
+        Returns:
+            - reward(:obj:`Float`): Zero Reward
+        """
+        return self._death_penalty

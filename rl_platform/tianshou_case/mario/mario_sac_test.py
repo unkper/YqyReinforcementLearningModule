@@ -13,7 +13,7 @@ import torch
 from ding.envs import DingEnvWrapper, MaxAndSkipWrapper, WarpFrameWrapper, ScaledFloatFrameWrapper, FrameStackWrapper, \
     EvalEpisodeReturnEnv
 from nes_py.wrappers import JoypadSpace
-from tianshou.env import DummyVectorEnv
+from tianshou.env import DummyVectorEnv, ShmemVectorEnv
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.data import Collector, VectorReplayBuffer
@@ -23,7 +23,7 @@ from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.mario.mario_model import DQN, TDQN
 from rl_platform.tianshou_case.net.network import ICMFeatureHead, PolicyHead
-from rl_platform.tianshou_case.utils.wrapper import DisableRewardWrapper
+from rl_platform.tianshou_case.utils.wrapper import DisableRewardWrapper, MarioRewardWrapper
 
 scale_obs = 0
 buffer_size = 100000
@@ -138,30 +138,37 @@ def _get_agent(
         agent_learn.load_state_dict(state_dict)
     return agent_learn, optim, None
 
+env_test = False
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
+    global env_test
     def wrapped_mario_env():
+        wrappers = [
+            lambda env: MaxAndSkipWrapper(env, skip=4),
+            lambda env: WarpFrameWrapper(env, size=84),
+            lambda env: ScaledFloatFrameWrapper(env),
+            lambda env: FrameStackWrapper(env, n_frames=4),
+            lambda env: EvalEpisodeReturnEnv(env),
+        ]
+        if not env_test:
+            wrappers.append(lambda env: MarioRewardWrapper(env))  # 为了验证ICM机制的有效性而加
+
         return DingEnvWrapper(
                 JoypadSpace(gym_super_mario_bros.make(env_name), action_type),
                 cfg={
-                    'env_wrapper': [
-                        lambda env: MaxAndSkipWrapper(env, skip=4),
-                        lambda env: WarpFrameWrapper(env, size=84),
-                        lambda env: ScaledFloatFrameWrapper(env),
-                        lambda env: FrameStackWrapper(env, n_frames=4),
-                        lambda env: EvalEpisodeReturnEnv(env),
-                        lambda env: DisableRewardWrapper(env),  # 为了验证ICM机制的有效性而加
-                    ]
+                    'env_wrapper': wrappers
                 }
             )
     return wrapped_mario_env()
 
 def train(load_check_point=None):
+    global env_test
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = DummyVectorEnv([_get_env for _ in range(training_num)])
-        test_envs = DummyVectorEnv([_get_env for _ in range(test_num)])
+        train_envs = ShmemVectorEnv([_get_env for _ in range(training_num)])
+        env_test = True
+        test_envs = ShmemVectorEnv([_get_env for _ in range(test_num)])
 
         # seed
         seed = 21343

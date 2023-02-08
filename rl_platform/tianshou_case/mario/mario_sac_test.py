@@ -39,8 +39,8 @@ update_per_epoch = 0.1
 batch_size, hidden_size = 64, 512
 training_num, test_num = 10, 10
 rew_norm = False
-device = "cpu"
-#device = "cuda" if torch.cuda.is_available() else "cpu"
+#device = "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 frames_stack = 4
 icm_lr_scale = 1e-3
 icm_reward_scale = 0.1
@@ -48,8 +48,6 @@ icm_forward_loss_weight = 0.2
 
 env_name = "SuperMarioBros-1-1-v0"
 action_type = [["right"], ["right", "A"]]
-
-from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config as cfg
 
 def get_policy(env, optim=None):
     global alpha
@@ -63,11 +61,11 @@ def get_policy(env, optim=None):
     action_shape = env.action_space.shape or env.action_space.n
 
     #net = DQN(**cfg.policy.model)
-    net = PolicyHead(*state_shape)
+    net = PolicyHead(*state_shape, device=device)
 
     # if torch.cuda.is_available():
     #     net.cuda()
-    if device == 'cuda':
+    if device == "cuda":
         net.cuda()
 
     actor = Actor(net, action_shape, device=device, softmax_output=False)
@@ -101,8 +99,8 @@ def get_policy(env, optim=None):
         reward_normalization=rew_norm,
     ).to(device)
     if icm_lr_scale > 0:
-        feature_net = ICMFeatureHead(*state_shape)
-        if device == 'cuda':
+        feature_net = ICMFeatureHead(*state_shape, device=device)
+        if device == "cuda":
             feature_net.cuda()
 
         action_dim = np.prod(action_shape)
@@ -245,15 +243,15 @@ def train(load_check_point=None):
         pprint.pprint(result)
 
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_01_20_17_25_16\policy.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_08_13_37_02\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     policy, optim, agents = _get_agent(None, 8,
                                        file_path=policy_path)
-    policy.eval()
+    #policy.eval()
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 
 
 if __name__ == "__main__":
-    train()
-    # test()
+    # train()
+    test()

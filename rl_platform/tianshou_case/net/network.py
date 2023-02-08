@@ -109,7 +109,6 @@ class PolicyHead(nn.Module):
         with torch.no_grad():
             self.mid_dim = np.prod(self.net(torch.zeros(1, channel, height, width)).shape[1:])
         self.lstm_layer = nn.LSTM(self.mid_dim, 256)
-        self.hidden = None
         self.output_dim = 256
 
     def forward(
@@ -118,8 +117,9 @@ class PolicyHead(nn.Module):
             state: Optional[Any] = None,
             info: Dict[str, Any] = {}, ):
         obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
-        x1 = self.net(obs)
-        x2, self.hidden = self.lstm_layer(x1, self.hidden)
+        x1 = torch.unsqueeze(self.net(obs), 0)
+        x2, ht = self.lstm_layer(x1)
+        x2 = torch.squeeze(x2, 0)
         return x2, state
 
 

@@ -1,127 +1,69 @@
-import argparse
 import datetime
 import os
 import pprint
 from typing import Optional, Tuple
 
 import gym
-import tianshou as ts
-
 import gym_super_mario_bros
 import numpy as np
 import torch
 from ding.envs import DingEnvWrapper, MaxAndSkipWrapper, WarpFrameWrapper, ScaledFloatFrameWrapper, FrameStackWrapper, \
-    EvalEpisodeReturnEnv
+    EvalEpisodeReturnEnv, SyncSubprocessEnvManager
 from nes_py.wrappers import JoypadSpace
-from tianshou.env import DummyVectorEnv
-from torch.utils.tensorboard import SummaryWriter
-
+from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.policy import DiscreteSACPolicy, ICMPolicy, BasePolicy
-from tianshou.trainer import offpolicy_trainer, onpolicy_trainer
-from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
+from tianshou.env import DummyVectorEnv, SubprocVectorEnv
+from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy
+from tianshou.trainer import offpolicy_trainer
 
-from rl_platform.tianshou_case.mario.mario_model import DQN, TDQN
-from rl_platform.tianshou_case.net.network import ICMFeatureHead, PolicyHead
+import tianshou as ts
 
-scale_obs = 0
-buffer_size = 100000
-actor_lr, critic_lr = 1e-5, 1e-5
-gamma, tau, alpha = 0.99, 0.005, 0.05
-n_step = 3
-auto_alpha = True
-alpha_lr = 3e-4
-epoch = 100
-step_per_epoch = 10000
-step_per_collect = 10
-epoch_per_test = 5
-update_per_epoch = 0.1
-batch_size, hidden_size = 64, 512
-training_num, test_num = 10, 10
-rew_norm = False
-device = "cpu"
-#device = "cuda" if torch.cuda.is_available() else "cpu"
-frames_stack = 4
-icm_lr_scale = 1e-3
-icm_reward_scale = 0.1
-icm_forward_loss_weight = 0.2
+import sys
 
+from rl_platform.tianshou_case.gfootball.model.q_network.football_q_network import FootballNaiveQ
+from rl_platform.tianshou_case.gfootball.model.q_network.football_q_network_default_config import default_model_config
+
+sys.path.append(r"/")
+
+
+lr, gamma, n_steps = 1e-4, 0.99, 3
+buffer_size = 200000
+batch_size = 256
+eps_train, eps_test = 0.2, 0.05
+max_epoch = 100
+max_step = 20000  # 环境的最大步数
+step_per_epoch = max_step
+step_per_collect = 50
+episode_per_test = 5
+update_per_step = 0.1
+seed = 1
+train_env_num, test_env_num = 5, 5
+
+cfg = default_model_config
 env_name = "SuperMarioBros-1-1-v0"
 action_type = [["right"], ["right", "A"]]
 
-from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config as cfg
 
 def get_policy(env, optim=None):
-    global alpha
     observation_space = (
         env.observation_space["observation"]
         if isinstance(env.observation_space, gym.spaces.Dict)
         else env.observation_space
     )
-
-    state_shape = env.observation_space.shape or env.observation_space.n
-    action_shape = env.action_space.shape or env.action_space.n
-
-    #net = DQN(**cfg.policy.model)
-    net = PolicyHead(*state_shape)
-
-    # if torch.cuda.is_available():
-    #     net.cuda()
-    if device == 'cuda':
+    net = FootballNaiveQ(cfg)
+    if torch.cuda.is_available():
         net.cuda()
 
-    actor = Actor(net, action_shape, device=device, softmax_output=False)
-    actor_optim = torch.optim.Adam(actor.parameters(), lr=actor_lr)
-    critic1 = Critic(net, last_size=action_shape, device=device)
-    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=critic_lr)
-    critic2 = Critic(net, last_size=action_shape, device=device)
-    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=critic_lr)
-
-    optims = [actor_optim, critic1_optim, critic2_optim]
-
-    # define policy
-    if auto_alpha:
-        target_entropy = 0.98 * np.log(np.prod(action_shape))
-        log_alpha = torch.zeros(1, requires_grad=True, device=device)
-        alpha_optim = torch.optim.Adam([log_alpha], lr=alpha_lr)
-        alpha = (target_entropy, log_alpha, alpha_optim)
-        optims.append(alpha_optim)
-
-    policy = DiscreteSACPolicy(
-        actor,
-        actor_optim,
-        critic1,
-        critic1_optim,
-        critic2,
-        critic2_optim,
-        tau,
-        gamma,
-        alpha,
-        estimation_step=n_step,
-        reward_normalization=rew_norm,
-    ).to(device)
-    if icm_lr_scale > 0:
-        feature_net = ICMFeatureHead(*state_shape)
-        if device == 'cuda':
-            feature_net.cuda()
-
-        action_dim = np.prod(action_shape)
-        feature_dim = feature_net.output_dim
-        icm_net = IntrinsicCuriosityModule(
-            feature_net.net,
-            feature_dim,
-            action_dim,
-            hidden_sizes=[hidden_size],
-            device=device,
-        )
-        icm_optim = torch.optim.Adam(icm_net.parameters(), lr=actor_lr)
-        policy = ICMPolicy(
-            policy, icm_net, icm_optim, icm_lr_scale, icm_reward_scale,
-            icm_forward_loss_weight
-        ).to(device)
-        optims.append(icm_optim)
-
-    return policy, optims
+    if optim is None:
+        optim = torch.optim.Adam(net.parameters(), lr=lr)
+    agent_learn = DQNPolicy(
+        model=net,
+        optim=optim,
+        discount_factor=gamma,
+        estimation_step=n_steps,
+        target_update_freq=320,
+    )
+    return agent_learn, optim
 
 
 def _get_agent(
@@ -157,11 +99,15 @@ def _get_env():
             )
     return wrapped_mario_env()
 
+def _get_test_env():
+    return gym_super_mario_bros.make(env_name)
+
+
 def train(load_check_point=None):
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = DummyVectorEnv([_get_env for _ in range(training_num)])
-        test_envs = DummyVectorEnv([_get_env for _ in range(test_num)])
+        train_envs = DummyVectorEnv([_get_env for _ in range(train_env_num)])
+        test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
 
         # seed
         seed = 21343
@@ -187,11 +133,11 @@ def train(load_check_point=None):
         )
         test_collector = Collector(policy, test_envs, exploration_noise=True)
 
-        # train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
+        train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
 
         # ======== Step 4: Callback functions setup =========
         task = "Mario_{}".format(env_name)
-        file_name = task + "_SAC_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        file_name = task + "_DQN_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         logger = ts.utils.TensorboardLogger(SummaryWriter('log/' + file_name))  # TensorBoard is supported!
 
         def save_best_fn(policy):
@@ -205,18 +151,18 @@ def train(load_check_point=None):
             ckpt_path = os.path.join('log/' + file_name, "checkpoint_{}.pth".format(epoch))
             save_data = {}
             save_data["agent"] = policy.state_dict()
-            save_data["optim"] = optim
+            save_data["optim"] = optim.state_dict()
             torch.save(save_data, ckpt_path)
             return ckpt_path
 
         def stop_fn(mean_rewards):
-            return mean_rewards >= 3000
+            return mean_rewards >= 2500
 
-        # def train_fn(epoch, env_step):
-        #     policy.set_eps(eps_train)
-        #
-        # def test_fn(epoch, env_step):
-        #     policy.set_eps(eps_test)
+        def train_fn(epoch, env_step):
+            policy.set_eps(eps_train)
+
+        def test_fn(epoch, env_step):
+            policy.set_eps(eps_test)
 
         def reward_metric(rews):
             return rews[:]
@@ -226,17 +172,17 @@ def train(load_check_point=None):
             policy=policy,
             train_collector=train_collector,
             test_collector=test_collector,
-            max_epoch=epoch,
+            max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
             step_per_collect=step_per_collect,
-            episode_per_test=epoch_per_test,
+            episode_per_test=episode_per_test,
             batch_size=batch_size,
-            # train_fn=train_fn,
-            # test_fn=test_fn,
+            train_fn=train_fn,
+            test_fn=test_fn,
             stop_fn=stop_fn,
             save_best_fn=save_best_fn,
             save_checkpoint_fn=save_checkpoint_fn,
-            update_per_step=update_per_epoch,
+            update_per_step=update_per_step,
             test_in_train=False,
             reward_metric=reward_metric,
             logger=logger
@@ -244,16 +190,28 @@ def train(load_check_point=None):
 
         pprint.pprint(result)
 
+
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_01_20_17_25_16\policy.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_DQN_2023_01_18_12_00_34\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
+
     policy, optim, agents = _get_agent(None, 8,
                                        file_path=policy_path)
     policy.eval()
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 
+import argparse
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--load_file", type=str, default=None)
+
+    parmas = parser.parse_args()
+
     train()
+    # train(r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-2-v0_DQN_2023_01_17_19_22_53\checkpoint_23.pth")
     # test()
+
+    # python run_tianshou.py --load_file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_DQN_2022_12_21_08_13_37\checkpoint_35.pth

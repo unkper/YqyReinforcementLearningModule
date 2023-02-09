@@ -26,12 +26,13 @@ import sys
 
 from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
 from rl_platform.tianshou_case.mario.mario_model import DQN
+from rl_platform.tianshou_case.net.network import PolicyHead
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
-
+parallel_env_num = 10
 lr, gamma, n_steps = 1e-4, 0.99, 3
-buffer_size = 200000
+buffer_size = 200000 / parallel_env_num
 batch_size = 256
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 100
@@ -43,10 +44,15 @@ update_per_step = 0.1
 seed = 1
 train_env_num, test_env_num = 5, 5
 
+set_device = "cuda"
+
 cfg = mario_dqn_config
 env_name = "SuperMarioBros-1-1-v0"
-action_type = [["right"], ["right", "A"]]
+action_type = [["right"], ["right", "A"], ["right", "B"]]
 
+icm_lr_scale = 1e-3
+icm_reward_scale = 0.1
+icm_forward_loss_weight = 0.2
 
 def get_policy(env, optim=None):
     observation_space = (
@@ -55,15 +61,12 @@ def get_policy(env, optim=None):
         else env.observation_space
     )
 
-    # net = Net(
-    #     state_shape=observation_space.shape
-    #                 or observation_space.n,
-    #     action_shape=env.action_space.shape or env.action_space.n,
-    #     hidden_sizes=[128, 128, 128],
-    #     device="cuda" if torch.cuda.is_available() else "cpu",
-    # ).to("cuda" if torch.cuda.is_available() else "cpu")
-    net = DQN(**cfg.policy.model)
-    if torch.cuda.is_available():
+    state_shape = env.observation_space.shape or env.observation_space.n
+    action_shape = env.action_space.shape or env.action_space.n
+
+    #net = DQN(**cfg.policy.model)
+    net = PolicyHead(*state_shape, device=set_device)
+    if set_device == 'cuda':
         net.cuda()
 
     if optim is None:

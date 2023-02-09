@@ -13,8 +13,8 @@ from ding.envs import DingEnvWrapper, MaxAndSkipWrapper, WarpFrameWrapper, Scale
 from nes_py.wrappers import JoypadSpace
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv, SubprocVectorEnv
-from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy, PPOPolicy
+from tianshou.env import DummyVectorEnv, SubprocVectorEnv, ShmemVectorEnv
+from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy, PPOPolicy, ICMPolicy
 from tianshou.trainer import offpolicy_trainer, onpolicy_trainer
 from tianshou.utils.net.common import Net, ActorCritic
 
@@ -23,17 +23,19 @@ import tianshou as ts
 
 import sys
 
-from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
 from rl_platform.tianshou_case.mario.mario_model import DQN
+from rl_platform.tianshou_case.net.network import ICMFeatureHead, PolicyHead
 from rl_platform.tianshou_case.utils.wrapper import MarioRewardWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
 
+parallel_env_num = 8
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = 200000
+buffer_size = 200000 / parallel_env_num
 batch_size = 256
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 500
@@ -57,12 +59,17 @@ update_per_step = 0.1
 seed = 1
 train_env_num, test_env_num = 10, 10
 
-set_device = "cuda" if torch.cuda.is_available() else "cpu"
+actor_lr = lr
+set_device = "cpu"
 
 cfg = mario_dqn_config
 env_name = "SuperMarioBros-1-1-v0"
 action_type = [["right"], ["right", "A"], ["right", "B"]]
 
+icm_hidden_size = 256
+icm_lr_scale = 1e-3
+icm_reward_scale = 0.1
+icm_forward_loss_weight = 0.2
 
 def get_policy(env, optim=None):
     observation_space = (
@@ -70,9 +77,12 @@ def get_policy(env, optim=None):
         if isinstance(env.observation_space, gym.spaces.Dict)
         else env.observation_space
     )
+    action_shape = env.action_space.shape or env.action_space.n
 
-    net = DQN(**cfg.policy.model)
-    if torch.cuda.is_available():
+    #net = DQN(**cfg.policy.model)
+    net = PolicyHead(*observation_space, device=set_device)
+
+    if set_device == "cuda":
         net.cuda()
 
     actor = Actor(net, env.action_space.n, device=set_device, softmax_output=False)
@@ -105,6 +115,26 @@ def get_policy(env, optim=None):
         recompute_advantage=recompute_adv,
     ).to(set_device)
 
+    if icm_lr_scale > 0:
+        feature_net = ICMFeatureHead(*observation_space, device=set_device)
+        if set_device == "cuda":
+            feature_net.cuda()
+
+        action_dim = np.prod(action_shape)
+        feature_dim = feature_net.output_dim
+        icm_net = IntrinsicCuriosityModule(
+            feature_net.net,
+            feature_dim,
+            action_dim,
+            hidden_sizes=[icm_hidden_size],
+            device=set_device,
+        )
+        icm_optim = torch.optim.Adam(icm_net.parameters(), lr=actor_lr)
+        policy = ICMPolicy(
+            policy, icm_net, icm_optim, icm_lr_scale, icm_reward_scale,
+            icm_forward_loss_weight
+        ).to(set_device)
+
     return policy, optim
 
 
@@ -124,14 +154,11 @@ def _get_agent(
 
     return agent_learn, optim, None
 
-
 env_test = False
-
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
     global env_test
-
     def wrapped_mario_env():
         wrappers = [
             lambda env: MaxAndSkipWrapper(env, skip=4),
@@ -159,9 +186,9 @@ def _get_test_env():
 def train(load_check_point=None):
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = DummyVectorEnv([_get_env for _ in range(train_env_num)])
+        train_envs = ShmemVectorEnv([_get_env for _ in range(parallel_env_num)])
         env_test = True
-        test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
+        test_envs = ShmemVectorEnv([_get_env for _ in range(test_env_num)])
 
         # seed
         # seed = 21343
@@ -176,8 +203,8 @@ def train(load_check_point=None):
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location="cuda" if torch.cuda.is_available() else "cpu")
             policy.load_state_dict(load_data["agent"])
-            for i in range(len(optim)):
-                optim[i].load_state_dict(load_data["optim"][i])
+            # for i in range(len(optim)):
+            #     optim[i].load_state_dict(load_data["optim"][i])
 
         # ======== Step 3: Collector setup =========
         train_collector = Collector(
@@ -262,11 +289,14 @@ import argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--load_file", type=str, default=None)
+    parser.add_argument("--test", type=bool, action='store_true')
 
     parmas = parser.parse_args()
 
-    # train()
+    if not parmas.test:
+        train()
+    else:
+        test()
     # train(r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-2-v0_DQN_2023_01_17_19_22_53\checkpoint_23.pth")
     # test()
 

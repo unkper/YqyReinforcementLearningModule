@@ -44,8 +44,7 @@ class MarioRewardWrapper(gym.RewardWrapper):
         """
         super().__init__(env)
         self.env = env
-        from gym_super_mario_bros import SuperMarioBrosEnv
-        self.env: SuperMarioBrosEnv
+
 
     def reward(self, reward):
         """
@@ -56,4 +55,4 @@ class MarioRewardWrapper(gym.RewardWrapper):
         Returns:
             - reward(:obj:`Float`): Zero Reward
         """
-        return self._death_penalty
+        return self.env.death_penalty_api

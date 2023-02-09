@@ -27,6 +27,7 @@ from tianshou.utils.net.discrete import Actor, Critic
 
 from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
 from rl_platform.tianshou_case.mario.mario_model import DQN
+from rl_platform.tianshou_case.utils.wrapper import MarioRewardWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
@@ -119,25 +120,36 @@ def _get_agent(
         agent_learn, optim = get_policy(env, optim)
     if file_path is not None:
         state_dict = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
-        agent_learn.load_state_dict(state_dict)
+        agent_learn.load_state_dict(state_dict["agent"])
+
     return agent_learn, optim, None
+
+
+env_test = False
 
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
+    global env_test
+
     def wrapped_mario_env():
+        wrappers = [
+            lambda env: MaxAndSkipWrapper(env, skip=4),
+            lambda env: WarpFrameWrapper(env, size=84),
+            lambda env: ScaledFloatFrameWrapper(env),
+            lambda env: FrameStackWrapper(env, n_frames=4),
+            lambda env: EvalEpisodeReturnEnv(env),
+        ]
+        if not env_test:
+            wrappers.append(lambda env: MarioRewardWrapper(env))  # 为了验证ICM机制的有效性而加
+
         return DingEnvWrapper(
-                JoypadSpace(gym_super_mario_bros.make(env_name), action_type),
-                cfg={
-                    'env_wrapper': [
-                        lambda env: MaxAndSkipWrapper(env, skip=4),
-                        lambda env: WarpFrameWrapper(env, size=84),
-                        lambda env: ScaledFloatFrameWrapper(env),
-                        lambda env: FrameStackWrapper(env, n_frames=4),
-                        lambda env: EvalEpisodeReturnEnv(env),
-                    ]
-                }
-            )
+            JoypadSpace(gym_super_mario_bros.make(env_name), action_type),
+            cfg={
+                'env_wrapper': wrappers
+            }
+        )
+
     return wrapped_mario_env()
 
 def _get_test_env():
@@ -148,14 +160,15 @@ def train(load_check_point=None):
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
         train_envs = DummyVectorEnv([_get_env for _ in range(train_env_num)])
+        env_test = True
         test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
 
         # seed
-        seed = 21343
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        train_envs.seed(seed)
-        test_envs.seed(seed)
+        # seed = 21343
+        # np.random.seed(seed)
+        # torch.manual_seed(seed)
+        # train_envs.seed(seed)
+        # test_envs.seed(seed)
 
         # ======== Step 2: Agent setup =========
         policy, optim, agents = _get_agent(agent_count=1)
@@ -163,7 +176,8 @@ def train(load_check_point=None):
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location="cuda" if torch.cuda.is_available() else "cpu")
             policy.load_state_dict(load_data["agent"])
-            optim.load_state_dict(load_data["optim"])
+            for i in range(len(optim)):
+                optim[i].load_state_dict(load_data["optim"][i])
 
         # ======== Step 3: Collector setup =========
         train_collector = Collector(
@@ -234,7 +248,7 @@ def train(load_check_point=None):
 
 
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_DQN_2023_01_18_12_00_34\policy.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_08_23_17_03\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     env = _get_env()
     policy, optim, agents = _get_agent(None, 8,
@@ -252,7 +266,7 @@ if __name__ == "__main__":
 
     parmas = parser.parse_args()
 
-    train()
+    # train()
     # train(r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-2-v0_DQN_2023_01_17_19_22_53\checkpoint_23.pth")
     # test()
 

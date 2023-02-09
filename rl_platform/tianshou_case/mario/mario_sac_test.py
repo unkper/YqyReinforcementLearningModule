@@ -18,21 +18,21 @@ from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.policy import DiscreteSACPolicy, ICMPolicy, BasePolicy
-from tianshou.trainer import offpolicy_trainer, onpolicy_trainer
+from tianshou.trainer import offpolicy_trainer
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
-from rl_platform.tianshou_case.mario.mario_model import DQN, TDQN
 from rl_platform.tianshou_case.net.network import ICMFeatureHead, PolicyHead
 from rl_platform.tianshou_case.utils.wrapper import DisableRewardWrapper, MarioRewardWrapper
 
+parallel_env_num = 10
 scale_obs = 0
-buffer_size = 100000
+buffer_size = 200000 / parallel_env_num
 actor_lr, critic_lr = 1e-5, 1e-5
 gamma, tau, alpha = 0.99, 0.005, 0.05
 n_step = 3
 auto_alpha = True
 alpha_lr = 3e-4
-epoch = 100
+epoch = 200
 step_per_epoch = 10000
 step_per_collect = 10
 epoch_per_test = 5
@@ -47,8 +47,8 @@ icm_lr_scale = 1e-3
 icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
 
-env_name = "SuperMarioBros-1-1-v0"
-action_type = [["right"], ["right", "A"]]
+env_name = "SuperMarioBros-2-3-v0"
+action_type = [["right"], ["right", "A"], ["right", "B"]]
 
 def get_policy(env, optim=None):
     global alpha
@@ -127,7 +127,8 @@ def _get_agent(
         agent_learn: Optional[BasePolicy] = None,
         agent_count: int = 1,
         optim: Optional[torch.optim.Optimizer] = None,
-        file_path=None
+        file_path=None,
+        test=True
 ) -> Tuple[BasePolicy, torch.optim.Optimizer, list]:
     env = _get_env()
     if agent_learn is None:
@@ -135,7 +136,8 @@ def _get_agent(
         agent_learn, optim = get_policy(env, optim)
     if file_path is not None:
         state_dict = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
-        agent_learn.load_state_dict(state_dict)
+        agent_learn.load_state_dict(state_dict["agent"] if not test else state_dict)
+
     return agent_learn, optim, None
 
 env_test = False
@@ -166,16 +168,20 @@ def train(load_check_point=None):
     global env_test
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = ShmemVectorEnv([_get_env for _ in range(training_num)])
+        # train_envs = DummyVectorEnv([_get_env for _ in range(training_num)])
+        # env_test = True
+        # test_envs = DummyVectorEnv([_get_env for _ in range(test_num)])
+
+        train_envs = ShmemVectorEnv([_get_env for _ in range(parallel_env_num)])
         env_test = True
         test_envs = ShmemVectorEnv([_get_env for _ in range(test_num)])
 
         # seed
-        seed = 21343
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        train_envs.seed(seed)
-        test_envs.seed(seed)
+        # seed = 21343
+        # np.random.seed(seed)
+        # torch.manual_seed(seed)
+        # train_envs.seed(seed)
+        # test_envs.seed(seed)
 
         # ======== Step 2: Agent setup =========
         policy, optim, agents = _get_agent(agent_count=1)
@@ -183,7 +189,8 @@ def train(load_check_point=None):
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location="cuda" if torch.cuda.is_available() else "cpu")
             policy.load_state_dict(load_data["agent"])
-            optim.load_state_dict(load_data["optim"])
+            # for i in range(len(optim)):
+            #     optim[i].load_state_dict(load_data["optim"][i])
 
         # ======== Step 3: Collector setup =========
         train_collector = Collector(
@@ -252,15 +259,16 @@ def train(load_check_point=None):
         pprint.pprint(result)
 
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_08_13_37_02\policy.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_09_00_45_58\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     policy, optim, agents = _get_agent(None, 8,
-                                       file_path=policy_path)
-    #policy.eval()
+                                       file_path=policy_path,
+                                       test=True)
+    policy.eval()
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 
 
 if __name__ == "__main__":
-    # train()
-    test()
+    train(load_check_point=r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_09_00_45_58\checkpoint_187.pth")
+    # test()

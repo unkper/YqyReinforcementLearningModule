@@ -259,7 +259,7 @@ def train(load_check_point=None):
         pprint.pprint(result)
 
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_09_00_45_58\policy.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-2-3-v0_SAC_2023_02_09_09_39_28\policy.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     policy, optim, agents = _get_agent(None, 8,
                                        file_path=policy_path,
@@ -270,5 +270,5 @@ def test():
 
 
 if __name__ == "__main__":
-    train(load_check_point=r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_09_00_45_58\checkpoint_187.pth")
-    # test()
+    # train(load_check_point=r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_09_00_45_58\checkpoint_187.pth")
+    test()

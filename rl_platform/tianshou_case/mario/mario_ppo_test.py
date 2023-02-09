@@ -33,7 +33,7 @@ from rl_platform.tianshou_case.utils.wrapper import MarioRewardWrapper
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
 
-parallel_env_num = 8
+parallel_env_num = 10
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = 200000 / parallel_env_num
 batch_size = 256
@@ -60,7 +60,7 @@ seed = 1
 train_env_num, test_env_num = 10, 10
 
 actor_lr = lr
-set_device = "cpu"
+set_device = "cuda"
 
 cfg = mario_dqn_config
 env_name = "SuperMarioBros-1-1-v0"
@@ -77,10 +77,12 @@ def get_policy(env, optim=None):
         if isinstance(env.observation_space, gym.spaces.Dict)
         else env.observation_space
     )
+
+    state_shape = env.observation_space.shape
     action_shape = env.action_space.shape or env.action_space.n
 
     #net = DQN(**cfg.policy.model)
-    net = PolicyHead(*observation_space, device=set_device)
+    net = PolicyHead(*state_shape, device=set_device)
 
     if set_device == "cuda":
         net.cuda()
@@ -116,7 +118,7 @@ def get_policy(env, optim=None):
     ).to(set_device)
 
     if icm_lr_scale > 0:
-        feature_net = ICMFeatureHead(*observation_space, device=set_device)
+        feature_net = ICMFeatureHead(*state_shape, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 
@@ -150,7 +152,10 @@ def _get_agent(
         agent_learn, optim = get_policy(env, optim)
     if file_path is not None:
         state_dict = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
-        agent_learn.load_state_dict(state_dict["agent"])
+        if type(state_dict) is dict:
+            agent_learn.load_state_dict(state_dict["agent"])
+        else:
+            agent_learn.load_state_dict(state_dict)
 
     return agent_learn, optim, None
 
@@ -176,7 +181,6 @@ def _get_env():
                 'env_wrapper': wrappers
             }
         )
-
     return wrapped_mario_env()
 
 def _get_test_env():
@@ -184,6 +188,7 @@ def _get_test_env():
 
 
 def train(load_check_point=None):
+    global env_test
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
         train_envs = ShmemVectorEnv([_get_env for _ in range(parallel_env_num)])
@@ -275,7 +280,7 @@ def train(load_check_point=None):
 
 
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_SAC_2023_02_08_23_17_03\policy.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_PPO_2023_02_09_14_17_48\checkpoint_380.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     env = _get_env()
     policy, optim, agents = _get_agent(None, 8,
@@ -289,11 +294,13 @@ import argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--test", type=bool, action='store_true')
+    #parser.add_argument("--test", type=bool, action='store_true', default=False)
 
     parmas = parser.parse_args()
 
-    if not parmas.test:
+    test_if = True
+
+    if not test_if:
         train()
     else:
         test()

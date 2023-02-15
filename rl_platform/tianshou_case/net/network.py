@@ -3,6 +3,7 @@ from typing import List, Union, Optional, Any, Dict, Tuple, Sequence, Callable
 import numpy as np
 import torch
 import torch.nn as nn
+from tianshou.data import Batch
 
 from tianshou.utils.net.common import MLP
 
@@ -88,7 +89,7 @@ class DQN(nn.Module):
         return self.net(obs), state
 
 
-class PolicyHead(nn.Module):
+class MarioPolicyHead(nn.Module):
     def __init__(self,
                  channel: int,
                  height: int,
@@ -123,7 +124,7 @@ class PolicyHead(nn.Module):
         return x2, state
 
 
-class ICMFeatureHead(nn.Module):
+class MarioICMFeatureHead(nn.Module):
     def __init__(self,
                  channel: int,
                  height: int,
@@ -153,20 +154,59 @@ class ICMFeatureHead(nn.Module):
         x1 = self.net(obs)
         return x1, state
 
-# feature_net = DQN(
-#     *args.state_shape, args.action_shape, args.device, features_only=True
-# )
-# action_dim = np.prod(args.action_shape)
-# feature_dim = feature_net.output_dim
-# icm_net = IntrinsicCuriosityModule(
-#     feature_net.net,
-#     feature_dim,
-#     action_dim,
-#     hidden_sizes=[args.hidden_size],
-#     device=args.device,
-# )
-# icm_optim = torch.optim.Adam(icm_net.parameters(), lr=args.actor_lr)
-# policy = ICMPolicy(
-#     policy, icm_net, icm_optim, args.icm_lr_scale, args.icm_reward_scale,
-#     args.icm_forward_loss_weight
-# ).to(args.device)
+
+class PedPolicyHead(nn.Module):
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int = 256,
+                 device="cpu",
+                 layer_init: Callable[[nn.Module], nn.Module] = lambda x: x
+                 ):
+        super().__init__()
+        self.device = device
+        self.encoder1 = nn.Sequential(
+            layer_init(nn.Linear(input_dim, hidden_dim)),
+            nn.ReLU(),
+            nn.Flatten()
+        )
+        self.lstm_layer = nn.GRU(hidden_dim, 64)
+        self.output_dim = 64
+
+    def forward(
+            self,
+            obs: Union[np.ndarray, torch.Tensor],
+            state: Optional[Any] = None,
+            info: Dict[str, Any] = {}, ):
+        if isinstance(obs, Batch):
+            obs = obs.obs
+        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
+        x1 = torch.unsqueeze(self.encoder1(obs), 0)
+        x2, ht = self.lstm_layer(x1)
+        x2 = torch.squeeze(x2, 0)
+        return x2, state
+
+
+class PedICMFeatureHead(nn.Module):
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int = 256,
+                 device: Union[str, int, torch.device] = "cpu",
+                 layer_init: Callable[[nn.Module], nn.Module] = lambda x: x
+                 ):
+        super().__init__()
+        self.device = device
+        self.net = nn.Sequential(
+            layer_init(nn.Linear(input_dim, hidden_dim)),
+            nn.ReLU(),
+            nn.Flatten()
+        )
+        self.output_dim = hidden_dim
+
+    def forward(
+            self,
+            obs: Union[np.ndarray, torch.Tensor],
+            state: Optional[Any] = None,
+            info: Dict[str, Any] = {}, ):
+        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
+        x1 = self.net(obs)
+        return x1, state

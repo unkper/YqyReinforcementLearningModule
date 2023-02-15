@@ -26,7 +26,7 @@ import sys
 
 from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
 from rl_platform.tianshou_case.mario.mario_model import DQN
-from rl_platform.tianshou_case.net.network import PolicyHead
+from rl_platform.tianshou_case.net.network import MarioPolicyHead
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
@@ -65,7 +65,7 @@ def get_policy(env, optim=None):
     action_shape = env.action_space.shape or env.action_space.n
 
     #net = DQN(**cfg.policy.model)
-    net = PolicyHead(*state_shape, device=set_device)
+    net = MarioPolicyHead(*state_shape, device=set_device)
     if set_device == 'cuda':
         net.cuda()
 

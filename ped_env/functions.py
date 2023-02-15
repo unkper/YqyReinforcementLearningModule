@@ -3,7 +3,7 @@ from typing import List
 
 import numpy as np
 
-from math import cos, sin
+from numba import njit
 
 from ped_env.settings import ACTION_DIM
 
@@ -18,6 +18,7 @@ def calculate_groups_person_num(env, person_num_sum) -> List:
     return person_num
 
 
+@njit
 def transfer_to_render(x, y, X, Y, scale=10.0):
     '''
     该函数将物理坐标转化为渲染坐标来进行输出
@@ -32,6 +33,7 @@ def transfer_to_render(x, y, X, Y, scale=10.0):
     return x_ * scale, y_ * scale, X * scale, Y * scale
 
 
+@njit
 def calculate_nij(i, j):
     pos_i = i.pos
     pos_j = j.pos
@@ -41,6 +43,7 @@ def calculate_nij(i, j):
 from math import sqrt, acos
 
 
+@njit
 def angle_of_vector(v1, v2):
     pi = 3.1415
     vector_prod = v1[0] * v2[0] + v1[1] * v2[1]
@@ -57,7 +60,7 @@ def parse_discrete_action(type: np.ndarray):
     #     type[i] /= sum_probabilities
     # return random_pick(actions, type)
 
-
+@njit
 def normalized(a, axis=-1, order=2):
     l2 = np.atleast_1d(np.linalg.norm(a, order, axis))
     l2[l2 == 0] = 1

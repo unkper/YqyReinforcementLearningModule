@@ -8,25 +8,30 @@ import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer, Batch
-from tianshou.env import DummyVectorEnv, SubprocVectorEnv
+from tianshou.env import DummyVectorEnv, ShmemVectorEnv
 from tianshou.env.pettingzoo_env import PettingZooEnv
-from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy, PPOPolicy
+from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy, PPOPolicy, ICMPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import Net, ActorCritic, MLP
 
 import pettingzoo as pet
 import tianshou as ts
-from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 import sys
+
+from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, PedICMFeatureHead, PedPolicyHead
+
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
 from ped_env.envs import PedsMoveEnv
-from ped_env.utils.maps import map_08, map_10
+from ped_env.utils.maps import map_09, map_10, map_08
 from rl_platform.tianshou_case.utils.common import _get_agents
 
+parallel_env_num = 10
+test_env_num = 3
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = 200000
+buffer_size = 200000 // parallel_env_num
 batch_size = 256
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 500
@@ -48,9 +53,14 @@ recompute_adv = 0
 episode_per_test = 5
 update_per_step = 0.1
 seed = 1
-train_env_num, test_env_num = 10, 10
 
-set_device = "cuda" if torch.cuda.is_available() else "cpu"
+
+icm_lr_scale = 1e-3
+icm_reward_scale = 0.1
+icm_forward_loss_weight = 0.2
+icm_hidden_size = 128
+
+set_device = "cpu"
 
 
 def get_policy(env, optim=None):
@@ -60,12 +70,19 @@ def get_policy(env, optim=None):
         else env.observation_space
     )
 
+    state_shape = env.observation_space.shape or env.observation_space.n
+    action_shape = env.action_space.shape or env.action_space.n
+
     from rl_platform.tianshou_case.net.network import MLPNetwork
 
-    net = MLPNetwork(
-        state_dim=env.observation_space.shape[0],
-        output_dim=128,
-        hidden_dim=[128, 128, 128],
+    # net = MLPNetwork(
+    #     state_dim=env.observation_space.shape[0],
+    #     output_dim=128,
+    #     hidden_dim=[128, 128, 128],
+    #     device=set_device
+    # )
+    net = PedPolicyHead(
+        input_dim=state_shape[0],
         device=set_device
     )
 
@@ -100,45 +117,97 @@ def get_policy(env, optim=None):
         recompute_advantage=recompute_adv,
     ).to(set_device)
 
+    if icm_lr_scale > 0:
+        feature_net = PedICMFeatureHead(env.observation_space.shape[0],
+                                        device=set_device)
+        if set_device == "cuda":
+            feature_net.cuda()
+
+        action_dim = np.prod(action_shape)
+        feature_dim = feature_net.output_dim
+        icm_net = IntrinsicCuriosityModule(
+            feature_net.net,
+            feature_dim,
+            action_dim,
+            hidden_sizes=[icm_hidden_size],
+            device=set_device,
+        )
+        icm_optim = torch.optim.Adam(icm_net.parameters(), lr=lr)
+        policy = ICMPolicy(
+            policy, icm_net, icm_optim, icm_lr_scale, icm_reward_scale,
+            icm_forward_loss_weight
+        ).to(set_device)
+
     return policy, optim
 
 
-train_map = map_10
-agent_num_map8 = 40
+def _get_agents(
+        agent_learn: Optional[BasePolicy] = None,
+        agent_count: int = 1,
+        optim: Optional[torch.optim.Optimizer] = None,
+        file_path=None
+) -> Tuple[BasePolicy, torch.optim.Optimizer, list]:
+    env = _get_env()
+    if agent_learn is None:
+        # model
+        agent_learn, optim = get_policy(env, optim)
+
+    agents = [copy.deepcopy(agent_learn) for _ in range(agent_count)]
+    if file_path is not None:
+        state_dicts = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
+        for ag, state_dict in zip(agents, state_dicts.values()):
+            ag.load_state_dict(state_dict)
+    policy = MultiAgentPolicyManager(agents, env)
+    return policy, optim, env.agents
 
 
-def _get_env(test=False):
+train_map = map_08
+agent_num_map8 = 8
+
+train_if = True #是否采用test模式，即在icm模式下采用奖励模型来评判
+
+
+def _get_env():
+    global train_if, max_step
     """This function is needed to provide callables for DummyVectorEnv."""
     env = PedsMoveEnv(train_map, person_num=agent_num_map8, group_size=(1, 1), random_init_mode=True,
-                      maxStep=max_step)
-    if test:
-        return env
-    else:
-        temp = pet.utils.parallel_to_aec(env)
-    return PettingZooEnv(temp)
+                      maxStep=max_step, disable_reward=train_if)
+    env = pet.utils.parallel_to_aec(env)
+    return PettingZooEnv(env)
 
 
-def train(load_check_point=None):
+def train(load_check_point=None, debug=False):
+    global parallel_env_num, test_env_num, train_if, max_step, icm_lr_scale, buffer_size, batch_size
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = DummyVectorEnv([_get_env for _ in range(train_env_num)])
-        test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
+        if debug:
+            parallel_env_num, test_env_num = 5, 3
+            max_step = 1000
+            buffer_size = 200
+            batch_size = 12
+            #icm_lr_scale = 0
+            train_envs = DummyVectorEnv([_get_env for _ in range(parallel_env_num)])
+            train_if = False
+            test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
+        else:
+            train_envs = DummyVectorEnv([_get_env for _ in range(parallel_env_num)])
+            train_if = False
+            test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
 
         # seed
-        seed = 25680
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        train_envs.seed(seed)
-        test_envs.seed(seed)
+        # seed = 25680
+        # np.random.seed(seed)
+        # torch.manual_seed(seed)
+        # train_envs.seed(seed)
+        # test_envs.seed(seed)
 
         # ======== Step 2: Agent setup =========
-        policy, optim, agents = _get_agents(_get_env(), agent_count=agent_num_map8, get_policy=get_policy)
+        policy, optim, agents = _get_agents(agent_count=agent_num_map8)
 
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location="cuda" if torch.cuda.is_available() else "cpu")
             for agent in agents:
                 policy.policies[agent].load_state_dict(load_data[agent])
-            optim.load_state_dict(load_data["optim"])
 
         # ======== Step 3: Collector setup =========
         train_collector = Collector(
@@ -185,8 +254,8 @@ def train(load_check_point=None):
         #     for agent in agents:
         #         policy.policies[agent].set_eps(eps_test)
 
-        def reward_metric(rews):
-            return rews[:, 1]
+        # def reward_metric(rews):
+        #     return rews[:, 1]
 
         # ======== Step 5: Run the trainer =========
         result = onpolicy_trainer(
@@ -206,7 +275,7 @@ def train(load_check_point=None):
             save_checkpoint_fn=save_checkpoint_fn,
             update_per_step=update_per_step,
             test_in_train=False,
-            reward_metric=reward_metric,
+            #reward_metric=reward_metric,
             logger=logger
         )
 
@@ -216,7 +285,7 @@ def train(load_check_point=None):
 def test():
     episode = 5
     # test_envs = DummyVectorEnv([_get_env for _ in range(1)])
-    env = _get_env(True)
+    env = _get_env()
     policy, optim = get_policy(_get_env())
 
     file_path = r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log" \
@@ -240,6 +309,7 @@ def test():
             obs, reward, is_done, truncated, info = env.step(action)
             # env.render()
 
+
 import argparse
 
 if __name__ == "__main__":
@@ -248,7 +318,7 @@ if __name__ == "__main__":
     # parser.add_argument("max_step", type=int, default=5000)
     # args = parser.parse_args()
     # train()
-    train(r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2023_01_01_21_24_54\checkpoint_14.pth")
+    train(debug=False)
     # test()
 
-    #python run_tianshou_ppo.py --file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_01_48_33\checkpoint_17.pth
+    # python run_tianshou_ppo.py --file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_01_48_33\checkpoint_17.pth

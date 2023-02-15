@@ -1,4 +1,6 @@
 import abc
+import logging
+
 import kdtree
 
 from math import inf
@@ -72,7 +74,7 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
     """
     该奖励机制不再考虑行人间的社会力，并且将动作改为修改行人的行走速度和行走方向
     """
-    ACTION_NUM = 63
+    ACTION_NUM = 9
 
     DETECT_PED_COUNT = 3
     DETECT_OBSTACLE_COUNT = 3
@@ -88,10 +90,10 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         self.agent_count = sum([int(num / int(sum(self.env.group_size) / 2)) for num in person_num])
 
         # 强化学习MDP定义区域
-        # 定义观察空间为[, 三个最近智能体的位置, 三个最近障碍物的位置]一共16个值
+        # 定义观察空间为[智能体位置, 智能体速度, 三个最近智能体的位置, 三个最近障碍物的位置]一共16个值
         self.observation_space = [Box(-inf, inf, (4 + PedsRLHandlerWithoutForce.DETECT_PED_COUNT * 2 +
-                                                  PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT * 2,)) for _ in
-                                  range(self.agent_count)]
+                                                  PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT * 2,))
+                                  for _ in range(self.agent_count)]
         if self.env.discrete:
             # 定义动作空间为修改智能体速度和角度，具体参见论文的动作空间设计
             self.action_space = [Discrete(PedsRLHandlerWithoutForce.ACTION_NUM) for _ in range(self.agent_count)]
@@ -147,7 +149,7 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         return observation
 
     def set_action(self, ped: Person, action):
-        ped.set_velocity(action)
+        ped.set_norm_velocity(action)
 
     def set_follower_action(self, ped: Person, action, group: Group, exit_pos):
         diff = group.get_distance_to_leader(ped)
@@ -172,7 +174,7 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
             int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
             mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         ped.self_driven_force(mix_dir)  # 跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
-        print("该奖励模型中不应该出现follower!")
+        logging.error("该奖励模型中不应该出现follower!")
         # ped.ij_group_force(group)
 
     def get_follower_a_star_path(self, ped, pos_i, pos_j, force=False):

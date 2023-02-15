@@ -5,6 +5,7 @@ import random
 import gym
 import pyglet
 import numpy as np
+import logging
 
 from math import sqrt, pow
 
@@ -156,7 +157,6 @@ class Spawner:
             Group.set_group_process(group, groups, group_dic, persons)
         return persons
 
-
 class Parser():
     def __init__(self):
         self.start_point_dic = defaultdict(list)
@@ -164,9 +164,7 @@ class Parser():
         self.start_nodes_exit = []
         self.start_nodes_obs = []
 
-    @njit
     def parse_and_create(self, map, spawn_map):
-        from ped_env.objects import BoxWall
         inc = BoxWall.PIECE_WALL_WIDTH / 2
         exit_symbol = set(str(ele) for ele in range(3, 10))
         # 按照从左往右，从上到下的遍历顺序
@@ -206,7 +204,6 @@ class Parser():
                 if 9 >= spawn_map[i, j] >= 3:
                     self.start_point_dic[spawn_map[i, j]].append((i + 0.5, j + 0.5))
 
-
 class PedsMoveEnv(gym.Env):
     viewer = None
     peds = []
@@ -221,6 +218,7 @@ class PedsMoveEnv(gym.Env):
                  frame_skipping=8,
                  maxStep=10000,
                  person_handler: PedsHandlerInterface = PedsRLHandlerWithoutForce,
+                 disable_reward=False,
                  use_planner=False,
                  random_init_mode: bool = True,
                  train_mode: bool = True,
@@ -280,7 +278,9 @@ class PedsMoveEnv(gym.Env):
         self.path_finder = AStar(self.terrain)
 
         # for pettingzoo interface
-        self.agents = ["agent_{}".format(i) for i in range(self.agent_count)]
+        self._cumulative_rewards = defaultdict(int)
+        #self.agents = ["agent_{}".format(i) for i in range(self.agent_count)]
+        self.agents = [str(i) for i in range(self.agent_count)]
         self.possible_agents = copy.deepcopy(self.agents)
         self.max_num_agents = len(self.possible_agents)
         self.observation_spaces = {agentid: copy.copy(self.person_handler.observation_space[0]) for agentid in
@@ -289,6 +289,10 @@ class PedsMoveEnv(gym.Env):
 
         self.agents_dict = {}
         self.agents_rev_dict = {}
+
+        self.disable_reward = disable_reward
+        if disable_reward:
+            logging.info(u"当前环境将使用无奖励机制!")
 
     @property
     def num_agents(self):
@@ -416,11 +420,14 @@ class PedsMoveEnv(gym.Env):
             min = dis if min > dis else min
         return min
 
-    @njit
     def get_ped_to_exit_dis(self, person_pos, exit_type):
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
-        x, y = person_pos
-        return sqrt(pow(ex - x, 2) + pow(ey - y, 2))
+        @njit
+        def inner():
+            nonlocal ex, ey
+            x, y = person_pos
+            return sqrt(pow(ex - x, 2) + pow(ey - y, 2))
+        return inner()
 
     def get_ped_rel_pos_to_exit(self, person_pos, exit_type):
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
@@ -498,15 +505,18 @@ class PedsMoveEnv(gym.Env):
 
         for ped in self.peds:
             if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
-                print("Agent{}:Leave the exit{}!".format(ped.id, ped.exit_type))
+                logging.info("Agent{}:Leave the exit{}!".format(ped.id, ped.exit_type))
                 self.delete_person(ped)
                 if ped.is_leader:
                     pass
-                    #self.agents.remove(self.agents_rev_dict[ped]) # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
+                    # self.agents.remove(self.agents_rev_dict[ped]) # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
 
         # 该环境中智能体是合作关系，因此使用统一奖励为好，此处使用了pettingzoo的形式
         obs, rewards = self.person_handler.step(self.peds, self.ped_to_group_dic, self.agents_rev_dict,
                                                 int(self.step_in_env / self.frame_skipping))
+        if self.disable_reward:
+            for key in rewards.keys():
+                rewards[key] = 0.0
 
         for idx, group in enumerate(self.groups):
             if group.leader.is_done:
@@ -516,9 +526,8 @@ class PedsMoveEnv(gym.Env):
         def is_done_operation():
             is_done = {agent: True for agent in self.agents}
             truncated = {agentid: False for agentid in self.agents}
-            self.agents.clear() # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
+            self.agents.clear()  # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
             return is_done, truncated
-
 
         if planning_mode and self.left_leader_num < self.agent_count:
             # 在planning_mode下，一旦有leader到达出口就终止
@@ -526,7 +535,7 @@ class PedsMoveEnv(gym.Env):
 
         if (not self.train_mode and self.left_person_num == 0) or (self.train_mode and self.left_leader_num == 0):
             is_done, truncated = is_done_operation()
-            print(u"所有智能体到达出口!")
+            logging.info(u"所有智能体到达出口!")
 
         self.step_in_env += self.frame_skipping
         if self.step_in_env > self.maxStep:  # 如果maxStep步都没有完全撤离，is_done直接为True
@@ -534,7 +543,7 @@ class PedsMoveEnv(gym.Env):
             truncated = {agentid: True for agentid in self.agents}
             # 清空agents里面的所有元素
             self.agents = []
-            print(u"在{}步时强行重置环境!".format(self.maxStep))
+            logging.info(u"在{}步时强行重置环境!".format(self.maxStep))
         leader_pos = []
         leader_step = []
         for group in self.groups:

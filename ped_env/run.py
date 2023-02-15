@@ -45,30 +45,22 @@ def test2():
 
     debug = False
 
-    person_num = 4
-    env = Env(map_10, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
+    person_num = 20
+    env = Env(map_08, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
 
     for epoch in range(5):
-        starttime = time.time()
+        start_time = time.time()
         step = 0
-        obs = env.reset()
         is_done = {env.agents[0]: False}
-        speed_action = random.sample([1], 1)[0]
+        env.reset()
 
         def get_single_action(agent):
             return env.action_space(agent).sample()
-            # return 18
 
         while not all(is_done.values()):
-            # if not debug:
-            #     action = np.random.random([leader_num, 9])
-            # else:
-            #     action = np.zeros([leader_num, 9])
-            #     action[:, 0] = 1
-            # action = {agent: env.action_space(agent).sample() for agent in env.agents}
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
             pprint.pprint(obs)
@@ -79,8 +71,8 @@ def test2():
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collision_between_agents, env.collide_wall))
-        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
-                                                                             step / (endtime - starttime)))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - start_time,
+                                                                             step / (endtime - start_time)))
     handler.save("./")
 
 

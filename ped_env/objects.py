@@ -12,7 +12,7 @@ import numpy as np
 from Box2D import *
 from math import sin, cos
 
-from numba import njit
+
 from numpy import ndarray
 
 from ped_env.utils.misc import angle_between
@@ -220,6 +220,14 @@ class Person(Agent):
                                                  color=ColorYellow if self.color != ColorYellow else ColorRed,
                                                  batch=batch, group=self.debug_level)
 
+
+    def set_norm_velocity(self, action_type: int):
+        from ped_env.settings import actions
+        # 简单将速度设置为
+        assert 0 <= action_type <= 8
+        new_action = actions[action_type] * Person.MAX_SPEED
+        self.body.linearVelocity = b2Vec2(new_action[0], new_action[1])
+
     def set_velocity(self, action_type: int):
         vec = np.array([self.body.linearVelocity.x, self.body.linearVelocity.y])
         c_speed_dictm = [0, -0.125, -0.25, -0.5, -1, 0.125, 0.25, 0.5, 1]
@@ -309,7 +317,6 @@ class Person(Agent):
         world.QueryAABB(callback, aabb)
         return callback.detect_objects
 
-    @njit
     def objects_query(self, objects: List, size, conditionFunc=lambda self, obj: True):
         pos = (self.getX, self.getY)
         detect_objects = []

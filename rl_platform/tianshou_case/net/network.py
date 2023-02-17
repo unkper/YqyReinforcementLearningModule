@@ -170,6 +170,7 @@ class PedPolicyHead(nn.Module):
             nn.Flatten()
         )
         self.lstm_layer = nn.GRU(hidden_dim, 64)
+        self.lstm_layer.flatten_parameters()
         self.output_dim = 64
 
     def forward(

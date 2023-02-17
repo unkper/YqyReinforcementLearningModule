@@ -2,9 +2,7 @@ import pprint
 import random
 
 import Box2D as b2d
-from gym.spaces import Discrete
 
-from ped_env.utils.new_map import NewMap
 from ped_env.envs import PedsMoveEnv as Env
 from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *

@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer, Batch
-from tianshou.env import DummyVectorEnv, ShmemVectorEnv
+from tianshou.env import DummyVectorEnv, ShmemVectorEnv, SubprocVectorEnv
 from tianshou.env.pettingzoo_env import PettingZooEnv
 from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy, PPOPolicy, ICMPolicy
 from tianshou.trainer import onpolicy_trainer
@@ -60,7 +60,7 @@ icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
 icm_hidden_size = 128
 
-set_device = "cpu"
+set_device = "cuda"
 
 
 def get_policy(env, optim=None):

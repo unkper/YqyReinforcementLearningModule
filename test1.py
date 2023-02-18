@@ -1,34 +1,34 @@
 import pyglet
-import numpy as np
+from pyglet.gl import *
 
-# 创建一个窗口
+# 创建窗口
 window = pyglet.window.Window()
 
-# 渲染五角星
-def draw_star(x, y, size, color):
-    half_size = size / 2
-    vertices = [
-        x, y + half_size,
-        x + half_size, y + size,
-        x + size, y + half_size,
-        x + half_size, y,
-        x, y + half_size
-    ]
-    colors = list(color) * 5
-    pyglet.graphics.draw(5, pyglet.gl.GL_LINE_STRIP, ('v2f', vertices), ('c3B', colors))
+# 定义长方形的四个点坐标
+vertices = [
+    0, 0,
+    window.width, 0,
+    window.width, window.height,
+    0, window.height
+]
 
-# 在窗口中渲染图像
+# 定义长方形的颜色，这里设为蓝色
+colors = [0, 0, 1] * 4
+
 @window.event
 def on_draw():
-    window.clear()
-    draw_star(window.width / 2, window.height / 2, 150, (255, 255, 255, 255))
+    # 清除屏幕
+    glClear(GL_COLOR_BUFFER_BIT)
 
-# 在窗口中运行pyglet应用程序
+    # 绘制长方形
+    glLoadIdentity()
+    glTranslatef(window.width // 2, window.height // 2, 0)
+    glScalef(window.width // 2, window.height // 2, 1)
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, colors)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    pyglet.graphics.draw(4, GL_QUADS, ('v2f', vertices))
+
+# 启动事件循环
 pyglet.app.run()
-
-# 获取渲染后的颜色缓冲区
-color_buffer = pyglet.image.get_buffer_manager().get_color_buffer()
-
-# 将颜色缓冲区转换为numpy数组
-data = np.frombuffer(color_buffer.get_image_data().get_data('RGB', color_buffer.pitch), dtype=np.uint8)
-data = data.reshape((color_buffer.height, color_buffer.width, 3))

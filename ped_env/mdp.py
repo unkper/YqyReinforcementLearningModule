@@ -219,17 +219,19 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
                     lr += self.r_wait
         return gr, lr
 
+
 class PedsVisionRLHandler(PedsRLHandlerWithoutForce):
     """
     这个版本将采用ICM的机制，所以将大部分奖励都设置为0
     """
+
     def __init__(self, env, r_move=0, r_wait=0, r_collision_person=0, r_collision_wall=0, r_reach=100,
                  use_planner=False):
         super().__init__(env, r_move, r_wait, r_collision_person, r_collision_wall, r_reach, use_planner)
-        self.p_render = PedsMoveEnvViewer(env, visible=False, render_ratio=0.25)  # 以更小的图像进行显示输出 125*125*4
+        self.p_render = PedsMoveEnvViewer(env, visible=False, render_ratio=0.2)  # 以更小的图像进行显示输出 100*100*4
         self.observation_space = [Box(-inf, inf, (4,
-                                                  125,
-                                                  125,))] # 定义新的观察空间为地图的俯视图(RGBA模式)
+                                                  self.p_render.height,
+                                                  self.p_render.width))]  # 定义新的观察空间为地图的俯视图(RGBA模式)
 
     def get_observation(self, ped: Person, group: Group, time):
         # 给予智能体当前渲染出的观察图像

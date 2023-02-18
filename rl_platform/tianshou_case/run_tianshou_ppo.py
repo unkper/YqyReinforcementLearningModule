@@ -162,8 +162,8 @@ def _get_agents(
     return policy, optim, env.agents
 
 
-train_map = map_08
-agent_num_map8 = 8
+train_map = map_10
+agent_num_map8 = 4
 
 train_if = False  # 是否采用test模式，即在icm模式下采用奖励模型来评判
 

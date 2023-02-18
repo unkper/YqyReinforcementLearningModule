@@ -519,6 +519,9 @@ class PedsMoveEnv(gym.Env):
                     pass
                     # self.agents.remove(self.agents_rev_dict[ped]) # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
 
+        # 为了有些MDP更新图像用
+        self.person_handler.update_image_data()
+
         # 该环境中智能体是合作关系，因此使用统一奖励为好，此处使用了pettingzoo的形式
         obs, rewards = self.person_handler.step(self.peds, self.ped_to_group_dic, self.agents_rev_dict,
                                                 int(self.step_in_env / self.frame_skipping))
@@ -564,8 +567,7 @@ class PedsMoveEnv(gym.Env):
         #     "leader_pos": leader_pos
         # }
 
-        # 为了有些MDP更新图像用
-        self.person_handler.update_image_data()
+
 
         info = {agent: {} for i, agent in enumerate(self.possible_agents)}
         return obs, rewards, is_done, truncated, info

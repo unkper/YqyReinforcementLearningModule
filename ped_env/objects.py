@@ -193,16 +193,17 @@ class Person(Agent):
 
     def setup(self, batch, render_scale, test_mode=True):
         x, y = self.getX, self.getY
+        rx, ry = render_scale
 
         # print("Agent angle:{}".format(math.degrees(self.body.angle) % 360))
         if test_mode:
             pass
-        self.body_pic = pyglet.shapes.Circle(x * render_scale, y * render_scale,
-                                             self.radius * render_scale,
+        self.body_pic = pyglet.shapes.Circle(x * rx, y * ry,
+                                             self.radius * rx,
                                              color=self.color,
                                              batch=batch, group=self.display_level)
 
-        self.No_pic = pyglet.text.Label(str(self.id), )
+        # self.No_pic = pyglet.text.Label(str(self.id), )
 
         # t_len = self.radius * 1.5
         # cos_30 = -0.8660254
@@ -213,9 +214,9 @@ class Person(Agent):
         #                                    x3 * render_scale, y3 * render_scale, batch=batch, group=self.debug_level,
         #                                    color=self.color)
         if self.is_leader:
-            self.leader_pic = pyglet.shapes.Star(x * render_scale, y * render_scale,
-                                                 self.radius * 0.6 * render_scale,
-                                                 self.radius * 0.4 * render_scale,
+            self.leader_pic = pyglet.shapes.Star(x * rx, y * ry,
+                                                 self.radius * 0.6 * rx,
+                                                 self.radius * 0.4 * rx,
                                                  5,
                                                  color=ColorYellow if self.color != ColorYellow else ColorRed,
                                                  batch=batch, group=self.debug_level)

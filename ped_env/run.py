@@ -7,7 +7,7 @@ from ped_env.envs import PedsMoveEnv as Env
 from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
-from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner
+from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner, PedsVisionRLHandler
 
 
 def HelloWorldProject():
@@ -43,9 +43,9 @@ def test2():
 
     debug = False
 
-    person_num = 20
-    env = Env(map_08, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
-              random_init_mode=True)
+    person_num = 4
+    env = Env(map_10, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
+              random_init_mode=True, person_handler=PedsVisionRLHandler)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
 
@@ -61,11 +61,12 @@ def test2():
         while not all(is_done.values()):
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
-            pprint.pprint(obs)
+            #pprint.pprint(obs)
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            env.render()
+            env.render(ratio=0.25)
+            # pprint.pprint(env.viewer.get_buffer_data())
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collision_between_agents, env.collide_wall))

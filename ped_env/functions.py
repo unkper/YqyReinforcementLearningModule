@@ -30,7 +30,8 @@ def transfer_to_render(x, y, X, Y, scale=10.0):
     :return:
     '''
     x_, y_ = x - X / 2, y - Y / 2
-    return x_ * scale, y_ * scale, X * scale, Y * scale
+    scale_x, scale_y = scale
+    return x_ * scale_x, y_ * scale_y, X * scale_x, Y * scale_y
 
 
 @njit

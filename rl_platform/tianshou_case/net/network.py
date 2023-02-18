@@ -157,21 +157,26 @@ class MarioICMFeatureHead(nn.Module):
 
 class PedPolicyHead(nn.Module):
     def __init__(self,
-                 input_dim: int,
-                 hidden_dim: int = 256,
+                 channel,
+                 height,
+                 width,
                  device="cpu",
                  layer_init: Callable[[nn.Module], nn.Module] = lambda x: x
                  ):
         super().__init__()
         self.device = device
-        self.encoder1 = nn.Sequential(
-            layer_init(nn.Linear(input_dim, hidden_dim)),
-            nn.ReLU(),
-            nn.Flatten()
+        self.net = nn.Sequential(
+            layer_init(nn.Conv2d(channel, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True),
+            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True),
+            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True), nn.Flatten()
         )
-        self.lstm_layer = nn.GRU(hidden_dim, 64)
-        self.lstm_layer.flatten_parameters()
-        self.output_dim = 64
+        with torch.no_grad():
+            self.mid_dim = np.prod(self.net(torch.zeros(1, channel, height, width)).shape[1:])
+        self.lstm_layer = nn.LSTM(self.mid_dim, 256)
+        self.output_dim = 256
 
     def forward(
             self,
@@ -181,7 +186,7 @@ class PedPolicyHead(nn.Module):
         if isinstance(obs, Batch):
             obs = obs.obs
         obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
-        x1 = torch.unsqueeze(self.encoder1(obs), 0)
+        x1 = torch.unsqueeze(self.net(obs), 0)
         x2, ht = self.lstm_layer(x1)
         x2 = torch.squeeze(x2, 0)
         return x2, state
@@ -189,19 +194,24 @@ class PedPolicyHead(nn.Module):
 
 class PedICMFeatureHead(nn.Module):
     def __init__(self,
-                 input_dim: int,
-                 hidden_dim: int = 256,
+                 channel,
+                 height,
+                 width,
                  device: Union[str, int, torch.device] = "cpu",
                  layer_init: Callable[[nn.Module], nn.Module] = lambda x: x
                  ):
         super().__init__()
         self.device = device
         self.net = nn.Sequential(
-            layer_init(nn.Linear(input_dim, hidden_dim)),
-            nn.ReLU(),
-            nn.Flatten()
+            layer_init(nn.Conv2d(channel, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True),
+            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True),
+            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True), nn.Flatten()
         )
-        self.output_dim = hidden_dim
+        with torch.no_grad():
+            self.output_dim = np.prod(self.net(torch.zeros(1, channel, height, width)).shape[1:])
 
     def forward(
             self,

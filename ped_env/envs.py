@@ -10,13 +10,13 @@ import logging
 from math import sqrt, pow
 
 from Box2D import (b2World, b2Vec2)
-from typing import Tuple, Dict, cast, List, Optional, Any
+from typing import Tuple, Dict, cast, List, Optional, Any, Type
 from collections import defaultdict
 
 from gym import Space
 from numba import njit
 
-from ped_env.mdp import PedsHandlerInterface, PedsRLHandlerWithPlanner, PedsRLHandlerWithoutForce
+from ped_env.mdp import PedsRLHandlerWithoutForce
 from ped_env.pathfinder import AStar
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
@@ -157,6 +157,7 @@ class Spawner:
             Group.set_group_process(group, groups, group_dic, persons)
         return persons
 
+
 class Parser():
     def __init__(self):
         self.start_point_dic = defaultdict(list)
@@ -204,6 +205,7 @@ class Parser():
                 if 9 >= spawn_map[i, j] >= 3:
                     self.start_point_dic[spawn_map[i, j]].append((i + 0.5, j + 0.5))
 
+
 class PedsMoveEnv(gym.Env):
     viewer = None
     peds = []
@@ -217,7 +219,7 @@ class PedsMoveEnv(gym.Env):
                  discrete=True,
                  frame_skipping=8,
                  maxStep=10000,
-                 person_handler: PedsHandlerInterface = PedsRLHandlerWithoutForce,
+                 person_handler = PedsRLHandlerWithoutForce,
                  disable_reward=False,
                  use_planner=False,
                  random_init_mode: bool = True,
@@ -279,7 +281,7 @@ class PedsMoveEnv(gym.Env):
 
         # for pettingzoo interface
         self._cumulative_rewards = defaultdict(int)
-        #self.agents = ["agent_{}".format(i) for i in range(self.agent_count)]
+        # self.agents = ["agent_{}".format(i) for i in range(self.agent_count)]
         self.agents = [str(i) for i in range(self.agent_count)]
         self.possible_agents = copy.deepcopy(self.agents)
         self.max_num_agents = len(self.possible_agents)
@@ -292,7 +294,7 @@ class PedsMoveEnv(gym.Env):
 
         self.disable_reward = disable_reward
         if disable_reward:
-            logging.info(u"当前环境将使用无奖励机制!")
+            logging.warning(u"当前环境将使用无奖励机制!")
 
     @property
     def num_agents(self):
@@ -321,6 +323,7 @@ class PedsMoveEnv(gym.Env):
         self.world.contactListener = self.listener
         # 创建渲染所需
         self.batch = pyglet.graphics.Batch()
+        self.render_element_dict = {}
         self.display_level = pyglet.graphics.OrderedGroup(0)
         self.debug_level = pyglet.graphics.OrderedGroup(1)
         # 创建一个行人工厂以供生成行人调用
@@ -381,8 +384,11 @@ class PedsMoveEnv(gym.Env):
                 idx += 1
 
     def setup_graphics(self):
+        render_scale = 500, 500
+        if self.viewer is not None:
+            render_scale = self.viewer.get_render_scale()
         for ele in self.elements:
-            ele.setup(self.batch, self.terrain.get_render_scale())
+            ele.setup(self.batch, render_scale)
 
     def delete_person(self, per: Person):
         self.pop_from_render_list(per.id)
@@ -422,11 +428,13 @@ class PedsMoveEnv(gym.Env):
 
     def get_ped_to_exit_dis(self, person_pos, exit_type):
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
+
         @njit
         def inner():
             nonlocal ex, ey
             x, y = person_pos
             return sqrt(pow(ex - x, 2) + pow(ey - y, 2))
+
         return inner()
 
     def get_ped_rel_pos_to_exit(self, person_pos, exit_type):
@@ -505,7 +513,7 @@ class PedsMoveEnv(gym.Env):
 
         for ped in self.peds:
             if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
-                logging.info("Agent{}:Leave the exit{}!".format(ped.id, ped.exit_type))
+                logging.warning("Agent{}:Leave the exit{}!".format(ped.id, ped.exit_type))
                 self.delete_person(ped)
                 if ped.is_leader:
                     pass
@@ -535,7 +543,7 @@ class PedsMoveEnv(gym.Env):
 
         if (not self.train_mode and self.left_person_num == 0) or (self.train_mode and self.left_leader_num == 0):
             is_done, truncated = is_done_operation()
-            logging.info(u"所有智能体到达出口!")
+            logging.warning(u"所有智能体到达出口!")
 
         self.step_in_env += self.frame_skipping
         if self.step_in_env > self.maxStep:  # 如果maxStep步都没有完全撤离，is_done直接为True
@@ -543,7 +551,7 @@ class PedsMoveEnv(gym.Env):
             truncated = {agentid: True for agentid in self.agents}
             # 清空agents里面的所有元素
             self.agents = []
-            logging.info(u"在{}步时强行重置环境!".format(self.maxStep))
+            logging.warning(u"在{}步时强行重置环境!".format(self.maxStep))
         leader_pos = []
         leader_step = []
         for group in self.groups:
@@ -556,12 +564,15 @@ class PedsMoveEnv(gym.Env):
         #     "leader_pos": leader_pos
         # }
 
+        # 为了有些MDP更新图像用
+        self.person_handler.update_image_data()
+
         info = {agent: {} for i, agent in enumerate(self.possible_agents)}
         return obs, rewards, is_done, truncated, info
 
-    def render(self, mode="human"):
+    def render(self, mode="human", ratio=1):
         if self.viewer is None:  # 如果调用了 render, 而且没有 viewer, 就生成一个
-            self.viewer = PedsMoveEnvViewer(self)
+            self.viewer = PedsMoveEnvViewer(self, render_ratio=ratio)
         self.viewer.render()  # 使用 Viewer 中的 render 功能
 
     def close(self):

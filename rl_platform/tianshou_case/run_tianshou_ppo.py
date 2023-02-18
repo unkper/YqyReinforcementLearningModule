@@ -20,6 +20,7 @@ from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 import sys
 
+from ped_env.mdp import PedsVisionRLHandler
 from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, PedICMFeatureHead, PedPolicyHead
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
@@ -82,7 +83,7 @@ def get_policy(env, optim=None):
     #     device=set_device
     # )
     net = PedPolicyHead(
-        input_dim=state_shape[0],
+        *state_shape,
         device=set_device
     )
 
@@ -118,7 +119,7 @@ def get_policy(env, optim=None):
     ).to(set_device)
 
     if icm_lr_scale > 0:
-        feature_net = PedICMFeatureHead(env.observation_space.shape[0],
+        feature_net = PedICMFeatureHead(*state_shape,
                                         device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
@@ -164,14 +165,14 @@ def _get_agents(
 train_map = map_08
 agent_num_map8 = 8
 
-train_if = True #是否采用test模式，即在icm模式下采用奖励模型来评判
+train_if = False  # 是否采用test模式，即在icm模式下采用奖励模型来评判
 
 
 def _get_env():
     global train_if, max_step
     """This function is needed to provide callables for DummyVectorEnv."""
     env = PedsMoveEnv(train_map, person_num=agent_num_map8, group_size=(1, 1), random_init_mode=True,
-                      maxStep=max_step, disable_reward=train_if)
+                      maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler)
     env = pet.utils.parallel_to_aec(env)
     return PettingZooEnv(env)
 
@@ -318,7 +319,7 @@ if __name__ == "__main__":
     # parser.add_argument("max_step", type=int, default=5000)
     # args = parser.parse_args()
     # train()
-    train(debug=False)
+    train(debug=True)
     # test()
 
     # python run_tianshou_ppo.py --file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_01_48_33\checkpoint_17.pth

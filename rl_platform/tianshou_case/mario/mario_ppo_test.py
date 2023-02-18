@@ -298,7 +298,7 @@ if __name__ == "__main__":
 
     parmas = parser.parse_args()
 
-    train_if = True
+    train_if = False
 
     if not train_if:
         train()

@@ -9,7 +9,7 @@ from collections import defaultdict
 
 from tqdm import tqdm
 
-import ped_env.envs
+
 from ped_env.utils.maps import *
 
 
@@ -327,9 +327,3 @@ class AStarPolicy():
 
 def recoder_for_debug(*obj):
     pass
-
-
-if __name__ == '__main__':
-    env = ped_env.envs.PedsMoveEnv(map_12, 32, (4, 4), random_init_mode=True)
-    planner = AStarController(env)
-    planner.play(20)

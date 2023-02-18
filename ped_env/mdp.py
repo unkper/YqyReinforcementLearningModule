@@ -9,13 +9,13 @@ from typing import List, Dict, cast
 import numpy as np
 from gym.spaces import Box, Discrete
 
-import ped_env.envs
 from ped_env.functions import parse_discrete_action, calculate_nij, normalized, angle_of_vector, \
     calculate_groups_person_num
 from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
 from ped_env.settings import ACTION_DIM, identity
 from ped_env.utils.misc import angle_between
+from ped_env.utils.viewer import PedsMoveEnvViewer
 
 
 class PedsHandlerInterface(abc.ABC):
@@ -69,6 +69,9 @@ class PedsHandlerInterface(abc.ABC):
     def get_reward(self, ped: Person, ped_index: int, time):
         pass
 
+    def update_image_data(self):
+        pass
+
 
 class PedsRLHandlerWithoutForce(PedsHandlerInterface):
     """
@@ -112,7 +115,7 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
     def get_observation(self, ped: Person, group: Group, time):
         from ped_env.utils.misc import ObjectType
         observation = []
-        self.env = cast(ped_env.envs.PedsMoveEnv, self.env)
+
         if ped.is_done:
             return self.last_observation[ped.id]
         # 给予智能体当前速度大小，速度相对于参考向量的夹角
@@ -215,6 +218,25 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
                 else:
                     lr += self.r_wait
         return gr, lr
+
+class PedsVisionRLHandler(PedsRLHandlerWithoutForce):
+    """
+    这个版本将采用ICM的机制，所以将大部分奖励都设置为0
+    """
+    def __init__(self, env, r_move=0, r_wait=0, r_collision_person=0, r_collision_wall=0, r_reach=100,
+                 use_planner=False):
+        super().__init__(env, r_move, r_wait, r_collision_person, r_collision_wall, r_reach, use_planner)
+        self.p_render = PedsMoveEnvViewer(env, visible=False, render_ratio=0.25)  # 以更小的图像进行显示输出 125*125*4
+        self.observation_space = [Box(-inf, inf, (4,
+                                                  125,
+                                                  125,))] # 定义新的观察空间为地图的俯视图(RGBA模式)
+
+    def get_observation(self, ped: Person, group: Group, time):
+        # 给予智能体当前渲染出的观察图像
+        return self.p_render.get_buffer_data()
+
+    def update_image_data(self):
+        self.p_render.render()
 
 
 class PedsRLHandler(PedsHandlerInterface):

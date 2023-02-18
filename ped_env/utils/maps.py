@@ -58,13 +58,6 @@ class Map:
     def height(self):
         return self.map.shape[1]
 
-    def get_render_scale(self, window_size: int = 500):
-        '''
-        得到缩放比例，500*500的窗口大小
-        :return:
-        '''
-        size = self.map.shape[0]
-        return window_size / size
 
     def get_random_exit(self, index):
         return sample(self.random_exits[index], 1)[0]

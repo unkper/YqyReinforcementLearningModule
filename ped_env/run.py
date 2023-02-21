@@ -8,32 +8,7 @@ from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
 from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner, PedsVisionRLHandler
-
-
-def HelloWorldProject():
-    world = b2d.b2World()
-    ground_body = world.CreateStaticBody(
-        position=(0, -10),
-        shapes=b2d.b2PolygonShape(box=(50, 10)),
-    )
-    body = world.CreateDynamicBody(position=(0, 4))
-
-    box = body.CreatePolygonFixture(box=(1, 1),
-                                    density=1,
-                                    friction=0.3)
-    timeStep = 1.0 / 60  # 时间步长，1/60秒
-    vel_iters, pos_iters = 6, 2
-    for i in range(600):  # 一共向前模拟60步，即总经过1秒
-        world.Step(timeStep, vel_iters, pos_iters)
-
-        # 清楚所有施加上的力，每次循环都是必须的
-        world.ClearForces()
-
-        # 打印输出物体的位置和角度
-        print("Body Pos:{},Angle:{}".format(
-            body.position,
-            body.angle
-        ))
+from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
 
 
 # 使用随机策略来前往目的地
@@ -66,7 +41,7 @@ def test2():
                 env.debug_step()
             step += env.frame_skipping
             env.render(ratio=0.25)
-            # pprint.pprint(env.viewer.get_buffer_data())
+            #pprint.pprint(env.viewer.get_buffer_data())
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collision_between_agents, env.collide_wall))
@@ -176,10 +151,45 @@ def test5():
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
                                                                              step / (endtime - starttime)))
 
+def test_wrapper_api():
+    import time
+    import numpy as np
+
+    debug = False
+
+    person_num = 1
+    env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
+              random_init_mode=True, person_handler=PedsVisionRLHandler)
+    env = FrameStackWrapper(env)
+
+    for epoch in range(5):
+        start_time = time.time()
+        step = 0
+        is_done = {'0': False}
+        env.reset(None, None)
+
+        def get_single_action(agent):
+            return env.action_space(agent).sample()
+
+        while not all(is_done.values()):
+            action = {agent: get_single_action(agent) for agent in env.agents}
+            obs, reward, is_done, truncated, info = env.step(action)
+            #pprint.pprint(obs)
+            if debug:
+                env.debug_step()
+            step += env.frame_skipping
+            #env.render(ratio=1)
+            #pprint.pprint(env.viewer.get_buffer_data())
+        endtime = time.time()
+        print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
+              .format(env.collision_between_agents, env.collide_wall))
+        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - start_time,
+                                                                             step / (endtime - start_time)))
 
 if __name__ == '__main__':
     # HelloWorldProject()
-    test2()
+    #test2()
+    test_wrapper_api()
 
     # import kdtree
     # points = []

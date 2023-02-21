@@ -158,7 +158,7 @@ class Spawner:
         return persons
 
 
-class Parser():
+class Parser:
     def __init__(self):
         self.start_point_dic = defaultdict(list)
         self.start_nodes_wall = []

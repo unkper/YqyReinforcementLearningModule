@@ -9,8 +9,8 @@ from typing import List, Dict, cast
 import numpy as np
 from gym.spaces import Box, Discrete
 
-from ped_env.functions import parse_discrete_action, calculate_nij, normalized, angle_of_vector, \
-    calculate_groups_person_num
+from ped_env.functions import parse_discrete_action_one_hot, calculate_nij, normalized, angle_of_vector, \
+    calculate_groups_person_num, parse_discrete_action
 from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
 from ped_env.settings import ACTION_DIM, identity
@@ -159,7 +159,7 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         if not group.leader.is_done:
             if diff < 2:
                 ped.person_state = PersonState.follow_leader
-                control_dir = parse_discrete_action(action) if self.env.discrete else action
+                control_dir = parse_discrete_action_one_hot(action) if self.env.discrete else action
                 leader_dir = calculate_nij(group.leader, ped)
                 if angle_of_vector(control_dir, leader_dir) > 90:
                     mix_dir = -leader_dir * 0.2
@@ -229,16 +229,21 @@ class PedsVisionRLHandler(PedsRLHandlerWithoutForce):
                  use_planner=False):
         super().__init__(env, r_move, r_wait, r_collision_person, r_collision_wall, r_reach, use_planner)
         self.p_render = PedsMoveEnvViewer(env, visible=False, render_ratio=0.2)  # 以更小的图像进行显示输出 100*100*4
-        self.observation_space = [Box(-inf, inf, (4,
-                                                  self.p_render.height,
-                                                  self.p_render.width))]  # 定义新的观察空间为地图的俯视图(RGBA模式)
+        self.observation_space = [Box(-1, 1,  (self.p_render.height, self.p_render.width))]  # 定义新的观察空间为地图的俯视图(RGB经过加权平均后的灰度模式)
 
     def get_observation(self, ped: Person, group: Group, time):
+        if ped.is_done:
+            return self.last_observation[ped.id]
         # 给予智能体当前渲染出的观察图像
-        return self.p_render.get_buffer_data()
+        obs = self.p_render.get_buffer_data()
+        self.last_observation[ped.id] = obs
+        return obs
 
     def update_image_data(self):
         self.p_render.render()
+
+    def set_action(self, ped: Person, action):
+        ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
 
 
 class PedsRLHandler(PedsHandlerInterface):
@@ -320,7 +325,7 @@ class PedsRLHandler(PedsHandlerInterface):
         return observation
 
     def set_action(self, ped: Person, action):
-        ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
+        ped.self_driven_force(parse_discrete_action_one_hot(action) if self.env.discrete else action)
         ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
         ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
 
@@ -329,7 +334,7 @@ class PedsRLHandler(PedsHandlerInterface):
         if not group.leader.is_done:
             if diff < 2:
                 ped.person_state = PersonState.follow_leader
-                control_dir = parse_discrete_action(action) if self.env.discrete else action
+                control_dir = parse_discrete_action_one_hot(action) if self.env.discrete else action
                 leader_dir = calculate_nij(group.leader, ped)
                 if angle_of_vector(control_dir, leader_dir) > 90:
                     mix_dir = -leader_dir * 0.2

@@ -22,6 +22,7 @@ import sys
 
 from ped_env.mdp import PedsVisionRLHandler
 from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, PedICMFeatureHead, PedPolicyHead
+from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
@@ -65,14 +66,11 @@ set_device = "cuda"
 
 
 def get_policy(env, optim=None):
-    observation_space = (
-        env.observation_space["observation"]
-        if isinstance(env.observation_space, gym.spaces.Dict)
-        else env.observation_space
-    )
 
     state_shape = env.observation_space.shape or env.observation_space.n
     action_shape = env.action_space.shape or env.action_space.n
+
+    state_shape = (4, ) + state_shape
 
     from rl_platform.tianshou_case.net.network import MLPNetwork
 
@@ -163,7 +161,7 @@ def _get_agents(
 
 
 train_map = map_10
-agent_num_map8 = 4
+agent_num_map = 4
 
 train_if = False  # 是否采用test模式，即在icm模式下采用奖励模型来评判
 
@@ -171,8 +169,8 @@ train_if = False  # 是否采用test模式，即在icm模式下采用奖励模�
 def _get_env():
     global train_if, max_step
     """This function is needed to provide callables for DummyVectorEnv."""
-    env = PedsMoveEnv(train_map, person_num=agent_num_map8, group_size=(1, 1), random_init_mode=True,
-                      maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler)
+    env = FrameStackWrapper(PedsMoveEnv(train_map, person_num=agent_num_map, group_size=(1, 1), random_init_mode=True,
+                                        maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler))
     env = pet.utils.parallel_to_aec(env)
     return PettingZooEnv(env)
 
@@ -203,7 +201,7 @@ def train(load_check_point=None, debug=False):
         # test_envs.seed(seed)
 
         # ======== Step 2: Agent setup =========
-        policy, optim, agents = _get_agents(agent_count=agent_num_map8)
+        policy, optim, agents = _get_agents(agent_count=agent_num_map)
 
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location="cuda" if torch.cuda.is_available() else "cpu")
@@ -222,7 +220,7 @@ def train(load_check_point=None, debug=False):
         train_collector.collect(n_step=batch_size * 10)  # batch size * training_num # use random policy
 
         # ======== Step 4: Callback functions setup =========
-        task = "PedsMoveEnv_{}_{}".format(train_map.name, agent_num_map8)
+        task = "PedsMoveEnv_{}_{}".format(train_map.name, agent_num_map)
         file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         logger = ts.utils.TensorboardLogger(SummaryWriter('log/' + file_name))  # TensorBoard is supported!
 

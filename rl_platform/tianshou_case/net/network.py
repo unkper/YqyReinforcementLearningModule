@@ -183,6 +183,7 @@ class PedPolicyHead(nn.Module):
             obs: Union[np.ndarray, torch.Tensor],
             state: Optional[Any] = None,
             info: Dict[str, Any] = {}, ):
+        self.lstm_layer.flatten_parameters()
         if isinstance(obs, Batch):
             obs = obs.obs
         obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)

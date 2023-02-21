@@ -53,13 +53,14 @@ def angle_of_vector(v1, v2):
     return (acos(cos) / pi) * 180
 
 
-def parse_discrete_action(type: np.ndarray):
+def parse_discrete_action_one_hot(type: np.ndarray):
     from ped_env.settings import actions
     return actions[np.argmax(type).item()]
-    # sum_probabilities = sum(type)
-    # for i in range(len(type)):
-    #     type[i] /= sum_probabilities
-    # return random_pick(actions, type)
+
+
+def parse_discrete_action(type: np.ndarray):
+    from ped_env.settings import actions
+    return actions[type]
 
 @njit
 def normalized(a, axis=-1, order=2):

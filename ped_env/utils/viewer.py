@@ -71,7 +71,23 @@ class PedsMoveEnvViewer(pyglet.window.Window):
         color_buffer = pyglet.image.get_buffer_manager().get_color_buffer()
         # 将颜色缓冲区转换为numpy数组
         data = np.frombuffer(color_buffer.get_image_data().get_data('RGB'), dtype=np.uint8)
-        return data.reshape((color_buffer.height, color_buffer.width, 4)).transpose((2, 1, 0))
+        data = data.reshape((color_buffer.height, color_buffer.width, 4)).transpose((2, 1, 0))
+        return self.gray_scale_image(data) # 灰度化图像并返回
+
+    def gray_scale_image(self, frame:np.ndarray)->np.ndarray:
+        # 将输入数组的最后一个维度（即A通道）丢弃，得到一个形状为（3, height, width）的RGB图像数组。
+        frame = frame[:3, :, :]
+
+        # 将输入数组缩放到 [0, 1] 范围内
+        frame = frame / 255.0
+
+        weights = np.array([0.2989, 0.5870, 0.1140])
+
+        # 沿着第一个轴对数组进行加权平均，得到形状为 [height, width] 的灰度图像
+        gray_frame = np.average(frame, axis=0, weights=weights)
+
+        # 将堆叠后的灰度图像数组作为输出返回
+        return gray_frame
 
 
 class PedsMoveEnvViewerWithBuffer(pyglet.window.Window):

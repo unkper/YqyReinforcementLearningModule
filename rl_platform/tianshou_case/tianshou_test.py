@@ -10,7 +10,8 @@ from tensorboardX import SummaryWriter
 from tianshou.policy import BasePolicy
 
 from ped_env.envs import PedsMoveEnv
-from ped_env.utils.maps import map_08, map_10
+from ped_env.utils.maps import map_08, map_10, map_simple
+from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
 
 
 def lunarlander_test(model_path):
@@ -289,7 +290,7 @@ if __name__ == '__main__':
 
     from pettingzoo.test import parallel_api_test, api_test
 
-    env = PedsMoveEnv(map_10, person_num=4, group_size=(1, 1), random_init_mode=True, maxStep=50000)
+    env = FrameStackWrapper(PedsMoveEnv(map_simple, person_num=6, group_size=(1, 1), random_init_mode=True, maxStep=10000))
     for _ in range(100):
         parallel_api_test(env, num_cycles=4000)
 

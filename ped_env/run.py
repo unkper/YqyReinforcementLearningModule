@@ -174,7 +174,7 @@ def test_wrapper_api():
         while not all(is_done.values()):
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
-            #pprint.pprint(obs)
+            pprint.pprint(obs)
             if debug:
                 env.debug_step()
             step += env.frame_skipping

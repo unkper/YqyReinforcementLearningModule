@@ -30,8 +30,8 @@ from ped_env.envs import PedsMoveEnv
 from ped_env.utils.maps import map_09, map_10, map_08
 from rl_platform.tianshou_case.utils.common import _get_agents
 
-parallel_env_num = 10
-test_env_num = 3
+parallel_env_num = 5
+test_env_num = 1
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = 200000 // parallel_env_num
 batch_size = 256
@@ -180,16 +180,16 @@ def train(load_check_point=None, debug=False):
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
         if debug:
-            parallel_env_num, test_env_num = 5, 3
+            parallel_env_num, test_env_num = 3, 1
             max_step = 1000
             buffer_size = 200
             batch_size = 12
             #icm_lr_scale = 0
-            train_envs = DummyVectorEnv([_get_env for _ in range(parallel_env_num)])
+            train_envs = SubprocVectorEnv([_get_env for _ in range(parallel_env_num)])
             train_if = False
             test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
         else:
-            train_envs = DummyVectorEnv([_get_env for _ in range(parallel_env_num)])
+            train_envs = SubprocVectorEnv([_get_env for _ in range(parallel_env_num)])
             train_if = False
             test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
 

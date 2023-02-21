@@ -15,7 +15,7 @@ from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
 from ped_env.settings import ACTION_DIM, identity
 from ped_env.utils.misc import angle_between
-from ped_env.utils.viewer import PedsMoveEnvViewer
+from ped_env.utils.viewer import PedsMoveEnvViewer, PedsMoveEnvRender, get_buffer_data
 
 
 class PedsHandlerInterface(abc.ABC):
@@ -228,14 +228,14 @@ class PedsVisionRLHandler(PedsRLHandlerWithoutForce):
     def __init__(self, env, r_move=0, r_wait=0, r_collision_person=0, r_collision_wall=0, r_reach=100,
                  use_planner=False):
         super().__init__(env, r_move, r_wait, r_collision_person, r_collision_wall, r_reach, use_planner)
-        self.p_render = PedsMoveEnvViewer(env, visible=False, render_ratio=0.2)  # 以更小的图像进行显示输出 100*100*4
+        self.p_render = PedsMoveEnvViewer(env, visible=False, render_ratio=0.25)  # 以更小的图像进行显示输出 100*100*4
         self.observation_space = [Box(-1, 1,  (self.p_render.height, self.p_render.width))]  # 定义新的观察空间为地图的俯视图(RGB经过加权平均后的灰度模式)
 
     def get_observation(self, ped: Person, group: Group, time):
         if ped.is_done:
             return self.last_observation[ped.id]
         # 给予智能体当前渲染出的观察图像
-        obs = self.p_render.get_buffer_data()
+        obs = get_buffer_data()
         self.last_observation[ped.id] = obs
         return obs
 

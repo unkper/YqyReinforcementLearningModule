@@ -12,7 +12,6 @@ import numpy as np
 from Box2D import *
 from math import sin, cos
 
-
 from numpy import ndarray
 
 from ped_env.utils.misc import angle_between
@@ -22,7 +21,7 @@ from ped_env.functions import transfer_to_render, normalized, ij_power
 from ped_env.utils.misc import FixtureInfo, ObjectType
 
 
-class Agent():
+class Agent:
 
     @property
     def getX(self):
@@ -221,7 +220,6 @@ class Person(Agent):
                                                  color=ColorYellow if self.color != ColorYellow else ColorRed,
                                                  batch=batch, group=self.debug_level)
 
-
     def set_norm_velocity(self, action_type: int):
         from ped_env.settings import actions
         # 简单将速度设置为
@@ -419,8 +417,7 @@ class BoxWall:
     def __init__(self, env: b2World, new_x, new_y, new_width, new_height, display_level, object_type,
                  color=ColorRed):
         # new_x,new_y代表的是矩形墙的中心坐标
-        self.body = env.CreateStaticBody(position=(new_x, new_y))
-        self.body: b2BodyDef
+        self.body: b2BodyDef = env.CreateStaticBody(position=(new_x, new_y))
         self.body.allowSleep = True
         self.x = self.body.position.x
         self.y = self.body.position.y

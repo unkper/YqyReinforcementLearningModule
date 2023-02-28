@@ -1,7 +1,10 @@
+import math
 import random
+import timeit
 from typing import List
 
 import numpy as np
+import pyglet
 
 from numba import njit
 
@@ -19,7 +22,7 @@ def calculate_groups_person_num(env, person_num_sum) -> List:
 
 
 @njit
-def transfer_to_render(x, y, X, Y, scale=10.0):
+def transfer_to_render(x, y, X, Y, scale=30):
     '''
     该函数将物理坐标转化为渲染坐标来进行输出
     :param x: 物体中心点坐标x
@@ -30,8 +33,7 @@ def transfer_to_render(x, y, X, Y, scale=10.0):
     :return:
     '''
     x_, y_ = x - X / 2, y - Y / 2
-    scale_x, scale_y = scale
-    return x_ * scale_x, y_ * scale_y, X * scale_x, Y * scale_y
+    return x_ * scale, y_ * scale, X * scale, Y * scale
 
 
 @njit
@@ -61,6 +63,7 @@ def parse_discrete_action_one_hot(type: np.ndarray):
 def parse_discrete_action(type: np.ndarray):
     from ped_env.settings import actions
     return actions[type]
+
 
 @njit
 def normalized(a, axis=-1, order=2):
@@ -106,6 +109,31 @@ def ij_power(r, A=0.01610612736, B=3.93216):
     return ij_group_f
 
 
+@njit
+# 定义函数，将角度转换为弧度
+def deg_to_rad(degrees):
+    return degrees * math.pi / 180
+
+
+@njit
+# 定义函数，计算三角形的顶点坐标
+def calc_triangle_points(pos, length, angle):
+    # 将角度转换为弧度
+    angle_rad = deg_to_rad(angle)
+
+    # 计算三角形的顶点坐标
+    x1 = pos[0] + length * math.cos(angle_rad)
+    y1 = pos[1] - length * math.sin(angle_rad)
+
+    x2 = pos[0] + length * math.cos(angle_rad + deg_to_rad(120))
+    y2 = pos[1] - length * math.sin(angle_rad + deg_to_rad(120))
+
+    x3 = pos[0] + length * math.cos(angle_rad + deg_to_rad(240))
+    y3 = pos[1] - length * math.sin(angle_rad + deg_to_rad(240))
+
+    return [(x1, y1), (x2, y2), (x3, y3)]
+
+
 if __name__ == '__main__':
     # for i in range(10):
     #     group_size = (5, 5)
@@ -119,16 +147,33 @@ if __name__ == '__main__':
     # mu = pow(B, 2)/(4*A)
     # print("Af={},Bf={},A={},B={},mu={},sigma={}".format(Af, Bf, A, B, mu, sigma))
 
-    delta, counter = 0.01, 0
-    start = 0.37
-    x, y = [], []
-    while counter <= 150:
-        counter += 1
-        r = (delta * counter) + start
-        force = ij_power(r)
-        x.append(counter / 100 + start)
-        y.append(force)
-    import matplotlib.pyplot as plt
+    # delta, counter = 0.01, 0
+    # start = 0.37
+    # x, y = [], []
+    # while counter <= 150:
+    #     counter += 1
+    #     r = (delta * counter) + start
+    #     force = ij_power(r)
+    #     x.append(counter / 100 + start)
+    #     y.append(force)
+    # import matplotlib.pyplot as plt
+    #
+    # plt.plot(x, y)
+    # plt.show()
+    pass
 
-    plt.plot(x, y)
-    plt.show()
+
+def gray_scale_image(frame: np.ndarray) -> np.ndarray:
+    # 将输入数组的最后一个维度（即A通道）丢弃，得到一个形状为（3, height, width）的RGB图像数组。
+    frame = frame[:, :, :]
+
+    # 将输入数组缩放到 [0, 1] 范围内
+    frame = frame / 255.0
+
+    weights = np.array([0.2989, 0.5870, 0.1140])
+
+    # 沿着第一个轴对数组进行加权平均，得到形状为 [height, width] 的灰度图像
+    gray_frame = np.average(frame, axis=2, weights=weights)
+
+    # 将堆叠后的灰度图像数组作为输出返回
+    return gray_frame

@@ -7,6 +7,10 @@ vel_iters, pos_iters = 6, 2
 ACTION_DIM = 9  # 离散动作的维数
 GROUP_SIZE = 0.5  # 一个团体中的人在半径为多大(m)的区域生成
 
+RENDER_RATIO = 1.0
+VIEWPORT_W, VIEWPORT_H = int(500 * RENDER_RATIO), int(500 * RENDER_RATIO)
+RENDER_SCALE = int(42 * RENDER_RATIO)
+
 # 动作常量区
 # 修复bug:未按照弧度值进行旋转
 identity = np.array([1.0, 0.0])
@@ -27,3 +31,8 @@ for idx, angle in enumerate(range(0, 360, int(360 / 8))):
                     sin(theta), cos(theta)]).reshape([2, 2])
     vec = np.matmul(mat, identity)
     DIRECTIONS.append(vec)
+
+def reset_settings():
+    global RENDER_RATIO, VIEWPORT_H, VIEWPORT_W, RENDER_SCALE
+    VIEWPORT_W, VIEWPORT_H = int(500 * RENDER_RATIO), int(500 * RENDER_RATIO)
+    RENDER_SCALE = int(42 * RENDER_RATIO)

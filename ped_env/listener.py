@@ -23,7 +23,7 @@ class MyContactListener(b2ContactListener):
         elif infoA.type == ObjectType.Agent and infoB.type == ObjectType.Agent:
             if infoB.model in infoA.model.group:
                 return
-            self.env.collision_between_agents += 1
+            self.env.collide_agents_count += 1
             # 互相添加彼此
             infoA.model.collide_agents[infoB.id] = infoB.model
             infoB.model.collide_agents[infoA.id] = infoA.model
@@ -35,7 +35,7 @@ class MyContactListener(b2ContactListener):
 
         elif (infoA.type == ObjectType.Agent and infoB.type in (ObjectType.Wall, ObjectType.Obstacle)) \
                 or (infoA.type in (ObjectType.Wall, ObjectType.Obstacle) and infoB.type == ObjectType.Agent):
-            self.env.collide_wall += 1
+            self.env.collide_wall_count += 1
             agent = infoA if infoA.type == ObjectType.Agent else infoB
             obs = infoA if infoA.type in (ObjectType.Wall, ObjectType.Obstacle) else infoB
             agent.model.collide_obstacles[obs.id] = obs.model

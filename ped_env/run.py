@@ -7,7 +7,7 @@ from ped_env.envs import PedsMoveEnv as Env
 from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *
 from rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
-from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner, PedsVisionRLHandler
+from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner, PedsVisionRLHandler, PedsRLHandlerWithForce
 from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
 
 
@@ -36,15 +36,15 @@ def test2():
         while not all(is_done.values()):
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
-            #pprint.pprint(obs)
+            # pprint.pprint(obs)
             if debug:
                 env.debug_step()
             step += env.frame_skipping
             env.render(ratio=0.25)
-            #pprint.pprint(env.viewer.get_buffer_data())
+            # pprint.pprint(env.viewer.get_buffer_data())
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.collision_between_agents, env.collide_wall))
+              .format(env.collide_agents_count, env.collide_wall_count))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - start_time,
                                                                              step / (endtime - start_time)))
     handler.save("./")
@@ -112,7 +112,7 @@ def test4():
             # print(obs, reward, is_done)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.collision_between_agents, env.collide_wall))
+              .format(env.collide_agents_count, env.collide_wall_count))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
                                                                              step / (endtime - starttime)))
 
@@ -147,22 +147,29 @@ def test5():
                 step += env.frame_skipping
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.collision_between_agents, env.collide_wall))
+              .format(env.collide_agents_count, env.collide_wall_count))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - starttime,
                                                                              step / (endtime - starttime)))
 
-def test_wrapper_api():
-    import time
-    import numpy as np
 
-    debug = False
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.animation import FuncAnimation
+
+
+def test_wrapper_api(debug=False):
+    import time
+    import ped_env.settings as setting
 
     person_num = 1
-    env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
+    env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
               random_init_mode=True, person_handler=PedsVisionRLHandler)
+    # env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
+    #           random_init_mode=True, person_handler=PedsRLHandlerWithForce)
+
     env = FrameStackWrapper(env)
 
-    for epoch in range(5):
+    for epoch in range(1):
         start_time = time.time()
         step = 0
         is_done = {'0': False}
@@ -171,25 +178,42 @@ def test_wrapper_api():
         def get_single_action(agent):
             return env.action_space(agent).sample()
 
+        obs_arr = []
+
         while not all(is_done.values()):
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
-            pprint.pprint(obs)
+            obs_arr.append(obs['0'][0])
+            # pprint.pprint(obs)
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            #env.render(ratio=1)
-            #pprint.pprint(env.viewer.get_buffer_data())
-        endtime = time.time()
-        print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
-              .format(env.collision_between_agents, env.collide_wall))
-        print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - start_time,
-                                                                             step / (endtime - start_time)))
+            #env.render()
+
+        if debug and isinstance(env.wrapper_env.person_handler, PedsVisionRLHandler):
+            fig, ax = plt.subplots()
+
+            now_obs_idx = 0
+
+            def update(frame):
+                nonlocal now_obs_idx, obs_arr
+                ax.clear()
+
+                ax.imshow(obs_arr[now_obs_idx])
+                #ax.imshow(np.transpose(obs_arr[now_obs_idx], (1, 2, 0)))
+                now_obs_idx += 1
+                now_obs_idx %= len(obs_arr)
+                # 隐藏坐标轴
+                ax.axis('off')
+
+            ani = FuncAnimation(fig, update)
+            ani.save('./animation.mp4', writer='ffmpeg')
+
 
 if __name__ == '__main__':
     # HelloWorldProject()
-    #test2()
-    test_wrapper_api()
+    # test2()
+    test_wrapper_api(debug=True)
 
     # import kdtree
     # points = []

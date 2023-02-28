@@ -6,16 +6,13 @@ import kdtree
 from math import inf
 from typing import List, Dict, cast
 
-import numpy as np
 from gym.spaces import Box, Discrete
 
 from ped_env.functions import parse_discrete_action_one_hot, calculate_nij, normalized, angle_of_vector, \
     calculate_groups_person_num, parse_discrete_action
 from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
-from ped_env.settings import ACTION_DIM, identity
-from ped_env.utils.misc import angle_between
-from ped_env.utils.viewer import PedsMoveEnvViewer, PedsMoveEnvRender, get_buffer_data
+from ped_env.settings import ACTION_DIM
 
 
 class PedsHandlerInterface(abc.ABC):
@@ -73,7 +70,7 @@ class PedsHandlerInterface(abc.ABC):
         pass
 
 
-class PedsRLHandlerWithoutForce(PedsHandlerInterface):
+class PedsRLHandlerWithForce(PedsHandlerInterface):
     """
     该奖励机制不再考虑行人间的社会力，并且将动作改为修改行人的行走速度和行走方向
     """
@@ -94,12 +91,12 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
 
         # 强化学习MDP定义区域
         # 定义观察空间为[智能体位置, 智能体速度, 三个最近智能体的位置, 三个最近障碍物的位置]一共16个值
-        self.observation_space = [Box(-inf, inf, (4 + PedsRLHandlerWithoutForce.DETECT_PED_COUNT * 2 +
-                                                  PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT * 2,))
+        self.observation_space = [Box(-inf, inf, (4 + PedsRLHandlerWithForce.DETECT_PED_COUNT * 2 +
+                                                  PedsRLHandlerWithForce.DETECT_OBSTACLE_COUNT * 2,))
                                   for _ in range(self.agent_count)]
         if self.env.discrete:
             # 定义动作空间为修改智能体速度和角度，具体参见论文的动作空间设计
-            self.action_space = [Discrete(PedsRLHandlerWithoutForce.ACTION_NUM) for _ in range(self.agent_count)]
+            self.action_space = [Discrete(PedsRLHandlerWithForce.ACTION_NUM) for _ in range(self.agent_count)]
         else:
             # 定义连续动作空间为[分量x，分量y]施加相应方向的力
             self.action_space = [Box(-1, 1, (2,)) for _ in range(self.agent_count)]
@@ -126,23 +123,23 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         observation.append(dis)
         observation.append(angle)
         # 给予附近3m内的所有智能体位置信息
-        persons = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithoutForce.DETECT_PED_COUNT,
+        persons = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithForce.DETECT_PED_COUNT,
                                                     detect_type=ObjectType.Agent)
         for pe in persons:
             observation.append(ped.relative_distence(pe.pos))
             observation.append(ped.relative_angle(pe.pos))
-        left = PedsRLHandlerWithoutForce.DETECT_PED_COUNT - len(persons)
+        left = PedsRLHandlerWithForce.DETECT_PED_COUNT - len(persons)
         if left > 0:  # 以0值作为填充
             for i in range(left):
                 observation.append(0.0)
                 observation.append(0.0)
 
-        obstacles = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT,
+        obstacles = self.env.get_ped_nearest_elements(ped, PedsRLHandlerWithForce.DETECT_OBSTACLE_COUNT,
                                                       detect_type=ObjectType.Obstacle)
         for ob in obstacles:
             observation.append(ped.relative_distence(ob.pos))
             observation.append(ped.relative_angle(ob.pos))
-        left = PedsRLHandlerWithoutForce.DETECT_OBSTACLE_COUNT - len(obstacles)
+        left = PedsRLHandlerWithForce.DETECT_OBSTACLE_COUNT - len(obstacles)
         if left > 0:
             for i in range(left):
                 observation.append(0.0)
@@ -152,7 +149,8 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         return observation
 
     def set_action(self, ped: Person, action):
-        ped.set_norm_velocity(action)
+        ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
+        # ped.set_norm_velocity(action)
 
     def set_follower_action(self, ped: Person, action, group: Group, exit_pos):
         diff = group.get_distance_to_leader(ped)
@@ -220,27 +218,30 @@ class PedsRLHandlerWithoutForce(PedsHandlerInterface):
         return gr, lr
 
 
-class PedsVisionRLHandler(PedsRLHandlerWithoutForce):
+class PedsVisionRLHandler(PedsRLHandlerWithForce):
     """
     这个版本将采用ICM的机制，所以将大部分奖励都设置为0
     """
 
     def __init__(self, env, r_move=0, r_wait=0, r_collision_person=0, r_collision_wall=0, r_reach=100,
-                 use_planner=False):
+                 use_planner=False, render_ratio=0.5):
+        import ped_env.settings as set
+        set.RENDER_RATIO = render_ratio
+        set.reset_settings()
         super().__init__(env, r_move, r_wait, r_collision_person, r_collision_wall, r_reach, use_planner)
-        self.p_render = PedsMoveEnvViewer(env, visible=False, render_ratio=0.25)  # 以更小的图像进行显示输出 100*100*4
-        self.observation_space = [Box(-1, 1,  (self.p_render.height, self.p_render.width))]  # 定义新的观察空间为地图的俯视图(RGB经过加权平均后的灰度模式)
+        self.env.render_mode = "gray_array"  # 设置渲染模式为灰度图
+        # self.env.render_scale = 30
+        self.observation_space = [Box(-1, 1, (set.VIEWPORT_H, set.VIEWPORT_H))]  # 定义新的观察空间为地图的俯视图(RGB经过加权平均后的灰度模式)
 
     def get_observation(self, ped: Person, group: Group, time):
+        assert self.env.render_mode in ["rgb_array", "gray_array"]
         if ped.is_done:
             return self.last_observation[ped.id]
+        self.env.render(self.env.render_mode)
         # 给予智能体当前渲染出的观察图像
-        obs = get_buffer_data()
+        obs = self.env.render_data
         self.last_observation[ped.id] = obs
         return obs
-
-    def update_image_data(self):
-        self.p_render.render()
 
     def set_action(self, ped: Person, action):
         ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)

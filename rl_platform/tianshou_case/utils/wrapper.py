@@ -93,7 +93,9 @@ class FrameStackWrapper():
         self.observation_spaces = {
             agentid: gym.spaces.Box(
                 low=np.min(obs_space.low), high=np.max(obs_space.high), shape=shape, dtype=obs_space.dtype
-            ) for agentid in self.wrapper_env.agents}
+            ) for agentid in self.wrapper_env.possible_agents}
+        for agentid in self.wrapper_env.possible_agents:
+            self.frames[agentid] = deque([], maxlen=n_frames)
 
     def reset(self, seed=None, options=None):
         """
@@ -104,7 +106,7 @@ class FrameStackWrapper():
         """
         obs = self.wrapper_env.reset(seed=seed)
         for _ in range(self.n_frames):
-            for agentid in obs.keys():
+            for agentid in self.wrapper_env.possible_agents:
                 self.frames[agentid].append(obs[agentid])
         return self._get_ob()
 
@@ -125,7 +127,7 @@ class FrameStackWrapper():
         """
 
         obs, reward, done, truncated, info = self.wrapper_env.step(action)
-        for agentid in obs.keys():
+        for agentid in self.wrapper_env.possible_agents:
             self.frames[agentid].append(obs[agentid])
         return self._get_ob(), reward, done, truncated, info
 
@@ -135,7 +137,7 @@ class FrameStackWrapper():
             The original wrapper use `LazyFrames` but since we use np buffer, it has no effect
         """
         obs = {}
-        for agentid in self.frames.keys():
+        for agentid in self.wrapper_env.possible_agents:
             obs[agentid] = np.stack(self.frames[agentid], axis=0)
         return obs
 

@@ -14,18 +14,28 @@ from typing import Tuple, Dict, cast, List, Optional, Any, Type
 from collections import defaultdict
 
 from gym import Space
+from gym.error import DependencyNotInstalled
 from numba import njit
 
-from ped_env.mdp import PedsRLHandlerWithoutForce
+try:
+    import pygame
+    from pygame import gfxdraw
+except ImportError:
+    raise DependencyNotInstalled(
+        "pygame is not installed, run `pip install pygame`"
+    )
+
+from ped_env.mdp import PedsRLHandlerWithForce
 from ped_env.pathfinder import AStar
 from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
-from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed)
+from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed, ColorYellow)
 from ped_env.utils.misc import ObjectType
 from ped_env.utils.maps import Map
 from ped_env.utils.viewer import PedsMoveEnvViewer
-from ped_env.functions import calculate_each_group_num, calculate_groups_person_num
-from ped_env.settings import TICKS_PER_SEC, vel_iters, pos_iters, ACTION_DIM, GROUP_SIZE
+from ped_env.functions import calculate_each_group_num, calculate_groups_person_num, calc_triangle_points, \
+    transfer_to_render, gray_scale_image
+from ped_env.settings import TICKS_PER_SEC, vel_iters, pos_iters, ACTION_DIM, GROUP_SIZE, RENDER_SCALE
 
 
 class Spawner:
@@ -212,6 +222,11 @@ class PedsMoveEnv(gym.Env):
     not_arrived_peds = []
     once = False
 
+    metadata = {
+        "render_modes": ["human", "rgb_array", "gray_array"],
+        "render_fps": 50,
+    }
+
     def __init__(self,
                  terrain: Map,
                  person_num=10,
@@ -219,7 +234,7 @@ class PedsMoveEnv(gym.Env):
                  discrete=True,
                  frame_skipping=8,
                  maxStep=10000,
-                 person_handler = PedsRLHandlerWithoutForce,
+                 person_handler=PedsRLHandlerWithForce,
                  disable_reward=False,
                  use_planner=False,
                  random_init_mode: bool = True,
@@ -250,6 +265,10 @@ class PedsMoveEnv(gym.Env):
         self.step_in_env = 0
         self.elements = []
         self.terrain = terrain
+        self.screen: Optional[pygame.Surface] = None
+        self.clock = None
+        self.render_data = None
+        self.render_scale = RENDER_SCALE
 
         self.person_num = person_num
         self.discrete = discrete
@@ -269,8 +288,8 @@ class PedsMoveEnv(gym.Env):
 
         self.left_leader_num = self.agent_count
 
-        self.collision_between_agents = 0
-        self.collide_wall = 0
+        self.collide_agents_count = 0
+        self.collide_wall_count = 0
 
         # for raycast and aabb_query debug
         self.train_mode = train_mode
@@ -278,17 +297,14 @@ class PedsMoveEnv(gym.Env):
         self.vec = [0.0 for _ in range(self.agent_count)]
 
         self.path_finder = AStar(self.terrain)
-
         # for pettingzoo interface
         self._cumulative_rewards = defaultdict(int)
-        # self.agents = ["agent_{}".format(i) for i in range(self.agent_count)]
         self.agents = [str(i) for i in range(self.agent_count)]
         self.possible_agents = copy.deepcopy(self.agents)
         self.max_num_agents = len(self.possible_agents)
         self.observation_spaces = {agentid: copy.copy(self.person_handler.observation_space[0]) for agentid in
                                    self.agents}
         self.action_spaces = {agentid: copy.copy(self.person_handler.action_space[0]) for agentid in self.agents}
-
         self.agents_dict = {}
         self.agents_rev_dict = {}
 
@@ -306,7 +322,7 @@ class PedsMoveEnv(gym.Env):
         BoxWall.counter = 0
         Exit.counter = 0
         Group.counter = 0
-        self.collide_wall = self.collision_between_agents = 0
+        self.collide_wall_count = self.collide_agents_count = 0
         self.step_in_env = 0
         self.peds.clear()
         self.not_arrived_peds.clear()
@@ -323,7 +339,6 @@ class PedsMoveEnv(gym.Env):
         self.world.contactListener = self.listener
         # 创建渲染所需
         self.batch = pyglet.graphics.Batch()
-        self.render_element_dict = {}
         self.display_level = pyglet.graphics.OrderedGroup(0)
         self.debug_level = pyglet.graphics.OrderedGroup(1)
         # 创建一个行人工厂以供生成行人调用
@@ -347,15 +362,17 @@ class PedsMoveEnv(gym.Env):
         person_num = calculate_groups_person_num(self, person_num_sum)
         for i, num in enumerate(person_num):
             if not self.debug_mode and not self.random_init_mode:
-                # 如果非debug_mode或者random_init_mode时，在固定点位创建行人
+                # 如果非debug_mode且非random_init_mode时，在固定点位创建行人
                 self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups,
                                                                              self.ped_to_group_dic,
                                                                              self.group_size, self.debug_mode))
             elif not self.debug_mode and self.random_init_mode:
+                # 如果非debug_mode且为random_init_mode时，在规定好的spawn_map创建行人
                 self.peds.extend(
                     self.factory.random_create_persons(self.terrain, i, num, self.groups, self.ped_to_group_dic,
                                                        self.group_size, self.parser.start_point_dic, self.debug_mode))
             else:
+                # 如果debug_mode，则按照
                 exit_type = self.terrain.get_random_exit(i)
                 group = self.factory.create_people(self.terrain.start_points, exit_type, self.debug_mode)
                 Group.set_group_process(group, self.groups, self.ped_to_group_dic, self.peds)
@@ -379,16 +396,8 @@ class PedsMoveEnv(gym.Env):
                 # 重置时针对pettingzoo
                 self.agents_dict[self.agents[idx]] = ped
                 self.agents_rev_dict[ped] = self.agents[idx]
-
                 self.leaders.append(ped)
                 idx += 1
-
-    def setup_graphics(self):
-        render_scale = 500, 500
-        if self.viewer is not None:
-            render_scale = self.viewer.get_render_scale()
-        for ele in self.elements:
-            ele.setup(self.batch, render_scale)
 
     def delete_person(self, per: Person):
         self.pop_from_render_list(per.id)
@@ -519,9 +528,6 @@ class PedsMoveEnv(gym.Env):
                     pass
                     # self.agents.remove(self.agents_rev_dict[ped]) # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
 
-        # 为了有些MDP更新图像用
-        self.person_handler.update_image_data()
-
         # 该环境中智能体是合作关系，因此使用统一奖励为好，此处使用了pettingzoo的形式
         obs, rewards = self.person_handler.step(self.peds, self.ped_to_group_dic, self.agents_rev_dict,
                                                 int(self.step_in_env / self.frame_skipping))
@@ -566,16 +572,62 @@ class PedsMoveEnv(gym.Env):
         #     "collision_with_agents": self.collision_between_agents,
         #     "leader_pos": leader_pos
         # }
-
-
-
         info = {agent: {} for i, agent in enumerate(self.possible_agents)}
         return obs, rewards, is_done, truncated, info
 
+    def _render(self, mode: str = "human"):
+        assert mode in self.metadata["render_modes"]
+        import ped_env.settings as set
+
+        if self.screen is None and mode == "human":
+            pygame.init()
+            pygame.display.init()
+            self.screen = pygame.display.set_mode((set.VIEWPORT_W, set.VIEWPORT_H))
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+        self.surf = pygame.Surface((set.VIEWPORT_W, set.VIEWPORT_H))
+        SCALE = self.render_scale = set.RENDER_SCALE
+
+        pygame.transform.scale(self.surf, (SCALE, SCALE))
+        self.surf.fill((255, 255, 255))
+        for ele in self.elements:
+            if isinstance(ele, Person):
+                pygame.draw.circle(self.surf,
+                                   ele.color,
+                                   (ele.getX * SCALE, ele.getY * SCALE),
+                                   ele.radius * SCALE)
+                # 计算三角形顶点坐标
+                triangle_points = calc_triangle_points((ele.getX * SCALE, ele.getY * SCALE),
+                                                       ele.radius * 0.5 * SCALE,
+                                                       math.degrees(ele.body.angle))
+                pygame.draw.polygon(self.surf,
+                                    ColorYellow if ele.color != ColorYellow else ColorRed,
+                                    triangle_points)
+            elif isinstance(ele, BoxWall):
+                rect = transfer_to_render(ele.getX, ele.getY, ele.width, ele.height, scale=SCALE)
+                pygame.draw.rect(self.surf,
+                                 color=ele.color,
+                                 rect=rect)
+            else:
+                raise Exception("不支持的渲染类型")
+
+        if mode == "human":
+            assert self.screen is not None
+            self.screen.blit(self.surf, (0, 0))
+            pygame.event.pump()
+            self.clock.tick(self.metadata["render_fps"])
+            pygame.display.flip()
+        elif mode in {"rgb_array", "gray_array"}:
+            data = np.transpose(
+                np.array(pygame.surfarray.pixels3d(self.surf)), axes=(0, 1, 2)
+            )[:, :]
+            return data if mode == "rgb_array" else gray_scale_image(data)
+
     def render(self, mode="human", ratio=1):
-        if self.viewer is None:  # 如果调用了 render, 而且没有 viewer, 就生成一个
-            self.viewer = PedsMoveEnvViewer(self, render_ratio=ratio)
-        self.viewer.render()  # 使用 Viewer 中的 render 功能
+        # if self.viewer is None:  # 如果调用了 render, 而且没有 viewer, 就生成一个
+        #     self.viewer = PedsMoveEnvViewer(self, render_ratio=ratio)
+        self.render_data = self._render(mode)
 
     def close(self):
         if self.viewer is not None:

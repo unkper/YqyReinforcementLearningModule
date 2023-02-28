@@ -169,7 +169,7 @@ def test_wrapper_api(debug=False):
 
     env = FrameStackWrapper(env)
 
-    for epoch in range(1):
+    for epoch in range(10):
         start_time = time.time()
         step = 0
         is_done = {'0': False}
@@ -183,6 +183,7 @@ def test_wrapper_api(debug=False):
         while not all(is_done.values()):
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
+            pprint.pprint(reward)
             obs_arr.append(obs['0'][0])
             # pprint.pprint(obs)
             if debug:
@@ -213,7 +214,7 @@ def test_wrapper_api(debug=False):
 if __name__ == '__main__':
     # HelloWorldProject()
     # test2()
-    test_wrapper_api(debug=True)
+    test_wrapper_api(debug=False)
 
     # import kdtree
     # points = []

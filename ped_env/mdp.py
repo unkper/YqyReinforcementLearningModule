@@ -206,6 +206,7 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
                 lr += self.r_collision_wall
             if ped.is_done and not ped.has_removed:
                 lr += self.r_reach
+                ped.has_removed = True
             else:
                 last_pos = self.env.points_in_last_step[ped_index]
                 now_pos = (ped.getX, ped.getY)
@@ -224,10 +225,16 @@ class PedsVisionRLHandler(PedsRLHandlerWithForce):
     """
 
     def __init__(self, env, r_move=0, r_wait=0, r_collision_person=0, r_collision_wall=0, r_reach=100,
-                 use_planner=False, render_ratio=0.5):
+                 use_planner=False, render_ratio=0.5, test_mode=False):
         import ped_env.settings as set
         set.RENDER_RATIO = render_ratio
         set.reset_settings()
+        if test_mode:
+            r_move = -0.1
+            r_wait = -0.1
+            r_collision_person = -0.1
+            r_collision_wall = -2.0
+            r_reach = 100
         super().__init__(env, r_move, r_wait, r_collision_person, r_collision_wall, r_reach, use_planner)
         self.env.render_mode = "gray_array"  # 设置渲染模式为灰度图
         # self.env.render_scale = 30

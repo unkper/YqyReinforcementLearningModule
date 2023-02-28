@@ -225,7 +225,7 @@ class PedsVisionRLHandler(PedsRLHandlerWithForce):
     """
 
     def __init__(self, env, r_move=0, r_wait=0, r_collision_person=0, r_collision_wall=0, r_reach=100,
-                 use_planner=False, render_ratio=0.5, test_mode=False):
+                 use_planner=False, render_ratio=0.25, test_mode=False):
         import ped_env.settings as set
         set.RENDER_RATIO = render_ratio
         set.reset_settings()

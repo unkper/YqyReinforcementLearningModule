@@ -10,9 +10,9 @@ from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv, ShmemVectorEnv, SubprocVectorEnv
 from tianshou.env.pettingzoo_env import PettingZooEnv
-from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy, PPOPolicy, ICMPolicy
+from tianshou.policy import BasePolicy, MultiAgentPolicyManager, PPOPolicy, ICMPolicy
 from tianshou.trainer import onpolicy_trainer
-from tianshou.utils.net.common import Net, ActorCritic, MLP
+from tianshou.utils.net.common import Net, ActorCritic
 
 import pettingzoo as pet
 import tianshou as ts
@@ -21,20 +21,20 @@ from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 import sys
 
 from ped_env.mdp import PedsVisionRLHandler
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, PedICMFeatureHead, PedPolicyHead
+from rl_platform.tianshou_case.net.network import PedICMFeatureHead, PedPolicyHead
 from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
 from ped_env.envs import PedsMoveEnv
-from ped_env.utils.maps import map_09, map_10, map_08
+from ped_env.utils.maps import map_09, map_10, map_simple
 from rl_platform.tianshou_case.utils.common import _get_agents
 
 parallel_env_num = 5
 test_env_num = 1
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = 200000 // parallel_env_num
-batch_size = 256
+batch_size = 128
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 500
 max_step = 10000  # 环境的最大步数
@@ -55,7 +55,6 @@ recompute_adv = 0
 episode_per_test = 5
 update_per_step = 0.1
 seed = 1
-
 
 icm_lr_scale = 1e-3
 icm_reward_scale = 0.1
@@ -160,8 +159,8 @@ def _get_agents(
     return policy, optim, env.agents
 
 
-train_map = map_10
-agent_num_map = 4
+train_map = map_simple
+agent_num_map = 1
 
 train_if = False  # 是否采用test模式，即在icm模式下采用奖励模型来评判
 
@@ -169,8 +168,13 @@ train_if = False  # 是否采用test模式，即在icm模式下采用奖励模�
 def _get_env():
     global train_if, max_step
     """This function is needed to provide callables for DummyVectorEnv."""
-    env = FrameStackWrapper(PedsMoveEnv(train_map, person_num=agent_num_map, group_size=(1, 1), random_init_mode=True,
-                                        maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler))
+    if train_if:
+        env = FrameStackWrapper(PedsMoveEnv(train_map, person_num=agent_num_map, group_size=(1, 1), random_init_mode=True,
+                                            maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler))
+    else:
+        env = FrameStackWrapper(PedsMoveEnv(train_map, person_num=agent_num_map, group_size=(1, 1), random_init_mode=True,
+                                            maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler,
+                                            test_reward_mode=True))
     env = pet.utils.parallel_to_aec(env)
     return PettingZooEnv(env)
 
@@ -287,25 +291,28 @@ def test():
     env = _get_env()
     policy, optim = get_policy(_get_env())
 
-    file_path = r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log" \
-                r"\PedsMoveEnv_map_10_40_PPO_2022_12_22_16_38_53\policy.pth "
+    file_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_simple_1_PPO_2023_02_28_23_36_44\policy.pth"
     if file_path is not None:
         state_dicts = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
         policy.load_state_dict(state_dicts[env.agents[0]])
 
-    # collector = Collector(policy, test_envs)
-    # collector.collect(n_episode=5, render=1 / 100)
+    test_envs = DummyVectorEnv([_get_env for _ in range(1)])
+
     policy.eval()
-    for i in range(episode):
-        obs = env.reset()
-        is_done = {"agent_1": False}
-        while not all(is_done.values()):
-            action = {}
-            for agent in env.agents:
-                batch = Batch(obs=[obs[agent]])
-                act = policy(batch).act[0]
-                action[agent] = act
-            obs, reward, is_done, truncated, info = env.step(action)
+
+    collector = Collector(policy, test_envs)
+    collector.collect(n_episode=5, render=1 / 100)
+
+    # for i in range(episode):
+    #     obs = env.reset()
+    #     is_done = {"agent_1": False}
+    #     while not all(is_done.values()):
+    #         action = {}
+    #         for agent in env.agents:
+    #             batch = Batch(obs=[obs[agent]])
+    #             act = policy(batch).act[0]
+    #             action[agent] = act
+    #         obs, reward, is_done, truncated, info = env.step(action)
             # env.render()
 
 
@@ -317,7 +324,7 @@ if __name__ == "__main__":
     # parser.add_argument("max_step", type=int, default=5000)
     # args = parser.parse_args()
     # train()
-    train(debug=True)
-    # test()
+    #train(debug=False)
+    test()
 
     # python run_tianshou_ppo.py --file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_01_48_33\checkpoint_17.pth

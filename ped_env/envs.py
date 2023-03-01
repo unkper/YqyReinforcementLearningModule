@@ -587,10 +587,15 @@ class PedsMoveEnv(gym.Env):
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
+        if set.RENDER_RATIO_CHANGED:
+            # 调整了渲染比例，需要重新创建screen
+            self.screen = pygame.display.set_mode((set.VIEWPORT_W, set.VIEWPORT_H))
+            set.RENDER_RATIO_CHANGED = False
+
         self.surf = pygame.Surface((set.VIEWPORT_W, set.VIEWPORT_H))
         SCALE = self.render_scale = set.RENDER_SCALE
 
-        pygame.transform.scale(self.surf, (SCALE, SCALE))
+        #pygame.transform.scale(self.surf, (SCALE, SCALE))
         self.surf.fill((255, 255, 255))
         for ele in self.elements:
             if isinstance(ele, Person):
@@ -599,12 +604,12 @@ class PedsMoveEnv(gym.Env):
                                    (ele.getX * SCALE, ele.getY * SCALE),
                                    ele.radius * SCALE)
                 # 计算三角形顶点坐标
-                triangle_points = calc_triangle_points((ele.getX * SCALE, ele.getY * SCALE),
-                                                       ele.radius * 0.5 * SCALE,
-                                                       math.degrees(ele.body.angle))
-                pygame.draw.polygon(self.surf,
-                                    ColorYellow if ele.color != ColorYellow else ColorRed,
-                                    triangle_points)
+                # triangle_points = calc_triangle_points((ele.getX * SCALE, ele.getY * SCALE),
+                #                                        ele.radius * 0.5 * SCALE,
+                #                                        math.degrees(ele.body.angle))
+                # pygame.draw.polygon(self.surf,
+                #                     ColorYellow if ele.color != ColorYellow else ColorRed,
+                #                     triangle_points)
             elif isinstance(ele, BoxWall):
                 rect = transfer_to_render(ele.getX, ele.getY, ele.width, ele.height, scale=SCALE)
                 pygame.draw.rect(self.surf,

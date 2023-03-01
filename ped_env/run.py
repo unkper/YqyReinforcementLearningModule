@@ -161,15 +161,15 @@ def test_wrapper_api(debug=False):
     import time
     import ped_env.settings as setting
 
-    person_num = 1
-    env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
+    person_num = 20
+    env = Env(map_10, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
               random_init_mode=True, person_handler=PedsVisionRLHandler)
     # env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
     #           random_init_mode=True, person_handler=PedsRLHandlerWithForce)
 
     env = FrameStackWrapper(env)
 
-    for epoch in range(10):
+    for epoch in range(1):
         start_time = time.time()
         step = 0
         is_done = {'0': False}
@@ -183,13 +183,13 @@ def test_wrapper_api(debug=False):
         while not all(is_done.values()):
             action = {agent: get_single_action(agent) for agent in env.agents}
             obs, reward, is_done, truncated, info = env.step(action)
-            pprint.pprint(reward)
+            # pprint.pprint(reward)
             obs_arr.append(obs['0'][0])
             # pprint.pprint(obs)
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            #env.render()
+            env.render()
 
         if debug and isinstance(env.wrapper_env.person_handler, PedsVisionRLHandler):
             fig, ax = plt.subplots()
@@ -201,7 +201,7 @@ def test_wrapper_api(debug=False):
                 ax.clear()
 
                 ax.imshow(obs_arr[now_obs_idx])
-                #ax.imshow(np.transpose(obs_arr[now_obs_idx], (1, 2, 0)))
+                # ax.imshow(np.transpose(obs_arr[now_obs_idx], (1, 2, 0)))
                 now_obs_idx += 1
                 now_obs_idx %= len(obs_arr)
                 # 隐藏坐标轴

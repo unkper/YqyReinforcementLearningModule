@@ -133,6 +133,21 @@ def calc_triangle_points(pos, length, angle):
 
     return [(x1, y1), (x2, y2), (x3, y3)]
 
+def gray_scale_image(frame: np.ndarray) -> np.ndarray:
+    # 将输入数组的最后一个维度（即A通道）丢弃，得到一个形状为（3, height, width）的RGB图像数组。
+    frame = frame[:, :, :]
+
+    # 将输入数组缩放到 [0, 1] 范围内
+    frame = frame / 255.0
+
+    weights = np.array([0.2989, 0.5870, 0.1140])
+
+    # 沿着第一个轴对数组进行加权平均，得到形状为 [height, width] 的灰度图像
+    gray_frame = np.average(frame, axis=2, weights=weights)
+
+    # 将堆叠后的灰度图像数组作为输出返回
+    return gray_frame
+
 
 if __name__ == '__main__':
     # for i in range(10):
@@ -163,17 +178,4 @@ if __name__ == '__main__':
     pass
 
 
-def gray_scale_image(frame: np.ndarray) -> np.ndarray:
-    # 将输入数组的最后一个维度（即A通道）丢弃，得到一个形状为（3, height, width）的RGB图像数组。
-    frame = frame[:, :, :]
 
-    # 将输入数组缩放到 [0, 1] 范围内
-    frame = frame / 255.0
-
-    weights = np.array([0.2989, 0.5870, 0.1140])
-
-    # 沿着第一个轴对数组进行加权平均，得到形状为 [height, width] 的灰度图像
-    gray_frame = np.average(frame, axis=2, weights=weights)
-
-    # 将堆叠后的灰度图像数组作为输出返回
-    return gray_frame

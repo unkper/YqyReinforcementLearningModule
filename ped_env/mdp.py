@@ -228,7 +228,7 @@ class PedsVisionRLHandler(PedsRLHandlerWithForce):
                  use_planner=False, render_ratio=0.25, test_mode=False):
         import ped_env.settings as set
         set.RENDER_RATIO = render_ratio
-        set.reset_settings()
+        set.init_settings(env.terrain.width, env.terrain.height)
         if test_mode:
             r_move = -0.1
             r_wait = -0.1
@@ -237,7 +237,6 @@ class PedsVisionRLHandler(PedsRLHandlerWithForce):
             r_reach = 100
         super().__init__(env, r_move, r_wait, r_collision_person, r_collision_wall, r_reach, use_planner)
         self.env.render_mode = "gray_array"  # 设置渲染模式为灰度图
-        # self.env.render_scale = 30
         self.observation_space = [Box(-1, 1, (set.VIEWPORT_H, set.VIEWPORT_H))]  # 定义新的观察空间为地图的俯视图(RGB经过加权平均后的灰度模式)
 
     def get_observation(self, ped: Person, group: Group, time):

@@ -159,8 +159,8 @@ def _get_agents(
     return policy, optim, env.agents
 
 
-train_map = map_simple
-agent_num_map = 1
+train_map = map_10
+agent_num_map = 20
 
 train_if = False  # 是否采用test模式，即在icm模式下采用奖励模型来评判
 
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     # parser.add_argument("max_step", type=int, default=5000)
     # args = parser.parse_args()
     # train()
-    #train(debug=False)
-    test()
+    train(debug=False)
+    # test()
 
     # python run_tianshou_ppo.py --file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_01_48_33\checkpoint_17.pth

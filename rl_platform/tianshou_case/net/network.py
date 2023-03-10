@@ -88,7 +88,6 @@ class DQN(nn.Module):
         obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
         return self.net(obs), state
 
-
 class MarioPolicyHead(nn.Module):
     def __init__(self,
                  channel: int,
@@ -122,6 +121,24 @@ class MarioPolicyHead(nn.Module):
         x2, ht = self.lstm_layer(x1)
         x2 = torch.squeeze(x2, 0)
         return x2, state
+
+
+class VizdoomPolicyHead(MarioPolicyHead):
+    def __init__(self,
+                 channel: int,
+                 height: int,
+                 width: int,
+                 device: Union[str, int, torch.device] = "cpu",
+                 layer_init: Callable[[nn.Module], nn.Module] = lambda x: x):
+        super().__init__(channel, height, width, device, layer_init)
+
+    def forward(
+            self,
+            obs: Union[np.ndarray, torch.Tensor],
+            state: Optional[Any] = None,
+            info: Dict[str, Any] = {}, ):
+        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32).permute(0, 3, 1, 2)
+        return super().forward(obs, state, info)
 
 
 class MarioICMFeatureHead(nn.Module):

@@ -6,9 +6,9 @@ import Box2D as b2d
 from ped_env.envs import PedsMoveEnv as Env
 from ped_env.pathfinder import AStarController, AStarPolicy
 from ped_env.utils.maps import *
-from rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
+from departed_rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
 from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner, PedsVisionRLHandler, PedsRLHandlerWithForce
-from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
+from rl_platform.tianshou_case.utils.wrappers import FrameStackWrapper
 
 
 # 使用随机策略来前往目的地
@@ -189,9 +189,9 @@ def test_wrapper_api(debug=False):
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            env.render()
+            #env.render()
 
-        if debug and isinstance(env.wrapper_env.person_handler, PedsVisionRLHandler):
+        if debug and isinstance(env.venv.person_handler, PedsVisionRLHandler):
             fig, ax = plt.subplots()
 
             now_obs_idx = 0
@@ -214,7 +214,7 @@ def test_wrapper_api(debug=False):
 if __name__ == '__main__':
     # HelloWorldProject()
     # test2()
-    test_wrapper_api(debug=False)
+    test_wrapper_api(debug=True)
 
     # import kdtree
     # points = []

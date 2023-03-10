@@ -8,3 +8,4 @@ rl_platform/tianshou_case/log
 rl_platform/tianshou_case/derk/chromedata
 rl_platform/tianshou_case/mario/log
 venv
+venv_vizdoom

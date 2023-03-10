@@ -2,6 +2,7 @@ import copy
 import math
 import random
 
+import cv2
 import gym
 import pyglet
 import numpy as np
@@ -628,7 +629,7 @@ class PedsMoveEnv(gym.Env):
             data = np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.surf)), axes=(0, 1, 2)
             )[:, :]
-            return data if mode == "rgb_array" else gray_scale_image(data)
+            return data if mode == "rgb_array" else cv2.cvtColor(data, cv2.COLOR_RGB2GRAY)
 
     def render(self, mode="human", ratio=1):
         # if self.viewer is None:  # 如果调用了 render, 而且没有 viewer, 就生成一个

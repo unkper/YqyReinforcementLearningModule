@@ -22,7 +22,7 @@ import sys
 
 from ped_env.mdp import PedsVisionRLHandler
 from rl_platform.tianshou_case.net.network import PedICMFeatureHead, PedPolicyHead
-from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
+from rl_platform.tianshou_case.utils.wrappers import FrameStackWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 

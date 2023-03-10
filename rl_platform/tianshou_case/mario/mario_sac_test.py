@@ -22,7 +22,7 @@ from tianshou.trainer import offpolicy_trainer
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead
-from rl_platform.tianshou_case.utils.wrapper import DisableRewardWrapper, MarioRewardWrapper
+from rl_platform.tianshou_case.utils.wrappers import DisableRewardWrapper, MarioRewardWrapper
 
 parallel_env_num = 10
 scale_obs = 0

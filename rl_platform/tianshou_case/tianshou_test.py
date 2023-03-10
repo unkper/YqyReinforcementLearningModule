@@ -11,7 +11,7 @@ from tianshou.policy import BasePolicy
 
 from ped_env.envs import PedsMoveEnv
 from ped_env.utils.maps import map_08, map_10, map_simple
-from rl_platform.tianshou_case.utils.wrapper import FrameStackWrapper
+from rl_platform.tianshou_case.utils.wrappers import FrameStackWrapper
 
 
 def lunarlander_test(model_path):

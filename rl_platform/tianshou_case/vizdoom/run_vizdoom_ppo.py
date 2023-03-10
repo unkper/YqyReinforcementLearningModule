@@ -1,5 +1,5 @@
-import copy
 import datetime
+import logging
 import os
 import pprint
 from typing import Optional, Tuple
@@ -8,17 +8,16 @@ import gym
 import gym_super_mario_bros
 import numpy as np
 import torch
-from ding.envs import DingEnvWrapper, MaxAndSkipWrapper, WarpFrameWrapper, ScaledFloatFrameWrapper, FrameStackWrapper, \
-    EvalEpisodeReturnEnv
-from nes_py.wrappers import JoypadSpace
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv, SubprocVectorEnv, ShmemVectorEnv
-from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy, PPOPolicy, ICMPolicy
-from tianshou.trainer import offpolicy_trainer, onpolicy_trainer
-from tianshou.utils.net.common import Net, ActorCritic
+from tianshou.env import DummyVectorEnv, ShmemVectorEnv
+from tianshou.policy import BasePolicy, PPOPolicy, ICMPolicy
+from tianshou.trainer import onpolicy_trainer
+from tianshou.utils.net.common import ActorCritic
 
-import pettingzoo as pet
+import vizdoom
+from vizdoom import gym_wrapper
+
 import tianshou as ts
 
 import sys
@@ -26,16 +25,18 @@ import sys
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead
-from rl_platform.tianshou_case.utils.wrappers import MarioRewardWrapper
+from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead, VizdoomPolicyHead
+from rl_platform.tianshou_case.net.r_network import RNetwork
+from rl_platform.tianshou_case.third_party import r_network_training
+from rl_platform.tianshou_case.vizdoom.vizdoom_env_wrapper import VizdoomEnvWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
-
-parallel_env_num = 10
+parallel_env_num = 4
+test_env_num = 2
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = 200000 / parallel_env_num
-batch_size = 256
+buffer_size = int(200000 / parallel_env_num)
+batch_size = 64
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 500
 max_step = 10000  # 环境的最大步数
@@ -56,32 +57,35 @@ recompute_adv = 0
 episode_per_test = 5
 update_per_step = 0.1
 seed = 1
-train_env_num, test_env_num = 10, 10
 
 actor_lr = lr
-set_device = "cuda"
+set_device = "cpu"
 
 cfg = mario_dqn_config
-env_name = "SuperMarioBros-1-1-v0"
-action_type = [["right"], ["right", "A"], ["right", "B"]]
+env_name = "normal"
 
 icm_hidden_size = 256
+use_icm = False
 icm_lr_scale = 1e-3
 icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
 
-def get_policy(env, optim=None):
-    observation_space = (
-        env.observation_space["observation"]
-        if isinstance(env.observation_space, gym.spaces.Dict)
-        else env.observation_space
-    )
+use_episodic_memory = True
+exploration_reward = "episodic_curiosity"  # episodic_curiosity,oracle
+scale_task_reward = 1.0
+scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
+bonus_reward_additive_term = 0
+exploration_reward_min_step = 0
+similarity_threshold = 0.5
 
+
+def get_policy(env, optim=None):
     state_shape = env.observation_space.shape
     action_shape = env.action_space.shape or env.action_space.n
 
-    #net = DQN(**cfg.policy.model)
-    net = MarioPolicyHead(*state_shape, device=set_device)
+    h, w, c = state_shape
+    # net = DQN(**cfg.policy.model)
+    net = VizdoomPolicyHead(c, h, w, device=set_device)
 
     if set_device == "cuda":
         net.cuda()
@@ -89,7 +93,7 @@ def get_policy(env, optim=None):
     actor = Actor(net, env.action_space.n, device=set_device, softmax_output=False)
     critic = Critic(net, device=set_device)
     optim = torch.optim.Adam(
-        ActorCritic(actor, critic).parameters(), lr=lr, eps = eps_train
+        ActorCritic(actor, critic).parameters(), lr=lr, eps=eps_train
     )
 
     def dist(p):
@@ -116,7 +120,8 @@ def get_policy(env, optim=None):
         recompute_advantage=recompute_adv,
     ).to(set_device)
 
-    if icm_lr_scale > 0:
+    if use_icm:
+        logging.warning(u"使用了ICM机制!")
         feature_net = MarioICMFeatureHead(*state_shape, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
@@ -140,17 +145,16 @@ def get_policy(env, optim=None):
 
 
 def _get_agent(
+        env,
         agent_learn: Optional[BasePolicy] = None,
-        agent_count: int = 1,
         optim: Optional[torch.optim.Optimizer] = None,
         file_path=None
 ) -> Tuple[BasePolicy, torch.optim.Optimizer, list]:
-    env = _get_env()
     if agent_learn is None:
         # model
         agent_learn, optim = get_policy(env, optim)
     if file_path is not None:
-        state_dict = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
+        state_dict = torch.load(file_path, map_location=set_device)
         if type(state_dict) is dict:
             agent_learn.load_state_dict(state_dict["agent"])
         else:
@@ -158,41 +162,70 @@ def _get_agent(
 
     return agent_learn, optim, None
 
+
 env_test = False
+
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
     global env_test
-    def wrapped_mario_env():
-        wrappers = [
-            lambda env: MaxAndSkipWrapper(env, skip=4),
-            lambda env: WarpFrameWrapper(env, size=84),
-            lambda env: ScaledFloatFrameWrapper(env),
-            lambda env: FrameStackWrapper(env, n_frames=4),
-            lambda env: EvalEpisodeReturnEnv(env),
-        ]
-        if not env_test:
-            wrappers.append(lambda env: MarioRewardWrapper(env))  # 为了验证ICM机制的有效性而加
 
-        return DingEnvWrapper(
-            JoypadSpace(gym_super_mario_bros.make(env_name), action_type),
-            cfg={
-                'env_wrapper': wrappers
-            }
-        )
-    return wrapped_mario_env()
+    def wrapped_vizdoom_env():
+        env = VizdoomEnvWrapper(gym.make("VizdoomMyWayHome-v0"))
+        env.observation_space = env.observation_space['screen']
+        if use_episodic_memory:
+            logging.warning(u"使用了EC机制!")
+            from rl_platform.tianshou_case.utils.single_curiosity_env_wrapper import CuriosityEnvWrapper
+            from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
+
+            net = RNetwork(env.observation_space, device=set_device)
+            r_trainer = r_network_training.RNetworkTrainer(
+                net,
+                observation_history_size=10000,
+                training_interval=500,
+                num_train_epochs=1,
+                checkpoint_dir=file_name,
+                device=set_device)
+            if set_device == 'cuda':
+                net = net.cuda()
+
+            memory = EpisodicMemory(observation_shape=[512],
+                                    observation_compare_fn=net.embedding_similarity)
+            target_image_shape = [84, 84, 3]
+            # target_image_shape = env.observation_space.shape
+            env = CuriosityEnvWrapper(
+                env,
+                memory,
+                net.embed_observation,
+                target_image_shape,
+                r_net_trainer=r_trainer,
+                scale_task_reward=scale_task_reward,
+                scale_surrogate_reward=scale_surrogate_reward,
+                test_mode=env_test
+            )
+        return env
+
+    return wrapped_vizdoom_env()
+
 
 def _get_test_env():
     return gym_super_mario_bros.make(env_name)
 
 
+task = "Vizdoom_{}".format(env_name)
+file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
+
 def train(load_check_point=None):
-    global env_test
+    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug
+    if debug:
+        parallel_env_num, test_env_num, buffer_size = 1, 1, 10000
+        batch_size = 16
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = ShmemVectorEnv([_get_env for _ in range(parallel_env_num)])
+        train_envs = DummyVectorEnv([_get_env for _ in range(parallel_env_num)])
         env_test = True
-        test_envs = ShmemVectorEnv([_get_env for _ in range(test_env_num)])
+        test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
 
         # seed
         # seed = 21343
@@ -202,10 +235,10 @@ def train(load_check_point=None):
         # test_envs.seed(seed)
 
         # ======== Step 2: Agent setup =========
-        policy, optim, agents = _get_agent(agent_count=1)
+        policy, optim, agents = _get_agent(_get_env())
 
         if load_check_point is not None:
-            load_data = torch.load(load_check_point, map_location="cuda" if torch.cuda.is_available() else "cpu")
+            load_data = torch.load(load_check_point, map_location=set_device)
             policy.load_state_dict(load_data["agent"])
             # for i in range(len(optim)):
             #     optim[i].load_state_dict(load_data["optim"][i])
@@ -222,8 +255,7 @@ def train(load_check_point=None):
         # train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
 
         # ======== Step 4: Callback functions setup =========
-        task = "Mario_{}".format(env_name)
-        file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
         logger = ts.utils.TensorboardLogger(SummaryWriter('log/' + file_name))  # TensorBoard is supported!
 
         def save_best_fn(policy):
@@ -235,14 +267,12 @@ def train(load_check_point=None):
         def save_checkpoint_fn(epoch, env_step, gradient_step):
             # see also: https://pytorch.org/tutorials/beginner/saving_loading_models.html
             ckpt_path = os.path.join('log/' + file_name, "checkpoint_{}.pth".format(epoch))
-            save_data = {}
-            save_data["agent"] = policy.state_dict()
-            save_data["optim"] = optim.state_dict()
+            save_data = {"agent": policy.state_dict(), "optim": optim.state_dict()}
             torch.save(save_data, ckpt_path)
             return ckpt_path
 
-        def stop_fn(mean_rewards):
-            return mean_rewards >= 2500
+        # def stop_fn(mean_rewards):
+        #     return mean_rewards >= 2500
 
         def train_fn(epoch, env_step):
             policy.set_eps(eps_train)
@@ -261,12 +291,12 @@ def train(load_check_point=None):
             max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
             step_per_collect=step_per_collect,
-            repeat_per_collect = 4,
+            repeat_per_collect=4,
             episode_per_test=episode_per_test,
             batch_size=batch_size,
             # train_fn=train_fn,
             # test_fn=test_fn,
-            stop_fn=stop_fn,
+            # stop_fn=stop_fn,
             save_best_fn=save_best_fn,
             save_checkpoint_fn=save_checkpoint_fn,
             update_per_step=update_per_step,
@@ -288,12 +318,15 @@ def test():
     collector = Collector(policy, test_envs)
     collector.collect(n_episode=5, render=1 / 36)
 
+
+debug = True
+
 import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    #parser.add_argument("--test", type=bool, action='store_true', default=False)
+    # parser.add_argument("--test", type=bool, action='store_true', default=False)
 
     parmas = parser.parse_args()
 

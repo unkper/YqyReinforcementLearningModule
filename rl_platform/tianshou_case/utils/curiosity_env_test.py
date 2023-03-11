@@ -21,8 +21,7 @@ from __future__ import print_function
 
 import unittest
 
-from rl_platform.tianshou_case.utils import single_curiosity_env_wrapper as curiosity_env_wrapper
-from rl_platform.tianshou_case.third_party import episodic_memory
+from rl_platform.tianshou_case.third_party import episodic_memory, single_curiosity_env_wrapper as curiosity_env_wrapper
 import gym
 import numpy as np
 

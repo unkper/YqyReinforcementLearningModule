@@ -5,18 +5,15 @@ import pprint
 from typing import Optional, Tuple
 
 import gym
-import gym_super_mario_bros
+
 import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv, ShmemVectorEnv
+from tianshou.env import DummyVectorEnv
 from tianshou.policy import BasePolicy, PPOPolicy, ICMPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
-
-import vizdoom
-from vizdoom import gym_wrapper
 
 import tianshou as ts
 
@@ -24,10 +21,10 @@ import sys
 
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
-from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead, VizdoomPolicyHead
+from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, VizdoomPolicyHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.third_party import r_network_training
+from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 from rl_platform.tianshou_case.vizdoom.vizdoom_env_wrapper import VizdoomEnvWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
@@ -38,10 +35,10 @@ lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = int(200000 / parallel_env_num)
 batch_size = 64
 eps_train, eps_test = 0.2, 0.05
-max_epoch = 500
-max_step = 10000  # 环境的最大步数
-step_per_epoch = max_step
-step_per_collect = 1000
+max_epoch = 100
+step_per_epoch = 10000
+step_per_collect = 5000
+repeat_per_collect = 10
 rew_norm = True
 vf_coef = 0.25
 ent_coef = 0.01
@@ -59,9 +56,8 @@ update_per_step = 0.1
 seed = 1
 
 actor_lr = lr
-set_device = "cpu"
+set_device = "cuda"
 
-cfg = mario_dqn_config
 env_name = "normal"
 
 icm_hidden_size = 256
@@ -77,13 +73,17 @@ scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大
 bonus_reward_additive_term = 0
 exploration_reward_min_step = 0
 similarity_threshold = 0.5
-
+target_image_shape = [120, 160, 3]
+r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
+task = "Vizdoom_{}".format(env_name)
+file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+writer = SummaryWriter('log/'+file_name)
 
 def get_policy(env, optim=None):
     state_shape = env.observation_space.shape
     action_shape = env.action_space.shape or env.action_space.n
 
-    h, w, c = state_shape
+    h, w, c = target_image_shape
     # net = DQN(**cfg.policy.model)
     net = VizdoomPolicyHead(c, h, w, device=set_device)
 
@@ -165,42 +165,47 @@ def _get_agent(
 
 env_test = False
 
+net = RNetwork(target_image_shape, device=set_device)
+if set_device == 'cuda':
+    net = net.cuda()
+if r_network_checkpoint is not None:
+    net = torch.load(r_network_checkpoint, "cuda")
+    logging.warning(u"加载完成RNetwork的相关参数!")
+else:
+    raise RuntimeError(u"必须指定训练好的的R-Network!")
+net.eval() # 此处是为了batchnorm而加
+memory = EpisodicMemory(observation_shape=[512],
+                        observation_compare_fn=net.embedding_similarity,
+                        writer=writer)
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
-    global env_test
+    global env_test, net, memory
 
     def wrapped_vizdoom_env():
         env = VizdoomEnvWrapper(gym.make("VizdoomMyWayHome-v0"))
         env.observation_space = env.observation_space['screen']
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
-            from rl_platform.tianshou_case.utils.single_curiosity_env_wrapper import CuriosityEnvWrapper
-            from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
+            from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
 
-            net = RNetwork(env.observation_space, device=set_device)
-            r_trainer = r_network_training.RNetworkTrainer(
-                net,
-                observation_history_size=10000,
-                training_interval=500,
-                num_train_epochs=1,
-                checkpoint_dir=file_name,
-                device=set_device)
-            if set_device == 'cuda':
-                net = net.cuda()
+            # r_trainer = r_network_training.RNetworkTrainer(
+            #     net,
+            #     observation_history_size=10000,
+            #     training_interval=500,
+            #     num_train_epochs=1,
+            #     checkpoint_dir=file_name,
+            #     device=set_device)
 
-            memory = EpisodicMemory(observation_shape=[512],
-                                    observation_compare_fn=net.embedding_similarity)
-            target_image_shape = [84, 84, 3]
-            # target_image_shape = env.observation_space.shape
             env = CuriosityEnvWrapper(
                 env,
                 memory,
                 net.embed_observation,
                 target_image_shape,
-                r_net_trainer=r_trainer,
+                #r_net_trainer=r_trainer,
                 scale_task_reward=scale_task_reward,
                 scale_surrogate_reward=scale_surrogate_reward,
+                exploration_reward_min_step=exploration_reward_min_step,
                 test_mode=env_test
             )
         return env
@@ -208,12 +213,7 @@ def _get_env():
     return wrapped_vizdoom_env()
 
 
-def _get_test_env():
-    return gym_super_mario_bros.make(env_name)
 
-
-task = "Vizdoom_{}".format(env_name)
-file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
 
 def train(load_check_point=None):
@@ -256,7 +256,7 @@ def train(load_check_point=None):
 
         # ======== Step 4: Callback functions setup =========
 
-        logger = ts.utils.TensorboardLogger(SummaryWriter('log/' + file_name))  # TensorBoard is supported!
+        logger = ts.utils.TensorboardLogger(writer)  # TensorBoard is supported!
 
         def save_best_fn(policy):
             model_save_path = os.path.join('log/' + file_name, "policy.pth")
@@ -291,7 +291,7 @@ def train(load_check_point=None):
             max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
             step_per_collect=step_per_collect,
-            repeat_per_collect=4,
+            repeat_per_collect=repeat_per_collect,
             episode_per_test=episode_per_test,
             batch_size=batch_size,
             # train_fn=train_fn,
@@ -319,7 +319,7 @@ def test():
     collector.collect(n_episode=5, render=1 / 36)
 
 
-debug = True
+debug = False
 
 import argparse
 
@@ -330,9 +330,9 @@ if __name__ == "__main__":
 
     parmas = parser.parse_args()
 
-    train_if = False
+    train_if = True
 
-    if not train_if:
+    if train_if:
         train()
     else:
         test()

@@ -123,22 +123,36 @@ class MarioPolicyHead(nn.Module):
         return x2, state
 
 
-class VizdoomPolicyHead(MarioPolicyHead):
+class VizdoomPolicyHead(nn.Module):
     def __init__(self,
                  channel: int,
                  height: int,
                  width: int,
                  device: Union[str, int, torch.device] = "cpu",
                  layer_init: Callable[[nn.Module], nn.Module] = lambda x: x):
-        super().__init__(channel, height, width, device, layer_init)
+        super().__init__()
+        self.device = device
+        self.net = nn.Sequential(
+            layer_init(nn.Conv2d(channel, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True),
+            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True),
+            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            nn.ELU(inplace=True), nn.Flatten()
+        )
+        with torch.no_grad():
+            self.mid_dim = np.prod(self.net(torch.zeros(1, channel, height, width)).shape[1:])
+        self.output_dim = self.mid_dim
 
     def forward(
             self,
             obs: Union[np.ndarray, torch.Tensor],
             state: Optional[Any] = None,
             info: Dict[str, Any] = {}, ):
-        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32).permute(0, 3, 1, 2)
-        return super().forward(obs, state, info)
+        #print(obs.shape)
+        obs = torch.permute(torch.as_tensor(obs, device=self.device, dtype=torch.float32), (0, 3, 1, 2))
+        x1 = self.net(obs)
+        return x1, state
 
 
 class MarioICMFeatureHead(nn.Module):

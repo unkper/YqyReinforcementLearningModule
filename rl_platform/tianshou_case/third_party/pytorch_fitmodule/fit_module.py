@@ -5,13 +5,13 @@ import torch
 from collections import OrderedDict
 from functools import partial
 from torch.autograd import Variable
-from torch.nn import CrossEntropyLoss, Module
-from torch.optim import SGD
+from torch.nn import BCELoss, Module
+from torch.optim import Adam
 
 from .utils import add_metrics_to_log, get_loader, log_to_message, ProgressBar, get_loader_r_training
 
-DEFAULT_LOSS = CrossEntropyLoss()
-DEFAULT_OPTIMIZER = partial(SGD, lr=0.001, momentum=0.9)
+DEFAULT_LOSS = BCELoss()
+DEFAULT_OPTIMIZER = partial(Adam, lr=0.001)
 
 
 class FitModule(Module):

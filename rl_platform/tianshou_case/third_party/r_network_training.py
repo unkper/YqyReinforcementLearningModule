@@ -31,7 +31,6 @@ from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.third_party.constants import Const
 import numpy as np
 
-
 def generate_positive_example(buffer_position,
                               next_buffer_position):
     """Generates a close enough pair of states."""
@@ -44,7 +43,6 @@ def generate_positive_example(buffer_position,
     if random.random() < 0.5:
         first, second = second, first
     return first, second
-
 
 def generate_negative_example(buffer_position,
                               len_episode_buffer,
@@ -65,7 +63,6 @@ def generate_negative_example(buffer_position,
     if index >= min_index:
         index = max_index + (index - min_index)
     return buffer_position, index
-
 
 def compute_next_buffer_position(buffer_position,
                                  positive_example_candidate,
@@ -144,7 +141,6 @@ def create_training_data_from_episode_buffer_v4(episode_buffer,
         labels.append(0)
     return x1, x2, labels
 
-
 def create_training_data_from_episode_buffer_v123(episode_buffer,
                                                   max_action_distance,
                                                   mode):
@@ -190,6 +186,7 @@ class RNetworkTrainer(object):
                  r_model: RNetwork,
                  observation_history_size=20000,
                  training_interval=20000,
+                 batch_size=32,
                  num_train_epochs=6,
                  checkpoint_dir=None,
                  writer: SummaryWriter = None,
@@ -203,7 +200,7 @@ class RNetworkTrainer(object):
         if device == 'cuda':
             self._r_model.cuda()
         self._training_interval = training_interval
-        self._batch_size = 64
+        self._batch_size = batch_size
         self._num_train_epochs = num_train_epochs
 
         # Keeps track of the last N observations.

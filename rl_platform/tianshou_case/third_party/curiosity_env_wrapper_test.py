@@ -19,22 +19,21 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import pprint
 import unittest
 from collections import OrderedDict
 
 from gym.vector.utils import spaces
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.third_party import episodic_memory, r_network_training
+from rl_platform.tianshou_case.third_party import episodic_memory, r_network_training, \
+    single_curiosity_env_wrapper as curiosity_env_wrapper
 
 import gym
 import numpy as np
 
-from rl_platform.tianshou_case.third_party.r_network_training import RNetworkTrainer
 from rl_platform.tianshou_case.third_party.vec_env import VecEnv
-from rl_platform.tianshou_case.utils.single_curiosity_env_wrapper import CuriosityEnvWrapper
-from rl_platform.tianshou_case.utils import single_curiosity_env_wrapper as curiosity_env_wrapper
+from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
+
 
 class DummyVecEnv(VecEnv):
     def __init__(self, env_fns):

@@ -19,8 +19,11 @@ from __future__ import division
 
 from __future__ import print_function
 
+import logging
+
 import numpy as np
 import torch
+from tensorboardX import SummaryWriter
 
 
 class EpisodicMemory(object):
@@ -30,7 +33,8 @@ class EpisodicMemory(object):
                  observation_shape,
                  observation_compare_fn,
                  replacement='fifo',
-                 capacity=200):
+                 capacity=200,
+                 writer:SummaryWriter=None):
         """Creates an episodic memory.
 
     Args:
@@ -57,6 +61,8 @@ class EpisodicMemory(object):
         self._observation_compare_fn = observation_compare_fn
         self._memory_age = np.zeros([self._capacity], dtype=np.int32)
         self._count = 0
+        self._reset_count = 0
+        self.writer = writer
         self.reset(False)
 
     def reset(self, show_stats=True):
@@ -67,10 +73,13 @@ class EpisodicMemory(object):
                                             10, [0, self._count])
             age_histogram = age_histogram.astype(np.float32)
             age_histogram = age_histogram / np.sum(age_histogram)
-            print('Number of samples added in the previous trajectory: {}'.format(
-                self._count))
-            print('Histogram of sample freshness (old to fresh): {}'.format(
-                age_histogram))
+            # if self.writer is not None:
+            #     self.writer.add_histogram("sample freshness", age_histogram, self._reset_count)
+            # logging.warning('Number of samples added in the previous trajectory: {}'.format(
+            #     self._count))
+            # logging.warning('Histogram of sample freshness (old to fresh): {}'.format(
+            #     age_histogram))
+        self._reset_count += 1
 
         self._count = 0
         # Stores environment embed observations.
@@ -118,7 +127,7 @@ class EpisodicMemory(object):
         else:
             index = self._count
 
-        self._obs_memory[index] = observation if not isinstance(observation, torch.Tensor) else observation.detach().numpy()
+        self._obs_memory[index] = observation if not isinstance(observation, torch.Tensor) else observation.cpu().detach().numpy()
         self._info_memory[index] = info
         self._memory_age[index] = self._count
         self._count += 1
@@ -138,7 +147,8 @@ class EpisodicMemory(object):
         # TODO(damienv): could we avoid replicating the observation ?
         # (with some form of broadcasting).
         size = len(self)
-        observation = np.array([observation] * size)
+        obs = np.squeeze(observation.cpu().detach().numpy())
+        observation = np.stack([np.copy(obs) for _ in range(size)])
         similarities = self._observation_compare_fn(observation,
                                                     self._obs_memory[:size])
         return similarities
@@ -166,6 +176,8 @@ def similarity_to_memory(observation,
     if memory_length == 0:
         return 0.0
     similarities = episodic_memory.similarity(observation)
+    if not isinstance(similarities, np.ndarray):
+        similarities = similarities.cpu().detach().numpy()
     # Implements different surrogate aggregated similarities.
     # TODO(damienv): Implement other types of surrogate aggregated similarities.
     if similarity_aggregation == 'max':

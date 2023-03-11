@@ -21,17 +21,16 @@ class TopNetwork(nn.Module):
                                               nn.ReLU(inplace=True)))
         self.linears = nn.ModuleList(self.linears)
         self.output = nn.Linear(EMBEDDING_DIM, 2)
-        self.softmax = nn.Softmax()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x1, x2):
         x1 = torch.as_tensor(x1, device=self.device, dtype=torch.float32)
         x2 = torch.as_tensor(x2, device=self.device, dtype=torch.float32)
-        bn = x1.data.shape[0]
-        x = torch.concatenate([x1, x2], dim=1)
+        x = torch.concat([x1, x2], dim=1)
         x = self.bn_relu_for_dense(x)
         for module in self.linears:
             x = module(x)
-        return self.softmax(self.output(x))
+        return self.sigmoid(self.output(x)) # 二分类问题应该使用Sigmoid
 
 
 class Siamese_Resnet(nn.Module):

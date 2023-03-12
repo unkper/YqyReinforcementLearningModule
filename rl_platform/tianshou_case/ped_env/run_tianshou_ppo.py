@@ -291,7 +291,7 @@ def test():
     env = _get_env()
     policy, optim = get_policy(_get_env())
 
-    file_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_simple_1_PPO_2023_02_28_23_36_44\policy.pth"
+    file_path = r"/rl_platform/tianshou_case/ped_env/log\PedsMoveEnv_map_simple_1_PPO_2023_02_28_23_36_44\policy.pth"
     if file_path is not None:
         state_dicts = torch.load(file_path, map_location='cuda' if torch.cuda.is_available() else 'cpu')
         policy.load_state_dict(state_dicts[env.agents[0]])

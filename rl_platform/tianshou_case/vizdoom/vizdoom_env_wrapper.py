@@ -2,6 +2,9 @@ from vizdoom.gym_wrapper.base_gym_env import VizdoomEnv
 
 
 class MyVizdoomEnv(VizdoomEnv):
+    """
+    scenario_file:"dense", "sparse", "verySparse"三个选项
+    """
     def __init__(
             self, scenario_file, frame_skip=4, max_buttons_pressed=1, render_mode=None
     ):
@@ -33,4 +36,7 @@ class VizdoomEnvWrapper():
         observations, _ = self._venv.reset()
         observations = observations['screen']
         return observations
+
+    def render(self, mode):
+        self._venv.render()
 

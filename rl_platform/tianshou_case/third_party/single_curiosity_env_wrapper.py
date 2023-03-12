@@ -289,6 +289,9 @@ class CuriosityEnvWrapper:
 
         return postprocessed_observations
 
+    def render(self, mode="human"):
+        self.venv.render(mode)
+
     @property
     def metadata(self) -> dict:
         """Returns the environment metadata."""

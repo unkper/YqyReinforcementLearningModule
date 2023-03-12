@@ -4,8 +4,10 @@ __pycache__/
 *.ini
 *.pyc
 rl_platform/d3rl_case/d3rlpy_logs
-rl_platform/tianshou_case/log
+rl_platform/tianshou_case/ped_env/log
 rl_platform/tianshou_case/derk/chromedata
 rl_platform/tianshou_case/mario/log
+rl_platform/tianshou_case/vizdoom/log
+rl_platform/tianshou_case/vizdoom/r_network
 venv
 venv_vizdoom

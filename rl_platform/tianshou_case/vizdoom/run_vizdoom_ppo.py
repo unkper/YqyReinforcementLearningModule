@@ -57,27 +57,28 @@ seed = 1
 
 actor_lr = lr
 set_device = "cuda"
-
 env_name = "normal"
-
+# icm parameters
 icm_hidden_size = 256
 use_icm = False
 icm_lr_scale = 1e-3
 icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
-
+# EC parameters
 use_episodic_memory = True
 exploration_reward = "episodic_curiosity"  # episodic_curiosity,oracle
 scale_task_reward = 1.0
 scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
 bonus_reward_additive_term = 0
-exploration_reward_min_step = 0
+exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
 target_image_shape = [120, 160, 3]
 r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
+# 文件配置相关
 task = "Vizdoom_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-writer = SummaryWriter('log/'+file_name)
+writer = SummaryWriter('log/' + file_name)
+
 
 def get_policy(env, optim=None):
     state_shape = env.observation_space.shape
@@ -173,17 +174,21 @@ if r_network_checkpoint is not None:
     logging.warning(u"加载完成RNetwork的相关参数!")
 else:
     raise RuntimeError(u"必须指定训练好的的R-Network!")
-net.eval() # 此处是为了batchnorm而加
+net.eval()  # 此处是为了batchnorm而加
 memory = EpisodicMemory(observation_shape=[512],
                         observation_compare_fn=net.embedding_similarity,
-                        writer=writer)
+                        writer=writer if not env_test else None)
+
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
     global env_test, net, memory
 
     def wrapped_vizdoom_env():
-        env = VizdoomEnvWrapper(gym.make("VizdoomMyWayHome-v0"))
+        if not env_test:
+            env = VizdoomEnvWrapper(gym.make("VizdoomMyWayHome-v0"))
+        else:
+            env = VizdoomEnvWrapper(gym.make("VizdoomMyWayHome-v0", render_mode="human"))
         env.observation_space = env.observation_space['screen']
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
@@ -202,7 +207,7 @@ def _get_env():
                 memory,
                 net.embed_observation,
                 target_image_shape,
-                #r_net_trainer=r_trainer,
+                # r_net_trainer=r_trainer,
                 scale_task_reward=scale_task_reward,
                 scale_surrogate_reward=scale_surrogate_reward,
                 exploration_reward_min_step=exploration_reward_min_step,
@@ -211,9 +216,6 @@ def _get_env():
         return env
 
     return wrapped_vizdoom_env()
-
-
-
 
 
 def train(load_check_point=None):
@@ -309,14 +311,17 @@ def train(load_check_point=None):
 
 
 def test():
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_SuperMarioBros-1-1-v0_PPO_2023_02_09_14_17_48\checkpoint_380.pth"
+    global env_test
+    env_test = True
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\log\Vizdoom_normal_PPO_2023_03_11_23_01_22\checkpoint_100.pth"
     test_envs = DummyVectorEnv([_get_env for _ in range(1)])
     env = _get_env()
-    policy, optim, agents = _get_agent(None, 8,
+    policy, optim, agents = _get_agent(env, None,
                                        file_path=policy_path)
     policy.eval()
     collector = Collector(policy, test_envs)
-    collector.collect(n_episode=5, render=1 / 36)
+    res = collector.collect(n_episode=2, render=1 / 36)
+    pprint.pprint(res)
 
 
 debug = False
@@ -330,7 +335,7 @@ if __name__ == "__main__":
 
     parmas = parser.parse_args()
 
-    train_if = True
+    train_if = False
 
     if train_if:
         train()

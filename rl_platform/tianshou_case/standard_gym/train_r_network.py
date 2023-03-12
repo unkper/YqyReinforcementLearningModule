@@ -3,16 +3,15 @@ from datetime import datetime
 
 import gym
 import torch
-import tqdm
 from tensorboardX import SummaryWriter
 from vizdoom import gym_wrapper  # noqa
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import resize_observation
-from rl_platform.tianshou_case.vizdoom.vizdoom_env_wrapper import VizdoomEnvWrapper
+from wrapper import create_walker_env
 
-env_name = "VizdoomMyWayHome-v0"
+env_name = "Walker_v3"
 set_device = "cuda"
 task = "{}".format(env_name)
 file_name = os.path.join("r_network", task + "_PPO_" + datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
@@ -25,7 +24,7 @@ target_image_shape = [120, 160, 3]
 
 
 def make_env():
-    env = VizdoomEnvWrapper(gym.make(env_name))
+    env = create_walker_env()
     return env
 
 

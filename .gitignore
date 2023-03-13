@@ -10,5 +10,6 @@ rl_platform/tianshou_case/mario/log
 rl_platform/tianshou_case/vizdoom/log
 rl_platform/tianshou_case/vizdoom/r_network
 rl_platform/tianshou_case/standard_gym/log
+rl_platform/tianshou_case/standard_gym/r_network
 venv
 venv_vizdoom

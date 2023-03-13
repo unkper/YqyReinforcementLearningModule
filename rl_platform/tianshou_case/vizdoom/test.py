@@ -10,6 +10,7 @@ if __name__ == "__main__":
     #env = gym.make("VizdoomMyWayHome-v0", render_mode="human")
     env = MyVizdoomEnv("sparse", render_mode="human")
 
+
     # Rendering random rollouts for ten episodes
     for _ in range(10):
         done = False

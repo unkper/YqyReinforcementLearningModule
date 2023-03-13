@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Any
 
 import gym
 from gym.core import ObsType, ActType
@@ -24,6 +24,13 @@ class WalkerEnvWrapper(gym.Wrapper):
         obs, rew, done, truncated, info = self.env.step(action)
         obs = self.env.render()
         obs = resize_observation(obs, target_image_shape)
+        done = done or truncated
+        return obs, rew, done, info
+
+class CarRacingWrapper(gym.Wrapper):
+    def step(self, action: ActType) -> tuple[Any, float, bool, dict]:
+        obs, rew, done, truncated, info = self.env.step(action)
+        done = done or truncated
         return obs, rew, done, info
 
 
@@ -32,4 +39,11 @@ def create_walker_env(hardcore=False, max_step=2000, num_stack=4):
         FrameStack(
             TimeLimit(gym.make('BipedalWalker-v3', render_mode='rgb_array', hardcore=hardcore),
                       max_episode_steps=max_step), num_stack=num_stack))
+    return env
+
+
+def create_car_racing_env(max_step=2000, discrete=True):
+    env = CarRacingWrapper(
+        TimeLimit(gym.make("CarRacing-v2", render_mode='rgb_array', continuous=not discrete),
+                  max_episode_steps=max_step))
     return env

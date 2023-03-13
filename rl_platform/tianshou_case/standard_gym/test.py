@@ -4,18 +4,21 @@ import gym
 
 import matplotlib.pyplot as plt
 from gym.wrappers import TimeLimit
-from wrapper import WalkerEnvWrapper, create_walker_env
+from wrapper import WalkerEnvWrapper, create_walker_env, create_car_racing_env
 from matplotlib.animation import FuncAnimation
 
-env = create_walker_env()
+env = create_car_racing_env()
 pprint.pprint(env.observation_space)
 
 # Reset the environment
 obs = env.reset()
+
 obs_arr = []
 
 done = False
-for i in range(250):
+i = 0
+while not done:
+    i += 1
     # Select a random action
     action = env.action_space.sample()
 
@@ -24,6 +27,7 @@ for i in range(250):
 
     # Render the current state of the environment
     obs_arr.append(obs)
+    print(i)
 
 fig, ax = plt.subplots()
 

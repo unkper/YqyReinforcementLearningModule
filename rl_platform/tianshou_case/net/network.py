@@ -7,6 +7,12 @@ from tianshou.data import Batch
 
 from tianshou.utils.net.common import MLP
 
+def init_func(net:nn.Module):
+    for m in list(net.modules()):
+        if isinstance(m, torch.nn.Linear):
+            # orthogonal initialization
+            torch.nn.init.orthogonal_(m.weight, gain=np.sqrt(2))
+            torch.nn.init.zeros_(m.bias)
 
 class MLPNetwork(nn.Module):
     def __init__(self, state_dim, output_dim, hidden_dim: List[int], device):
@@ -88,6 +94,7 @@ class DQN(nn.Module):
         obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
         return self.net(obs), state
 
+
 class MarioPolicyHead(nn.Module):
     def __init__(self,
                  channel: int,
@@ -108,19 +115,16 @@ class MarioPolicyHead(nn.Module):
         )
         with torch.no_grad():
             self.mid_dim = np.prod(self.net(torch.zeros(1, channel, height, width)).shape[1:])
-        self.lstm_layer = nn.LSTM(self.mid_dim, 256)
-        self.output_dim = 256
+        self.output_dim = self.mid_dim
 
     def forward(
             self,
             obs: Union[np.ndarray, torch.Tensor],
             state: Optional[Any] = None,
             info: Dict[str, Any] = {}, ):
-        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
-        x1 = torch.unsqueeze(self.net(obs), 0)
-        x2, ht = self.lstm_layer(x1)
-        x2 = torch.squeeze(x2, 0)
-        return x2, state
+        obs = torch.permute(torch.as_tensor(obs, device=self.device, dtype=torch.float32), (0, 3, 1, 2))
+        x1 = self.net(obs)
+        return x1, state
 
 
 class VizdoomPolicyHead(nn.Module):
@@ -149,7 +153,7 @@ class VizdoomPolicyHead(nn.Module):
             obs: Union[np.ndarray, torch.Tensor],
             state: Optional[Any] = None,
             info: Dict[str, Any] = {}, ):
-        #print(obs.shape)
+        # print(obs.shape)
         obs = torch.permute(torch.as_tensor(obs, device=self.device, dtype=torch.float32), (0, 3, 1, 2))
         x1 = self.net(obs)
         return x1, state

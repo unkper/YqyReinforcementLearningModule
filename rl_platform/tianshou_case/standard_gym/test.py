@@ -1,3 +1,5 @@
+import pprint
+
 import gym
 
 import matplotlib.pyplot as plt
@@ -6,6 +8,7 @@ from wrapper import WalkerEnvWrapper, create_walker_env
 from matplotlib.animation import FuncAnimation
 
 env = create_walker_env()
+pprint.pprint(env.observation_space)
 
 # Reset the environment
 obs = env.reset()

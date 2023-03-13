@@ -210,7 +210,7 @@ class EpisodicEnvWrapperTest(unittest.TestCase):
             observation_history_size=10000,
             training_interval=500,
             num_train_epochs=1,
-            checkpoint_dir="./",
+            checkpoint_dir="../",
             device=set_device)
         env_wrapper = CuriosityEnvWrapper(
             vec_env, vec_episodic_memory,

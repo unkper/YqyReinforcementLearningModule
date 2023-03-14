@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv
+from tianshou.env import DummyVectorEnv, SubprocVectorEnv
 from tianshou.policy import BasePolicy, PPOPolicy, ICMPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
@@ -22,16 +22,14 @@ import sys
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 from torch.optim import Adam, Optimizer
 
-from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, MarioPolicyHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead
 from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env
-from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
-parallel_env_num = 6
+parallel_env_num = 10
 test_env_num = 2
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = int(200000 / parallel_env_num)
@@ -61,7 +59,7 @@ actor_lr = lr
 set_device = "cuda"
 env_name = "normal"
 # icm parameters
-use_icm = True
+use_icm = False
 icm_hidden_size = 256
 icm_lr_scale = 1e-3
 icm_reward_scale = 1
@@ -79,7 +77,6 @@ r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platfor
 # 文件配置相关
 task = "CarRacing_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-writer = SummaryWriter('log/' + file_name)
 
 
 def get_policy(env, optim=None):
@@ -179,8 +176,7 @@ if use_episodic_memory:
         raise RuntimeError(u"必须指定训练好的的R-Network!")
     net.eval()  # 此处是为了batchnorm而加
     memory = EpisodicMemory(observation_shape=[512],
-                            observation_compare_fn=net.embedding_similarity,
-                            writer=writer if not env_test else None)
+                            observation_compare_fn=net.embedding_similarity)
 
 
 def _get_env():
@@ -229,7 +225,7 @@ def train(load_check_point=None):
         batch_size = 16
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = DummyVectorEnv([_get_env for _ in range(parallel_env_num)])
+        train_envs = SubprocVectorEnv([_get_env for _ in range(parallel_env_num)])
         env_test = True
         test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
 
@@ -254,7 +250,7 @@ def train(load_check_point=None):
         # train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
 
         # ======== Step 4: Callback functions setup =========
-
+        writer = SummaryWriter('log/' + file_name)
         logger = ts.utils.TensorboardLogger(writer)  # TensorBoard is supported!
 
         def save_best_fn(policy):
@@ -286,7 +282,7 @@ def train(load_check_point=None):
         result = onpolicy_trainer(
             policy=policy,
             train_collector=train_collector,
-            test_collector= None,
+            test_collector=None,
             max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
             step_per_collect=step_per_collect,

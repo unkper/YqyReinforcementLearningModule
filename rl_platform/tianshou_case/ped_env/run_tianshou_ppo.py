@@ -124,7 +124,7 @@ def get_policy(env, optim=None):
         action_dim = np.prod(action_shape)
         feature_dim = feature_net.output_dim
         icm_net = IntrinsicCuriosityModule(
-            feature_net.net,
+            feature_net,
             feature_dim,
             action_dim,
             hidden_sizes=[icm_hidden_size],

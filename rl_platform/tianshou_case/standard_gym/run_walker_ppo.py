@@ -24,7 +24,7 @@ from tianshou.utils.net.continuous import ActorProb, Critic
 from torch.distributions import Independent, Normal
 from torch.optim import Adam, Optimizer
 
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead
+from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, MarioPolicyHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.standard_gym.wrapper import create_walker_env
 from rl_platform.tianshou_case.third_party import r_network_training
@@ -126,14 +126,14 @@ def get_policy(env, optim=None):
 
     if use_icm:
         logging.warning(u"使用了ICM机制!")
-        feature_net = MarioICMFeatureHead(c, h, w, device=set_device)
+        feature_net = StandardICMFeatureHead(c, h, w, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 
         action_dim = np.prod(action_shape)
         feature_dim = feature_net.output_dim
         icm_net = IntrinsicCuriosityModule(
-            feature_net.net,
+            feature_net,
             feature_dim,
             action_dim,
             hidden_sizes=[icm_hidden_size],

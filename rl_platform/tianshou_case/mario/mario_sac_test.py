@@ -21,7 +21,7 @@ from tianshou.policy import DiscreteSACPolicy, ICMPolicy, BasePolicy
 from tianshou.trainer import offpolicy_trainer
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead
+from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, MarioPolicyHead
 from rl_platform.tianshou_case.utils.wrappers import DisableRewardWrapper, MarioRewardWrapper
 
 parallel_env_num = 10
@@ -100,7 +100,7 @@ def get_policy(env, optim=None):
         reward_normalization=rew_norm,
     ).to(device)
     if icm_lr_scale > 0:
-        feature_net = MarioICMFeatureHead(*state_shape, device=device)
+        feature_net = StandardICMFeatureHead(*state_shape, device=device)
         if device == "cuda":
             feature_net.cuda()
 

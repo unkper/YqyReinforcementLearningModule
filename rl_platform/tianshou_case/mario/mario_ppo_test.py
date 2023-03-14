@@ -26,7 +26,7 @@ import sys
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.mario.mario_dqn_config import mario_dqn_config, SIMPLE_MOVEMENT
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead
+from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, MarioPolicyHead
 from rl_platform.tianshou_case.utils.wrappers import MarioRewardWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
@@ -117,7 +117,7 @@ def get_policy(env, optim=None):
     ).to(set_device)
 
     if icm_lr_scale > 0:
-        feature_net = MarioICMFeatureHead(*state_shape, device=set_device)
+        feature_net = StandardICMFeatureHead(*state_shape, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 

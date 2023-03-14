@@ -21,7 +21,7 @@ import sys
 
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, VizdoomPolicyHead
+from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, VizdoomPolicyHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
@@ -123,7 +123,7 @@ def get_policy(env, optim=None):
 
     if use_icm:
         logging.warning(u"使用了ICM机制!")
-        feature_net = MarioICMFeatureHead(*state_shape, device=set_device)
+        feature_net = StandardICMFeatureHead(*state_shape, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 

@@ -20,19 +20,18 @@ import tianshou as ts
 import sys
 
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
-from torch.distributions import Independent, Normal
 from torch.optim import Adam, Optimizer
 
-from rl_platform.tianshou_case.net.network import MarioICMFeatureHead, MarioPolicyHead
+from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, MarioPolicyHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
+from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead
 from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
-from rl_platform.tianshou_case.vizdoom.vizdoom_env_wrapper import VizdoomEnvWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
-parallel_env_num = 4
+parallel_env_num = 6
 test_env_num = 2
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = int(200000 / parallel_env_num)
@@ -54,17 +53,18 @@ dual_clip = None
 value_clip = 1
 norm_adv = 1
 recompute_adv = 0
-episode_per_test = 5
+episode_per_test = 2
 update_per_step = 0.1
+hidden_size = 100
 
 actor_lr = lr
 set_device = "cuda"
 env_name = "normal"
 # icm parameters
-use_icm = False
+use_icm = True
 icm_hidden_size = 256
 icm_lr_scale = 1e-3
-icm_reward_scale = 0.1
+icm_reward_scale = 1
 icm_forward_loss_weight = 0.2
 # EC parameters
 use_episodic_memory = False
@@ -74,7 +74,7 @@ scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大
 bonus_reward_additive_term = 0
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
-target_image_shape = [96, 96, 3]
+target_image_shape = [96, 96, 4] # [96, 96, 4个连续灰度图像的堆叠]
 r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
 # 文件配置相关
 task = "CarRacing_{}".format(env_name)
@@ -88,13 +88,13 @@ def get_policy(env, optim=None):
 
     h, w, c = target_image_shape
     # net = DQN(**cfg.policy.model)
-    net = MarioPolicyHead(c, h, w, device=set_device)
+    net = CarRacingPolicyHead(c, h, w, device=set_device)
 
     if set_device == "cuda":
         net.cuda()
 
-    actor = Actor(net, action_shape, device=set_device)
-    critic = Critic(net, device=set_device)
+    actor = Actor(net, action_shape, hidden_sizes=[256, hidden_size], device=set_device)
+    critic = Critic(net, hidden_sizes=[256, hidden_size], device=set_device)
     optim = torch.optim.Adam(
         ActorCritic(actor, critic).parameters(), lr=lr, eps=eps_train
     )
@@ -125,17 +125,17 @@ def get_policy(env, optim=None):
 
     if use_icm:
         logging.warning(u"使用了ICM机制!")
-        feature_net = MarioICMFeatureHead(c, h, w, device=set_device)
+        feature_net = CarRacingPolicyHead(c, h, w, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 
         action_dim = np.prod(action_shape)
         feature_dim = feature_net.output_dim
         icm_net = IntrinsicCuriosityModule(
-            feature_net.net,
+            feature_net,
             feature_dim,
             action_dim,
-            hidden_sizes=[icm_hidden_size],
+            hidden_sizes=[icm_hidden_size, 100],
             device=set_device,
         )
         icm_optim = torch.optim.Adam(icm_net.parameters(), lr=actor_lr)
@@ -221,10 +221,11 @@ def _get_env():
 
 
 def train(load_check_point=None):
-    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, step_per_collect
+    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, step_per_collect, episode_per_test
     if debug:
         parallel_env_num, test_env_num, buffer_size = 5, 1, 10000
         step_per_collect = 10
+        episode_per_test = 0
         batch_size = 16
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
@@ -285,7 +286,7 @@ def train(load_check_point=None):
         result = onpolicy_trainer(
             policy=policy,
             train_collector=train_collector,
-            test_collector=test_collector,
+            test_collector= None,
             max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
             step_per_collect=step_per_collect,
@@ -320,7 +321,7 @@ def test():
     pprint.pprint(res)
 
 
-debug = True
+debug = False
 
 import argparse
 

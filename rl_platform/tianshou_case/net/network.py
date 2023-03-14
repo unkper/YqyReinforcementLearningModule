@@ -123,6 +123,8 @@ class MarioPolicyHead(nn.Module):
             state: Optional[Any] = None,
             info: Dict[str, Any] = {}, ):
         obs = torch.permute(torch.as_tensor(obs, device=self.device, dtype=torch.float32), (0, 3, 1, 2))
+
+        #print("policy:"+str(obs.shape))
         x1 = self.net(obs)
         return x1, state
 
@@ -159,7 +161,7 @@ class VizdoomPolicyHead(nn.Module):
         return x1, state
 
 
-class MarioICMFeatureHead(nn.Module):
+class StandardICMFeatureHead(nn.Module):
     def __init__(self,
                  channel: int,
                  height: int,
@@ -185,9 +187,11 @@ class MarioICMFeatureHead(nn.Module):
             obs: Union[np.ndarray, torch.Tensor],
             state: Optional[Any] = None,
             info: Dict[str, Any] = {}, ):
-        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
+        #print("icm:" + str(obs.shape))
+        obs = torch.permute(torch.as_tensor(obs, device=self.device, dtype=torch.float32), (0, 3, 1, 2))
+        #obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
         x1 = self.net(obs)
-        return x1, state
+        return x1
 
 
 class PedPolicyHead(nn.Module):

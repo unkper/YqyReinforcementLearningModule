@@ -49,3 +49,15 @@ class CarRacingPolicyHead(nn.Module):
         if isinstance(m, nn.Conv2d):
             nn.init.xavier_uniform_(m.weight, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias, 0.1)
+
+
+class CarRacingICMHead(CarRacingPolicyHead):
+    def forward(
+            self,
+            obs: Union[np.ndarray, torch.Tensor],
+            state: Optional[Any] = None,
+            info: Dict[str, Any] = {}, ):
+        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
+        # print("policy:"+str(obs.shape))
+        x1 = self.net(obs)
+        return x1

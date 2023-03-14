@@ -23,7 +23,7 @@ from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 from torch.optim import Adam, Optimizer
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead
+from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
 from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
@@ -59,10 +59,10 @@ actor_lr = lr
 set_device = "cuda"
 env_name = "normal"
 # icm parameters
-use_icm = False
+use_icm = True
 icm_hidden_size = 256
 icm_lr_scale = 1e-3
-icm_reward_scale = 1
+icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
 # EC parameters
 use_episodic_memory = False
@@ -122,7 +122,7 @@ def get_policy(env, optim=None):
 
     if use_icm:
         logging.warning(u"使用了ICM机制!")
-        feature_net = CarRacingPolicyHead(c, h, w, device=set_device)
+        feature_net = CarRacingICMHead(c, h, w, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 
@@ -219,7 +219,7 @@ def _get_env():
 def train(load_check_point=None):
     global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, step_per_collect, episode_per_test
     if debug:
-        parallel_env_num, test_env_num, buffer_size = 5, 1, 10000
+        parallel_env_num, test_env_num, buffer_size = 2, 1, 10000
         step_per_collect = 10
         episode_per_test = 0
         batch_size = 16

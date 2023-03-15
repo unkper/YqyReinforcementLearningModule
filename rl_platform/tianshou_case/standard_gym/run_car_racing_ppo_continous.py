@@ -19,6 +19,7 @@ import tianshou as ts
 
 import sys
 
+from tianshou.utils.net.continuous import ActorProb, Critic
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 from torch.optim import Adam, Optimizer
 

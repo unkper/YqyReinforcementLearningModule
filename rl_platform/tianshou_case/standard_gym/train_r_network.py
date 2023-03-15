@@ -1,15 +1,20 @@
 import os.path
+import pprint
 from datetime import datetime
 
 import gym
 import torch
 from tensorboardX import SummaryWriter
+from tianshou.data import ReplayBuffer, VectorReplayBuffer
+from tianshou.env import DummyVectorEnv
+from tianshou.policy import RandomPolicy
 from vizdoom import gym_wrapper  # noqa
 from tianshou.data.collector import Collector
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import resize_observation
+from rl_platform.tianshou_case.utils.dummy_policy import DummyPolicy
 from wrapper import create_walker_env, create_car_racing_env, CarRewardType
 
 env_name = "CarRacing_v3"
@@ -23,18 +28,24 @@ num_train_epochs = 50
 batch_size = 128
 #target_image_shape = [120, 160, 3]
 target_image_shape = [96, 96, 4]
-
+step_interval = 500
+train_env_num = 5
 
 def make_env():
-    env = create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD)
+    env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
     #env = create_walker_env()
     return env
 
 
 def train(file = None):
     global set_device
-    vec_env = make_env()
     writer = SummaryWriter(file_name)
+    vec_env = make_env()
+
+    policy = DummyPolicy(make_env().action_space)
+    train_envs = DummyVectorEnv([make_env for _ in range(train_env_num)])
+    buffer = VectorReplayBuffer(1000, len(train_envs))
+    collector = Collector(policy, train_envs, buffer=buffer)
 
     net = RNetwork(vec_env.observation_space, device=set_device)
     if file is not None:
@@ -56,20 +67,23 @@ def train(file = None):
     i = 0
 
     while i < total_feed_step:
-        done = False
-        obs = vec_env.reset()
-        while not done:
-            obs, rew, terminated, info = vec_env.step(vec_env.action_space.sample())
-            #obs = resize_observation(obs, target_image_shape)
-            r_trainer.on_new_observation(obs, rew, done, info)
-            # pprint.pprint(rew)
-            done = terminated
-            if i >= total_feed_step:
-                break
-            pbar.update(1)
-            i += 1
+        collector.collect(n_step=step_interval)
+        batch, _ = buffer.sample(step_interval)
+        for j in range(step_interval):
+            r_trainer.on_new_observation(batch.obs[j], batch.rew[j], batch.done[j], batch.info[j])
+        pbar.update(step_interval)
+        i += step_interval
+
+def test_collector():
+    policy = DummyPolicy(make_env().action_space)
+    train_envs = DummyVectorEnv([make_env for _ in range(5)])
+    buffer = VectorReplayBuffer(100, len(train_envs))
+    collector = Collector(policy, train_envs, buffer=buffer)
+    collector.collect(n_step=2)
+    pprint.pprint(buffer.sample(2))
 
 
 if __name__ == '__main__':
     #path = r"/rl_platform/tianshou_case/vizdoom/checkpoints/VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
+    #train()
     train()

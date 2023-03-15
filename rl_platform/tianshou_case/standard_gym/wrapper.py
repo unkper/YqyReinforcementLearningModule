@@ -31,6 +31,9 @@ class WalkerEnvWrapper(gym.Wrapper):
 
 
 class CarRacingWrapper(gym.Wrapper):
+    def __init__(self, env, discrete_reward=False):
+        super().__init__(env)
+        self._d_reward = discrete_reward
 
     def reset(self):
         self.counter = 0
@@ -42,18 +45,31 @@ class CarRacingWrapper(gym.Wrapper):
         self.stack = [img_gray] * CAR_IMAGE_STACK  # four frames for decision
         return np.array(self.stack)
 
+    def task_reward(self, die, img_rgb, reward):
+        # don't penalize "die state"
+        if die:
+            reward += 100
+        # green penalty
+        if np.mean(img_rgb[:, :, 1]) > 185.0:
+            reward -= 0.05
+        return reward
+
     def step(self, action):
         done = False
         total_reward = 0
+        total_task_r = 0
         for i in range(CAR_ACTION_REAPET):
             img_rgb, reward, die, truncated, _ = self.env.step(action)
-            # don't penalize "die state"
-            if die:
-                reward += 100
-            # green penalty
-            if np.mean(img_rgb[:, :, 1]) > 185.0:
-                reward -= 0.05
+            # reward model
+            if self._d_reward:
+                # give zero reward for icm and ec
+                reward = 0
+                task_reward = self.task_reward(die, img_rgb, reward)
+            else:
+                reward = self.task_reward(die, img_rgb, reward)
+                task_reward = reward
             total_reward += reward
+            total_task_r += task_reward
             # if no reward recently, end the episode
             done = True if self.av_r(reward) <= -0.1 else False
             if done or die:
@@ -62,7 +78,7 @@ class CarRacingWrapper(gym.Wrapper):
         self.stack.pop(0)
         self.stack.append(img_gray)
         assert len(self.stack) == CAR_IMAGE_STACK
-        return np.array(self.stack), total_reward, done, {}
+        return np.array(self.stack), total_reward, done, {"task_reward": total_task_r}
 
     @staticmethod
     def rgb2gray(rgb, norm=True):
@@ -97,6 +113,6 @@ def create_walker_env(hardcore=False, max_step=2000, num_stack=4):
     return env
 
 
-def create_car_racing_env(max_step=2000, discrete=True):
-    env = CarRacingWrapper(gym.make("CarRacing-v2", render_mode='rgb_array', continuous=not discrete))
+def create_car_racing_env(zero_reward=True, discrete=True):
+    env = CarRacingWrapper(gym.make("CarRacing-v2", render_mode='rgb_array', continuous=not discrete, zero_reward=zero_reward))
     return env

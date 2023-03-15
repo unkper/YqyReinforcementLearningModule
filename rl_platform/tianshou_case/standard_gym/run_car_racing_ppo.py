@@ -185,7 +185,7 @@ def _get_env():
 
     def wrapped_env():
         if not env_test:
-            env = create_car_racing_env()
+            env = create_car_racing_env(zero_reward=True)
         else:
             env = create_car_racing_env()
         if use_episodic_memory:

@@ -24,18 +24,19 @@ from torch.optim import Adam, Optimizer
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
-from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env
+from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, CarRewardType
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
-parallel_env_num = 10
-test_env_num = 2
+parallel_env_num = 8
+test_env_num = 4
+episode_per_test = 4
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = int(200000 / parallel_env_num)
 batch_size = 128
 eps_train, eps_test = 0.2, 0.05
-max_epoch = 100
+max_epoch = 150
 step_per_epoch = 10000
 step_per_collect = 1000
 repeat_per_collect = 4
@@ -51,7 +52,6 @@ dual_clip = None
 value_clip = 1
 norm_adv = 1
 recompute_adv = 0
-episode_per_test = 2
 update_per_step = 0.1
 hidden_size = 100
 
@@ -185,9 +185,9 @@ def _get_env():
 
     def wrapped_env():
         if not env_test:
-            env = create_car_racing_env(zero_reward=True)
+            env = create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD)
         else:
-            env = create_car_racing_env()
+            env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
             from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
@@ -235,8 +235,6 @@ def train(load_check_point=None):
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location=set_device)
             policy.load_state_dict(load_data["agent"])
-            # for i in range(len(optim)):
-            #     optim[i].load_state_dict(load_data["optim"][i])
 
         # ======== Step 3: Collector setup =========
         train_collector = Collector(
@@ -246,8 +244,6 @@ def train(load_check_point=None):
             exploration_noise=True
         )
         test_collector = Collector(policy, test_envs, exploration_noise=True)
-
-        # train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
 
         # ======== Step 4: Callback functions setup =========
         writer = SummaryWriter('log/' + file_name)

@@ -114,5 +114,6 @@ def create_walker_env(hardcore=False, max_step=2000, num_stack=4):
 
 
 def create_car_racing_env(zero_reward=True, discrete=True):
-    env = CarRacingWrapper(gym.make("CarRacing-v2", render_mode='rgb_array', continuous=not discrete, zero_reward=zero_reward))
+    env = CarRacingWrapper(gym.make("CarRacing-v2", render_mode='rgb_array', continuous=not discrete)
+                           , discrete_reward=zero_reward)
     return env

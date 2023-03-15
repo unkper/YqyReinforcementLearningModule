@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv
+from tianshou.env import DummyVectorEnv, SubprocVectorEnv
 from tianshou.policy import BasePolicy, PPOPolicy, ICMPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
@@ -20,29 +20,27 @@ import tianshou as ts
 import sys
 
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
-from tianshou.utils.net.continuous import ActorProb, Critic
-from torch.distributions import Independent, Normal
 from torch.optim import Adam, Optimizer
 
-from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, MarioPolicyHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.standard_gym.wrapper import create_walker_env
+from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
+from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, CarRewardType
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
-from rl_platform.tianshou_case.vizdoom.vizdoom_env_wrapper import VizdoomEnvWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
-parallel_env_num = 4
-test_env_num = 2
+parallel_env_num = 8
+test_env_num = 4
+episode_per_test = 4
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
 buffer_size = int(200000 / parallel_env_num)
-batch_size = 64
+batch_size = 128
 eps_train, eps_test = 0.2, 0.05
-max_epoch = 100
+max_epoch = 150
 step_per_epoch = 10000
-step_per_collect = 2000
-repeat_per_collect = 10
+step_per_collect = 1000
+repeat_per_collect = 4
 rew_norm = True
 vf_coef = 0.25
 ent_coef = 0.01
@@ -55,14 +53,14 @@ dual_clip = None
 value_clip = 1
 norm_adv = 1
 recompute_adv = 0
-episode_per_test = 5
 update_per_step = 0.1
+hidden_size = 100
 
 actor_lr = lr
 set_device = "cuda"
 env_name = "normal"
 # icm parameters
-use_icm = False
+use_icm = True
 icm_hidden_size = 256
 icm_lr_scale = 1e-3
 icm_reward_scale = 0.1
@@ -75,33 +73,35 @@ scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大
 bonus_reward_additive_term = 0
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
-target_image_shape = [80, 120, 3]
+target_image_shape = [96, 96, 4]  # [96, 96, 4个连续灰度图像的堆叠]
 r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
+# EC online train parameters
+use_EC_online_train = False
+
 # 文件配置相关
-task = "Walker_{}".format(env_name)
+task = "CarRacing_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-writer = SummaryWriter('log/' + file_name)
 
 
 def get_policy(env, optim=None):
-    #state_shape = env.observation_space.shape
+    # state_shape = env.observation_space.shape
     action_shape = env.action_space.shape or env.action_space.n
 
     h, w, c = target_image_shape
     # net = DQN(**cfg.policy.model)
-    net = MarioPolicyHead(c, h, w, device=set_device)
+    net = CarRacingPolicyHead(c, h, w, device=set_device)
 
     if set_device == "cuda":
         net.cuda()
 
-    actor = ActorProb(net, [4], device=set_device, max_action=env.action_space.high[0])
-    critic = Critic(net, device=set_device)
+    actor = Actor(net, action_shape, hidden_sizes=[256, hidden_size], device=set_device)
+    critic = Critic(net, hidden_sizes=[256, hidden_size], device=set_device)
     optim = torch.optim.Adam(
         ActorCritic(actor, critic).parameters(), lr=lr, eps=eps_train
     )
 
-    def dist(*logits):
-        return Independent(Normal(*logits), 1)
+    def dist(p):
+        return torch.distributions.Categorical(logits=p)
 
     policy = PPOPolicy(
         actor,
@@ -126,7 +126,7 @@ def get_policy(env, optim=None):
 
     if use_icm:
         logging.warning(u"使用了ICM机制!")
-        feature_net = StandardICMFeatureHead(c, h, w, device=set_device)
+        feature_net = CarRacingICMHead(c, h, w, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 
@@ -136,7 +136,7 @@ def get_policy(env, optim=None):
             feature_net,
             feature_dim,
             action_dim,
-            hidden_sizes=[icm_hidden_size],
+            hidden_sizes=[icm_hidden_size, 100],
             device=set_device,
         )
         icm_optim = torch.optim.Adam(icm_net.parameters(), lr=actor_lr)
@@ -180,8 +180,15 @@ if use_episodic_memory:
         raise RuntimeError(u"必须指定训练好的的R-Network!")
     net.eval()  # 此处是为了batchnorm而加
     memory = EpisodicMemory(observation_shape=[512],
-                            observation_compare_fn=net.embedding_similarity,
-                            writer=writer if not env_test else None)
+                            observation_compare_fn=net.embedding_similarity)
+    if use_EC_online_train:
+        r_trainer = r_network_training.RNetworkTrainer(
+            net,
+            observation_history_size=10000,
+            training_interval=500,
+            num_train_epochs=1,
+            checkpoint_dir=file_name,
+            device=set_device)
 
 
 def _get_env():
@@ -190,20 +197,12 @@ def _get_env():
 
     def wrapped_env():
         if not env_test:
-            env = create_walker_env()
+            env = create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD)
         else:
-            env = create_walker_env()
+            env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
             from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
-
-            # r_trainer = r_network_training.RNetworkTrainer(
-            #     net,
-            #     observation_history_size=10000,
-            #     training_interval=500,
-            #     num_train_epochs=1,
-            #     checkpoint_dir=file_name,
-            #     device=set_device)
 
             env = CuriosityEnvWrapper(
                 env,
@@ -222,14 +221,15 @@ def _get_env():
 
 
 def train(load_check_point=None):
-    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, step_per_collect
+    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, step_per_collect, episode_per_test
     if debug:
-        parallel_env_num, test_env_num, buffer_size = 1, 1, 10000
+        parallel_env_num, test_env_num, buffer_size = 2, 1, 10000
         step_per_collect = 10
+        episode_per_test = 0
         batch_size = 16
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = DummyVectorEnv([_get_env for _ in range(parallel_env_num)])
+        train_envs = SubprocVectorEnv([_get_env for _ in range(parallel_env_num)])
         env_test = True
         test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
 
@@ -239,8 +239,6 @@ def train(load_check_point=None):
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location=set_device)
             policy.load_state_dict(load_data["agent"])
-            # for i in range(len(optim)):
-            #     optim[i].load_state_dict(load_data["optim"][i])
 
         # ======== Step 3: Collector setup =========
         train_collector = Collector(
@@ -249,12 +247,10 @@ def train(load_check_point=None):
             VectorReplayBuffer(buffer_size, len(train_envs)),
             exploration_noise=True
         )
-        test_collector = Collector(policy, test_envs, exploration_noise=True)
-
-        # train_collector.collect(n_step=batch_size * 10)  # batch size * training_num
+        test_collector = Collector(policy, test_envs, exploration_noise=False)
 
         # ======== Step 4: Callback functions setup =========
-
+        writer = SummaryWriter('log/' + file_name)
         logger = ts.utils.TensorboardLogger(writer)  # TensorBoard is supported!
 
         def save_best_fn(policy):
@@ -321,20 +317,23 @@ def test():
     pprint.pprint(res)
 
 
+def icm_one_experiment():
+    global use_icm
+    # use_icm
+    train()
+    # not use_icm
+    use_icm = False
+    train()
+
+
 debug = False
 
-import argparse
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    icm_one_experiment()
 
-    # parser.add_argument("--test", type=bool, action='store_true', default=False)
-
-    parmas = parser.parse_args()
-
-    train_if = True
-
-    if train_if:
-        train()
-    else:
-        test()
+    # train_if = True
+    #
+    # if train_if:
+    #     train()
+    # else:
+    #     test()

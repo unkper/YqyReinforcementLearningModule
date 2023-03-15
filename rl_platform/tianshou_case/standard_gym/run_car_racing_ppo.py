@@ -25,6 +25,7 @@ from torch.optim import Adam, Optimizer
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
 from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, CarRewardType
+from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
@@ -33,7 +34,7 @@ parallel_env_num = 8
 test_env_num = 4
 episode_per_test = 4
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = int(200000 / parallel_env_num)
+buffer_size = int(600000 / parallel_env_num)
 batch_size = 128
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 150
@@ -72,15 +73,18 @@ scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大
 bonus_reward_additive_term = 0
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
-target_image_shape = [96, 96, 4] # [96, 96, 4个连续灰度图像的堆叠]
+target_image_shape = [96, 96, 4]  # [96, 96, 4个连续灰度图像的堆叠]
 r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
+# EC online train parameters
+use_EC_online_train = False
+
 # 文件配置相关
 task = "CarRacing_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
 
 def get_policy(env, optim=None):
-    #state_shape = env.observation_space.shape
+    # state_shape = env.observation_space.shape
     action_shape = env.action_space.shape or env.action_space.n
 
     h, w, c = target_image_shape
@@ -177,6 +181,14 @@ if use_episodic_memory:
     net.eval()  # 此处是为了batchnorm而加
     memory = EpisodicMemory(observation_shape=[512],
                             observation_compare_fn=net.embedding_similarity)
+    if use_EC_online_train:
+        r_trainer = r_network_training.RNetworkTrainer(
+            net,
+            observation_history_size=10000,
+            training_interval=500,
+            num_train_epochs=1,
+            checkpoint_dir=file_name,
+            device=set_device)
 
 
 def _get_env():
@@ -191,14 +203,6 @@ def _get_env():
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
             from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
-
-            # r_trainer = r_network_training.RNetworkTrainer(
-            #     net,
-            #     observation_history_size=10000,
-            #     training_interval=500,
-            #     num_train_epochs=1,
-            #     checkpoint_dir=file_name,
-            #     device=set_device)
 
             env = CuriosityEnvWrapper(
                 env,
@@ -243,7 +247,7 @@ def train(load_check_point=None):
             VectorReplayBuffer(buffer_size, len(train_envs)),
             exploration_noise=True
         )
-        test_collector = Collector(policy, test_envs, exploration_noise=True)
+        test_collector = Collector(policy, test_envs, exploration_noise=False)
 
         # ======== Step 4: Callback functions setup =========
         writer = SummaryWriter('log/' + file_name)
@@ -278,7 +282,7 @@ def train(load_check_point=None):
         result = onpolicy_trainer(
             policy=policy,
             train_collector=train_collector,
-            test_collector=None,
+            test_collector=test_collector,
             max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
             step_per_collect=step_per_collect,
@@ -313,20 +317,23 @@ def test():
     pprint.pprint(res)
 
 
+def icm_one_experiment():
+    global use_icm
+    # use_icm
+    train()
+    # not use_icm
+    use_icm = False
+    train()
+
+
 debug = False
 
-import argparse
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    icm_one_experiment()
 
-    # parser.add_argument("--test", type=bool, action='store_true', default=False)
-
-    parmas = parser.parse_args()
-
-    train_if = True
-
-    if train_if:
-        train()
-    else:
-        test()
+    # train_if = True
+    #
+    # if train_if:
+    #     train()
+    # else:
+    #     test()

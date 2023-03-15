@@ -77,10 +77,37 @@ target_image_shape = [96, 96, 4]  # [96, 96, 4个连续灰度图像的堆叠]
 r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
 # EC online train parameters
 use_EC_online_train = False
-
+v_r_network = None
+memory = None
+r_trainer = None
 # 文件配置相关
 task = "CarRacing_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
+
+def reset_train():
+    global file_name, v_r_network, memory, r_trainer
+    file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    if use_episodic_memory:
+        v_r_network = RNetwork(target_image_shape, device=set_device)
+        if set_device == 'cuda':
+            v_r_network = v_r_network.cuda()
+        if r_network_checkpoint is not None:
+            v_r_network = torch.load(r_network_checkpoint, "cuda")
+            logging.warning(u"加载完成RNetwork的相关参数!")
+        else:
+            raise RuntimeError(u"必须指定训练好的的R-Network!")
+        v_r_network.eval()  # 此处是为了batchnorm而加
+        memory = EpisodicMemory(observation_shape=[512],
+                                observation_compare_fn=v_r_network.embedding_similarity)
+        if use_EC_online_train:
+            r_trainer = r_network_training.RNetworkTrainer(
+                v_r_network,
+                observation_history_size=10000,
+                training_interval=500,
+                num_train_epochs=1,
+                checkpoint_dir=file_name,
+                device=set_device)
 
 
 def get_policy(env, optim=None):
@@ -169,72 +196,56 @@ def _get_agent(
 
 env_test = False
 
-if use_episodic_memory:
-    net = RNetwork(target_image_shape, device=set_device)
-    if set_device == 'cuda':
-        net = net.cuda()
-    if r_network_checkpoint is not None:
-        net = torch.load(r_network_checkpoint, "cuda")
-        logging.warning(u"加载完成RNetwork的相关参数!")
-    else:
-        raise RuntimeError(u"必须指定训练好的的R-Network!")
-    net.eval()  # 此处是为了batchnorm而加
-    memory = EpisodicMemory(observation_shape=[512],
-                            observation_compare_fn=net.embedding_similarity)
-    if use_EC_online_train:
-        r_trainer = r_network_training.RNetworkTrainer(
-            net,
-            observation_history_size=10000,
-            training_interval=500,
-            num_train_epochs=1,
-            checkpoint_dir=file_name,
-            device=set_device)
+
+def _get_train_env():
+    env = create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD)
+    return _get_env(env)
 
 
-def _get_env():
+def _get_test_env():
+    env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
+    return _get_env(env)
+
+
+def _get_env(env):
     """This function is needed to provide callables for DummyVectorEnv."""
-    global env_test, net, memory
+    global v_r_network, memory
 
-    def wrapped_env():
-        if not env_test:
-            env = create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD)
-        else:
-            env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
-        if use_episodic_memory:
-            logging.warning(u"使用了EC机制!")
-            from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
+    if use_episodic_memory:
+        logging.warning(u"使用了EC机制!")
+        from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
 
-            env = CuriosityEnvWrapper(
-                env,
-                memory,
-                net.embed_observation,
-                target_image_shape,
-                # r_net_trainer=r_trainer,
-                scale_task_reward=scale_task_reward,
-                scale_surrogate_reward=scale_surrogate_reward,
-                exploration_reward_min_step=exploration_reward_min_step,
-                test_mode=env_test
-            )
-        return env
-
-    return wrapped_env()
+        env = CuriosityEnvWrapper(
+            env,
+            memory,
+            v_r_network.embed_observation,
+            target_image_shape,
+            # r_net_trainer=r_trainer,
+            scale_task_reward=scale_task_reward,
+            scale_surrogate_reward=scale_surrogate_reward,
+            exploration_reward_min_step=exploration_reward_min_step,
+            test_mode=env_test
+        )
+    return env
 
 
 def train(load_check_point=None):
-    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, step_per_collect, episode_per_test
+    global parallel_env_num, test_env_num, buffer_size, batch_size, \
+        debug, step_per_collect, episode_per_test, max_epoch, step_per_epoch
     if debug:
         parallel_env_num, test_env_num, buffer_size = 2, 1, 10000
+        max_epoch = 2
+        step_per_epoch = 100
         step_per_collect = 10
-        episode_per_test = 0
+        episode_per_test = 1
         batch_size = 16
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
-        train_envs = SubprocVectorEnv([_get_env for _ in range(parallel_env_num)])
-        env_test = True
-        test_envs = DummyVectorEnv([_get_env for _ in range(test_env_num)])
+        train_envs = SubprocVectorEnv([_get_train_env for _ in range(parallel_env_num)])
+        test_envs = DummyVectorEnv([_get_test_env for _ in range(test_env_num)])
 
         # ======== Step 2: Agent setup =========
-        policy, optim, agents = _get_agent(_get_env())
+        policy, optim, agents = _get_agent(_get_test_env())
 
         if load_check_point is not None:
             load_data = torch.load(load_check_point, map_location=set_device)
@@ -307,8 +318,8 @@ def test():
     global env_test
     env_test = True
     policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\log\Vizdoom_normal_PPO_2023_03_11_23_01_22\checkpoint_100.pth"
-    test_envs = DummyVectorEnv([_get_env for _ in range(1)])
-    env = _get_env()
+    test_envs = DummyVectorEnv([_get_test_env for _ in range(1)])
+    env = _get_test_env()
     policy, optim, agents = _get_agent(env, None,
                                        file_path=policy_path)
     policy.eval()
@@ -326,7 +337,7 @@ def icm_one_experiment():
     train()
 
 
-debug = False
+debug = True
 
 if __name__ == "__main__":
     icm_one_experiment()

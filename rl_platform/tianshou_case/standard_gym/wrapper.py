@@ -17,6 +17,7 @@ class CarRewardType(Enum):
     ZERO_REWARD = 1
     ADV_REWARD = 2
     RAW_REWARD = 3
+    DEAD_REWARD = 4
 
 
 class WalkerEnvWrapper(gym.Wrapper):

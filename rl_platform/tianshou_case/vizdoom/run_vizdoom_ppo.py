@@ -166,23 +166,23 @@ def _get_agent(
 
 env_test = False
 
-net = RNetwork(target_image_shape, device=set_device)
+v_r_network = RNetwork(target_image_shape, device=set_device)
 if set_device == 'cuda':
-    net = net.cuda()
+    v_r_network = v_r_network.cuda()
 if r_network_checkpoint is not None:
-    net = torch.load(r_network_checkpoint, "cuda")
+    v_r_network = torch.load(r_network_checkpoint, "cuda")
     logging.warning(u"加载完成RNetwork的相关参数!")
 else:
     raise RuntimeError(u"必须指定训练好的的R-Network!")
-net.eval()  # 此处是为了batchnorm而加
+v_r_network.eval()  # 此处是为了batchnorm而加
 memory = EpisodicMemory(observation_shape=[512],
-                        observation_compare_fn=net.embedding_similarity,
+                        observation_compare_fn=v_r_network.embedding_similarity,
                         writer=writer if not env_test else None)
 
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
-    global env_test, net, memory
+    global env_test, v_r_network, memory
 
     def wrapped_vizdoom_env():
         if not env_test:

@@ -170,20 +170,20 @@ def _get_agent(
 env_test = False
 
 if use_episodic_memory:
-    net = RNetwork(target_image_shape, device=set_device)
+    v_r_network = RNetwork(target_image_shape, device=set_device)
     if set_device == 'cuda':
-        net = net.cuda()
+        v_r_network = v_r_network.cuda()
     if r_network_checkpoint is not None:
-        net = torch.load(r_network_checkpoint, "cuda")
+        v_r_network = torch.load(r_network_checkpoint, "cuda")
         logging.warning(u"加载完成RNetwork的相关参数!")
     else:
         raise RuntimeError(u"必须指定训练好的的R-Network!")
-    net.eval()  # 此处是为了batchnorm而加
+    v_r_network.eval()  # 此处是为了batchnorm而加
     memory = EpisodicMemory(observation_shape=[512],
-                            observation_compare_fn=net.embedding_similarity)
+                            observation_compare_fn=v_r_network.embedding_similarity)
     if use_EC_online_train:
         r_trainer = r_network_training.RNetworkTrainer(
-            net,
+            v_r_network,
             observation_history_size=10000,
             training_interval=500,
             num_train_epochs=1,
@@ -193,7 +193,7 @@ if use_episodic_memory:
 
 def _get_env():
     """This function is needed to provide callables for DummyVectorEnv."""
-    global env_test, net, memory
+    global env_test, v_r_network, memory
 
     def wrapped_env():
         if not env_test:

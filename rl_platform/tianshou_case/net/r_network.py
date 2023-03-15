@@ -34,16 +34,18 @@ class TopNetwork(nn.Module):
 
 
 class Siamese_Resnet(nn.Module):
-    def __init__(self, device):
+    def __init__(self, channel, device):
         super().__init__()
         self.device = device
-        self.branch = models.resnet18()
+        self.branch = models.resnet18(pretrained=True)
+        if channel != 3:
+            self.branch.conv1 = torch.nn.Conv2d(channel, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.branch.fc = nn.Linear(512, EMBEDDING_DIM)
         self.similarity_network: TopNetwork = TopNetwork(device)
 
     def forward(self, x1, x2):
-        x1 = torch.as_tensor(x1, device=self.device, dtype=torch.float32).permute(0, 3, 1, 2)
-        x2 = torch.as_tensor(x2, device=self.device, dtype=torch.float32).permute(0, 3, 1, 2)
+        x1 = torch.as_tensor(x1, device=self.device, dtype=torch.float32)
+        x2 = torch.as_tensor(x2, device=self.device, dtype=torch.float32)
         y1 = self.branch(x1)
         y2 = self.branch(x2)
         return self.similarity_network(y1, y2)
@@ -55,17 +57,13 @@ from rl_platform.tianshou_case.third_party.pytorch_fitmodule.fit_module import F
 class RNetwork(FitModule):
     def __init__(self, input_shape, device):
         super().__init__()
+        h, w, c = input_shape
         self.device = device
-        self.net: Siamese_Resnet = Siamese_Resnet(device)
+        self.net: Siamese_Resnet = Siamese_Resnet(c, device)
         (self._r_network, self._embedding_network,
          self._similarity_network) = (self.net, self.net.branch, self.net.similarity_network)
 
     def embed_observation(self, x):
-        if isinstance(x, np.ndarray) and len(x.shape) == 3:  # 添加batch维度
-            x = torch.as_tensor(x, device=self.device, dtype=torch.float32).permute(2, 0, 1)
-            x = torch.unsqueeze(x, 0)
-        else:
-            x = torch.as_tensor(x, device=self.device, dtype=torch.float32).permute(0, 3, 1, 2)
         return self._embedding_network.forward(x)
 
     def embedding_similarity(self, x, y):

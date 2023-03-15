@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import pprint
+import time
 from typing import Optional, Tuple, Union
 
 import gym
@@ -337,9 +338,10 @@ def icm_one_experiment():
     train()
 
 
-debug = True
+debug = False
 
 if __name__ == "__main__":
+    time.sleep(7800)
     icm_one_experiment()
 
     # train_if = True

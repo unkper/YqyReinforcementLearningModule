@@ -3,9 +3,10 @@ from typing import Union, Optional, Dict, Any
 import numpy as np
 import torch
 from torch import nn
+from torchvision.models import resnet18
 
 
-class CarRacingPolicyHead(nn.Module):
+class MarioFeatureNet(nn.Module):
     def __init__(self,
                  channel: int,
                  height: int,
@@ -14,22 +15,24 @@ class CarRacingPolicyHead(nn.Module):
                  ):
         super().__init__()
         self.device = device
-        self.net = nn.Sequential(
-            nn.Conv2d(channel, 8, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(8, 16, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, 32, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 256, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.Flatten()
-        )
-        self.apply(self._weights_init)
+        self.net = resnet18(pretrained=False, num_classes=256)
+        if channel != 3:
+            self.net.conv1 = torch.nn.Conv2d(channel, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # self.net = nn.Sequential(
+        #     nn.Conv2d(channel, 8, kernel_size=3),
+        #     nn.ReLU(inplace=True),
+        #     nn.Conv2d(8, 16, kernel_size=3),
+        #     nn.ReLU(inplace=True),
+        #     nn.Conv2d(16, 32, kernel_size=3),
+        #     nn.ReLU(inplace=True),
+        #     nn.Conv2d(32, 64, kernel_size=3),
+        #     nn.ReLU(inplace=True),
+        #     nn.Conv2d(64, 128, kernel_size=3),
+        #     nn.ReLU(inplace=True),
+        #     nn.Conv2d(128, 256, kernel_size=3),
+        #     nn.ReLU(inplace=True),
+        #     nn.Flatten()
+        # )
         with torch.no_grad():
             self.mid_dim = np.prod(self.net(torch.zeros(1, channel, height, width)).shape[1:])
         self.output_dim = self.mid_dim
@@ -44,14 +47,11 @@ class CarRacingPolicyHead(nn.Module):
         x1 = self.net(obs)
         return x1, state
 
-    @staticmethod
-    def _weights_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.xavier_uniform_(m.weight, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias, 0.1)
+    def eval(self):
+        self.net.eval()
 
 
-class CarRacingICMHead(CarRacingPolicyHead):
+class MarioICMHead(MarioFeatureNet):
     def forward(
             self,
             obs: Union[np.ndarray, torch.Tensor],

@@ -7,8 +7,6 @@ from matplotlib.animation import FuncAnimation
 from tianshou.env import PettingZooEnv
 from tianshou.policy import BasePolicy, MultiAgentPolicyManager
 
-from ped_env.envs import PedsMoveEnv
-
 
 def _get_agents(
         env,

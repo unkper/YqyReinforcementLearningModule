@@ -24,9 +24,9 @@ from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 from torch.optim import Adam, Optimizer
 
 from rl_platform.tianshou_case.mario.wrapper import create_mario_env
+from rl_platform.tianshou_case.net.mario_net import MarioFeatureNet, MarioICMHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
-from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, RewardType
+from rl_platform.tianshou_case.standard_gym.wrapper import RewardType
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
@@ -36,7 +36,7 @@ parallel_env_num = 5
 test_env_num = 4
 episode_per_test = 4
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = 80000
+buffer_size = 100000
 batch_size = 64
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 200
@@ -118,7 +118,7 @@ def get_policy(env, optim=None):
 
     h, w, c = target_image_shape
     # net = DQN(**cfg.policy.model)
-    net = CarRacingPolicyHead(c, h, w, device=set_device)
+    net = MarioFeatureNet(c, h, w, device=set_device)
 
     if set_device == "cuda":
         net.cuda()
@@ -155,7 +155,7 @@ def get_policy(env, optim=None):
 
     if use_icm:
         logging.warning(u"使用了ICM机制!")
-        feature_net = CarRacingICMHead(c, h, w, device=set_device)
+        feature_net = MarioICMHead(c, h, w, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 
@@ -200,7 +200,7 @@ env_test = False
 
 
 def _get_train_env():
-    env = create_mario_env()
+    env = create_mario_env(reward_type=RewardType.ZERO_REWARD)
     return _get_env(env)
 
 

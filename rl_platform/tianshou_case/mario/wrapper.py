@@ -41,7 +41,7 @@ class MarioWrapper(gym.Wrapper):
         img_rgb = self.env.reset()
         img_gray = self.rgb2gray(img_rgb)
         self.stack = [img_gray] * IMAGE_STACK  # four frames for decision
-        return resize_images(np.array(self.stack))
+        return np.transpose(resize_images(np.array(self.stack)), (2, 0, 1))
 
     def task_reward(self, die, img_rgb, reward):
         return reward
@@ -72,7 +72,8 @@ class MarioWrapper(gym.Wrapper):
         self.stack.pop(0)
         self.stack.append(img_gray)
         assert len(self.stack) == IMAGE_STACK
-        return resize_images(np.array(self.stack)), total_reward, done, truncated, {"task_reward": total_task_r}
+        obs = np.transpose(resize_images(np.array(self.stack)), (2, 0, 1))
+        return obs, total_reward, done, truncated, {"task_reward": total_task_r}
 
     @staticmethod
     def rgb2gray(rgb, norm=True):

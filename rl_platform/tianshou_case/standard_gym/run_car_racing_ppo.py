@@ -233,6 +233,7 @@ def _get_env(env):
 def train(load_check_point=None):
     global parallel_env_num, test_env_num, buffer_size, batch_size, \
         debug, step_per_collect, episode_per_test, max_epoch, step_per_epoch
+    reset_train()
     if debug:
         parallel_env_num, test_env_num, buffer_size = 2, 1, 10000
         max_epoch = 2

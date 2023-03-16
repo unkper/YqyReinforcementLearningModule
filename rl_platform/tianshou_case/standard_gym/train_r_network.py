@@ -13,7 +13,7 @@ from tianshou.data.collector import Collector
 
 from rl_platform.tianshou_case.third_party.r_network_training import train_r_network_with_collector
 from rl_platform.tianshou_case.utils.dummy_policy import DummyPolicy
-from wrapper import create_walker_env, create_car_racing_env, CarRewardType
+from wrapper import create_walker_env, create_car_racing_env, RewardType
 
 env_name = "CarRacing_v3"
 set_device = "cuda"
@@ -31,7 +31,7 @@ train_env_num = 10
 
 
 def make_env():
-    env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
+    env = create_car_racing_env(zero_reward=RewardType.RAW_REWARD)
     # env = create_walker_env()
     return env
 

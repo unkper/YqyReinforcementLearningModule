@@ -23,6 +23,7 @@ import sys
 from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 from torch.optim import Adam, Optimizer
 
+from rl_platform.tianshou_case.mario.wrapper import create_mario_env
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
 from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, RewardType
@@ -31,14 +32,14 @@ from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
-parallel_env_num = 8
+parallel_env_num = 5
 test_env_num = 4
 episode_per_test = 4
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = 200000
-batch_size = 128
+buffer_size = 80000
+batch_size = 64
 eps_train, eps_test = 0.2, 0.05
-max_epoch = 60
+max_epoch = 200
 step_per_epoch = 10000
 step_per_collect = 1000
 repeat_per_collect = 4
@@ -74,7 +75,7 @@ scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大
 bonus_reward_additive_term = 0
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
-target_image_shape = [96, 96, 4]  # [96, 96, 4个连续灰度图像的堆叠]
+target_image_shape = [80, 86, 4]  # [96, 96, 4个连续灰度图像的堆叠]
 r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
 # EC online train parameters
 use_EC_online_train = False
@@ -199,12 +200,12 @@ env_test = False
 
 
 def _get_train_env():
-    env = create_car_racing_env(zero_reward=RewardType.ZERO_REWARD)
+    env = create_mario_env()
     return _get_env(env)
 
 
 def _get_test_env():
-    env = create_car_racing_env(zero_reward=RewardType.RAW_REWARD)
+    env = create_mario_env()
     return _get_env(env)
 
 
@@ -240,10 +241,8 @@ def train(load_check_point=None):
         step_per_collect = 10
         episode_per_test = 1
         batch_size = 16
-
     ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_epoch, parallel_env_num,
-              step_per_collect, step_per_epoch, test_env_num)
-
+                  step_per_collect, step_per_epoch, test_env_num)
 
 def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_epoch, parallel_env_num,
               step_per_collect, step_per_epoch, test_env_num):
@@ -315,7 +314,6 @@ def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_e
     )
     pprint.pprint(result)
 
-
 def test():
     global env_test
     env_test = True
@@ -339,10 +337,10 @@ def icm_one_experiment():
     train()
 
 
-debug = False
+debug = True
 
 if __name__ == "__main__":
-    time.sleep(7800)
+    #time.sleep(7800)
     icm_one_experiment()
 
     # train_if = True

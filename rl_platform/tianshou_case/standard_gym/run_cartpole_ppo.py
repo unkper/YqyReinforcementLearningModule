@@ -24,7 +24,7 @@ from torch.optim import Adam, Optimizer
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
-from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, CarRewardType
+from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, RewardType
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
@@ -197,9 +197,9 @@ def _get_env():
 
     def wrapped_env():
         if not env_test:
-            env = create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD)
+            env = create_car_racing_env(zero_reward=RewardType.ZERO_REWARD)
         else:
-            env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
+            env = create_car_racing_env(zero_reward=RewardType.RAW_REWARD)
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
             from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper

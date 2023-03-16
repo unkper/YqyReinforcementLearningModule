@@ -24,7 +24,7 @@ from torch.optim import Adam, Optimizer
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
-from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, CarRewardType
+from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, RewardType
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 
@@ -198,12 +198,12 @@ env_test = False
 
 
 def _get_train_env():
-    env = create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD)
+    env = create_car_racing_env(zero_reward=RewardType.ZERO_REWARD)
     return _get_env(env)
 
 
 def _get_test_env():
-    env = create_car_racing_env(zero_reward=CarRewardType.RAW_REWARD)
+    env = create_car_racing_env(zero_reward=RewardType.RAW_REWARD)
     return _get_env(env)
 
 

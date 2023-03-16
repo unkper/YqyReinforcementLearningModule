@@ -13,7 +13,7 @@ CAR_IMAGE_STACK = 4
 CAR_ACTION_REAPET = 8
 
 
-class CarRewardType(Enum):
+class RewardType(Enum):
     ZERO_REWARD = 1
     ADV_REWARD = 2
     RAW_REWARD = 3
@@ -40,9 +40,9 @@ class WalkerEnvWrapper(gym.Wrapper):
 
 
 class CarRacingWrapper(gym.Wrapper):
-    def __init__(self, env, discrete_reward: CarRewardType = CarRewardType.ZERO_REWARD):
+    def __init__(self, env, discrete_reward: RewardType = RewardType.ZERO_REWARD):
         super().__init__(env)
-        self._d_reward: CarRewardType = discrete_reward
+        self._d_reward: RewardType = discrete_reward
 
     def reset(self):
         self.counter = 0
@@ -70,11 +70,11 @@ class CarRacingWrapper(gym.Wrapper):
         for i in range(CAR_ACTION_REAPET):
             img_rgb, reward, die, truncated, _ = self.env.step(action)
             # reward model
-            if self._d_reward == CarRewardType.ZERO_REWARD:
+            if self._d_reward == RewardType.ZERO_REWARD:
                 # give zero reward for icm and ec
                 reward = 0
                 task_reward = self.task_reward(die, img_rgb, reward)
-            elif self._d_reward == CarRewardType.ADV_REWARD:
+            elif self._d_reward == RewardType.ADV_REWARD:
                 reward = self.task_reward(die, img_rgb, reward)
                 task_reward = reward
             else:
@@ -124,7 +124,7 @@ def create_walker_env(hardcore=False, max_step=2000, num_stack=4):
     return env
 
 
-def create_car_racing_env(zero_reward=CarRewardType.ZERO_REWARD, discrete=True):
+def create_car_racing_env(zero_reward=RewardType.ZERO_REWARD, discrete=True):
     env = CarRacingWrapper(gym.make("CarRacing-v2", render_mode='rgb_array', continuous=not discrete)
                            , discrete_reward=zero_reward)
     return env

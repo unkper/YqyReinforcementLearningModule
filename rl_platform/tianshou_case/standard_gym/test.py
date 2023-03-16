@@ -31,23 +31,3 @@ while not done:
     obs_arr.append(obs)
 print(i)
 
-fig, ax = plt.subplots()
-
-now_obs_idx = 0
-
-def update(frame):
-    global now_obs_idx, obs_arr
-    ax.clear()
-
-    ax.imshow(obs_arr[now_obs_idx][0])
-    # ax.imshow(np.transpose(obs_arr[now_obs_idx], (1, 2, 0)))
-    now_obs_idx += 1
-    now_obs_idx %= len(obs_arr)
-    # 隐藏坐标轴
-    ax.axis('off')
-
-ani = FuncAnimation(fig, update)
-ani.save('./animation.mp4', writer='ffmpeg')
-
-# Close the environment window
-env.close()

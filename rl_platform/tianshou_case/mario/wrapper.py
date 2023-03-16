@@ -12,7 +12,7 @@ from numba import njit
 from rl_platform.tianshou_case.standard_gym.wrapper import RewardType
 from rl_platform.tianshou_case.utils.common import save_video
 
-target_image_shape = [4, 80, 86]
+target_image_shape = [4, 60, 65]
 IMAGE_STACK = 4
 ACTION_REPEAT = 8
 action_type = [["right"], ["right", "A"], ["right", "B"]]

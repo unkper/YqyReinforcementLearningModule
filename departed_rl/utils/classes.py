@@ -450,8 +450,8 @@ class ModelBasedMAAgentMixin():
             inputs = torch.cat([s0_critic_in, a0], dim=-1).detach().cpu().numpy()
             labels = torch.cat([torch.reshape(r1, (r1.shape[0], -1)), delta_state], dim=-1).detach().cpu().numpy()
             # 输入x = (state,action),y = (r,delta_state)
-            eval_loss, var_loss, mse_loss = self.predict_env.model.train(inputs, labels, batch_size=256,
-                                                                         holdout_ratio=0.2)
+            eval_loss, var_loss, mse_loss = self.predict_env.model.train_r_network_with_collector(inputs, labels, batch_size=256,
+                                                                                                  holdout_ratio=0.2)
 
             mean_losses[0] += eval_loss.mean().item()
             mean_losses[1] += var_loss

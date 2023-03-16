@@ -24,12 +24,18 @@ import logging
 import os
 import random
 
+import torch
 import torch as th
 from tensorboardX import SummaryWriter
+from tianshou.data import VectorReplayBuffer, Collector
+from tianshou.env import SubprocVectorEnv
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.third_party.constants import Const
 import numpy as np
+
+from rl_platform.tianshou_case.utils.dummy_policy import DummyPolicy
+
 
 def generate_positive_example(buffer_position,
                               next_buffer_position):
@@ -43,6 +49,7 @@ def generate_positive_example(buffer_position,
     if random.random() < 0.5:
         first, second = second, first
     return first, second
+
 
 def generate_negative_example(buffer_position,
                               len_episode_buffer,
@@ -63,6 +70,7 @@ def generate_negative_example(buffer_position,
     if index >= min_index:
         index = max_index + (index - min_index)
     return buffer_position, index
+
 
 def compute_next_buffer_position(buffer_position,
                                  positive_example_candidate,
@@ -140,6 +148,7 @@ def create_training_data_from_episode_buffer_v4(episode_buffer,
         x2.append(episode_buffer[j])
         labels.append(0)
     return x1, x2, labels
+
 
 def create_training_data_from_episode_buffer_v123(episode_buffer,
                                                   max_action_distance,
@@ -331,9 +340,9 @@ class RNetworkTrainer(object):
         # in ppo2.py, check whether it includes the R-network part.
         # Otherwise, we would train but never saves the model.
         logs, loss = self._r_model.fit([x1_train, x2_train], labels_train,
-                                      batch_size=self._batch_size,
-                                      epochs=self._num_train_epochs,
-                                      validation_data=validation_data)
+                                       batch_size=self._batch_size,
+                                       epochs=self._num_train_epochs,
+                                       validation_data=validation_data)
         self._writer.add_scalar("r_training/loss", loss, self._current_epoch)
         # Note: the same could possibly be achieved using parameters "callback",
         # "initial_epoch", "epochs" in fit_generator. However, this is not really
@@ -346,3 +355,42 @@ class RNetworkTrainer(object):
             #     self._checkpointer.on_epoch_end(self._current_epoch)
         if self._save_dir is not None:
             th.save(self._r_model, os.path.join(self._save_dir, "r_network_weight_{}.pt".format(self._current_epoch)))
+
+
+from easydict import EasyDict
+
+
+def train_r_network_with_collector(make_env, file_name, params: EasyDict, load_file=None):
+    writer = SummaryWriter(file_name)
+
+    policy = DummyPolicy(make_env().action_space)
+    train_envs = SubprocVectorEnv([make_env for _ in range(params.train_env_num)])
+    buffer = VectorReplayBuffer(1000, len(train_envs))
+    collector = Collector(policy, train_envs, buffer=buffer)
+
+    net = RNetwork(params.target_image_shape, device=params.set_device)
+    if load_file is not None:
+        net = torch.load(load_file, map_location="cuda")
+    if params.set_device == 'cuda':
+        net = net.cuda()
+    r_trainer = RNetworkTrainer(
+        net,
+        observation_history_size=params.observation_history_size,
+        training_interval=params.training_interval,
+        num_train_epochs=params.num_train_epochs,
+        checkpoint_dir=file_name,
+        device=params.set_device,
+        batch_size=params.batch_size,
+        writer=writer)
+    from tqdm import tqdm
+
+    pbar = tqdm(total=params.total_feed_step, desc="r-network training:")
+    i = 0
+
+    while i < params.total_feed_step:
+        collector.collect(n_step=params.step_interval)
+        batch, _ = buffer.sample(params.step_interval)
+        for j in range(params.step_interval):
+            r_trainer.on_new_observation(batch.obs[j], batch.rew[j], batch.done[j], batch.info[j])
+        pbar.update(params.step_interval)
+        i += params.step_interval

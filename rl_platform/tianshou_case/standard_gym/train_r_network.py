@@ -11,16 +11,14 @@ from tianshou.policy import RandomPolicy
 from vizdoom import gym_wrapper  # noqa
 from tianshou.data.collector import Collector
 
-from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.third_party import r_network_training
-from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import resize_observation
+from rl_platform.tianshou_case.third_party.r_network_training import train_r_network_with_collector
 from rl_platform.tianshou_case.utils.dummy_policy import DummyPolicy
 from wrapper import create_walker_env, create_car_racing_env, CarRewardType
 
 env_name = "CarRacing_v3"
 set_device = "cuda"
 task = "{}".format(env_name)
-file_name = os.path.join("r_network", task + "_PPO_" + datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+file_name = os.path.abspath(os.path.join("r_network", task + "_PPO_" + datetime.now().strftime("%Y_%m_%d_%H_%M_%S")))
 total_feed_step = 200000
 observation_history_size = 20000
 training_interval = 2000
@@ -38,46 +36,7 @@ def make_env():
     return env
 
 
-debug = False
-
-
-def train(file=None):
-    global set_device, debug, training_interval
-    writer = SummaryWriter(file_name)
-    if debug:
-        training_interval = 500
-
-    policy = DummyPolicy(make_env().action_space)
-    train_envs = SubprocVectorEnv([make_env for _ in range(train_env_num)])
-    buffer = VectorReplayBuffer(1000, len(train_envs))
-    collector = Collector(policy, train_envs, buffer=buffer)
-
-    net = RNetwork(target_image_shape, device=set_device)
-    if file is not None:
-        net = torch.load(file, map_location="cuda")
-    if set_device == 'cuda':
-        net = net.cuda()
-    r_trainer = r_network_training.RNetworkTrainer(
-        net,
-        observation_history_size=observation_history_size,
-        training_interval=training_interval,
-        num_train_epochs=num_train_epochs,
-        checkpoint_dir=file_name,
-        device=set_device,
-        batch_size=batch_size,
-        writer=writer)
-    from tqdm import tqdm
-
-    pbar = tqdm(total=total_feed_step, desc="r-network training:")
-    i = 0
-
-    while i < total_feed_step:
-        collector.collect(n_step=step_interval)
-        batch, _ = buffer.sample(step_interval)
-        for j in range(step_interval):
-            r_trainer.on_new_observation(batch.obs[j], batch.rew[j], batch.done[j], batch.info[j])
-        pbar.update(step_interval)
-        i += step_interval
+debug = True
 
 
 def test_collector():
@@ -88,8 +47,11 @@ def test_collector():
     collector.collect(n_step=2)
     pprint.pprint(buffer.sample(2))
 
+from easydict import EasyDict
 
 if __name__ == '__main__':
+    dic = EasyDict(globals())
+    train_r_network_with_collector(make_env, file_name, dic)
     # path = r"/rl_platform/tianshou_case/vizdoom/checkpoints/VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
     # train()
-    train(r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\standard_gym\r_network\CarRacing_v3_PPO_2023_03_16_00_07_57\r_network_weight_150.pt")
+    #train(r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\standard_gym\r_network\CarRacing_v3_PPO_2023_03_16_00_07_57\r_network_weight_150.pt")

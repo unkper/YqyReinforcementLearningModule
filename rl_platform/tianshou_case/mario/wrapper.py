@@ -86,7 +86,7 @@ class MarioWrapper(gym.Wrapper):
 
 
 def create_mario_env(reward_type: RewardType = RewardType.RAW_REWARD, level="1-2"):
-    level = "SuperMarioBros-{}-v0".format(level)
+    level = "SuperMarioBros-{}-v3".format(level)
     return MarioWrapper(JoypadSpace(gym_super_mario_bros.make(level), action_type), discrete_reward=reward_type)
 
 

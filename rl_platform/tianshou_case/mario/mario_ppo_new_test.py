@@ -36,8 +36,8 @@ parallel_env_num = 5
 test_env_num = 4
 episode_per_test = 4
 lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = 100000
-batch_size = 64
+buffer_size = 80000
+batch_size = 32
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 200
 step_per_epoch = 10000
@@ -60,7 +60,6 @@ hidden_size = 100
 
 actor_lr = lr
 set_device = "cuda"
-env_name = "normal"
 # icm parameters
 use_icm = True
 icm_hidden_size = 256
@@ -83,7 +82,8 @@ v_r_network = None
 memory = None
 r_trainer = None
 # 文件配置相关
-task = "CarRacing_{}".format(env_name)
+env_name = "normal"
+task = "Mario_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
 
@@ -337,7 +337,7 @@ def icm_one_experiment():
     train()
 
 
-debug = True
+debug = False
 
 if __name__ == "__main__":
     #time.sleep(7800)

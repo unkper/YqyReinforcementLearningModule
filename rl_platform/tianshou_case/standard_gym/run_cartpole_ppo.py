@@ -39,7 +39,7 @@ batch_size = 128
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 150
 step_per_epoch = 10000
-step_per_collect = 1000
+update_policy_interval = 1000
 repeat_per_collect = 4
 rew_norm = True
 vf_coef = 0.25
@@ -221,7 +221,7 @@ def _get_env():
 
 
 def train(load_check_point=None):
-    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, step_per_collect, episode_per_test
+    global env_test, parallel_env_num, test_env_num, buffer_size, batch_size, debug, update_policy_interval, episode_per_test
     if debug:
         parallel_env_num, test_env_num, buffer_size = 2, 1, 10000
         step_per_collect = 10

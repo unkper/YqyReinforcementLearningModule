@@ -39,7 +39,7 @@ eps_train, eps_test = 0.2, 0.05
 max_epoch = 500
 max_step = 10000  # 环境的最大步数
 step_per_epoch = max_step
-step_per_collect = 1000
+update_policy_interval = 1000
 rew_norm = True
 vf_coef = 0.25
 ent_coef = 0.01
@@ -267,7 +267,7 @@ def train(load_check_point=None, debug=False):
             test_collector=test_collector,
             max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
-            step_per_collect=step_per_collect,
+            step_per_collect=update_policy_interval,
             repeat_per_collect=4,
             episode_per_test=episode_per_test,
             batch_size=batch_size,

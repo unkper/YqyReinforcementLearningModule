@@ -12,10 +12,10 @@ from numba import njit
 from rl_platform.tianshou_case.standard_gym.wrapper import RewardType
 from rl_platform.tianshou_case.utils.common import save_video
 
-target_image_shape = [4, 60, 65]
+target_image_shape = [4, 42, 42]
 IMAGE_STACK = 4
-ACTION_REPEAT = 8
-action_type = [["right"], ["right", "A"], ["right", "B"]]
+ACTION_REPEAT = 4
+action_type = [["right"], ["right", "A"]]
 
 
 def resize_images(images):
@@ -24,7 +24,7 @@ def resize_images(images):
     # 计算新的图像尺寸
     new_height, new_width = int(target_image_shape[1]), int(target_image_shape[2])
     # 缩放图像
-    resized_img_hwc = cv2.resize(input_img_hwc, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    resized_img_hwc = cv2.resize(input_img_hwc, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
 
     return resized_img_hwc
 
@@ -68,10 +68,10 @@ class MarioWrapper(gym.Wrapper):
             total_task_r += task_reward
             if done:
                 break
-        img_gray = self.rgb2gray(img_rgb)
-        self.stack.pop(0)
-        self.stack.append(img_gray)
-        assert len(self.stack) == IMAGE_STACK
+            img_gray = self.rgb2gray(img_rgb)
+            self.stack.pop(0)
+            self.stack.append(img_gray)
+            assert len(self.stack) == IMAGE_STACK
         obs = np.transpose(resize_images(np.array(self.stack)), (2, 0, 1))
         return obs, total_reward, done, truncated, {"task_reward": total_task_r}
 

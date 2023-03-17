@@ -35,21 +35,20 @@ sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 parallel_env_num = 5
 test_env_num = 4
 episode_per_test = 4
-lr, gamma, n_steps = 2.5e-4, 0.99, 3
+lr, gamma, n_steps = 1e-4, 0.99, 3
 buffer_size = 100000
 batch_size = 64
 eps_train, eps_test = 0.2, 0.05
 max_epoch = 200
 step_per_epoch = 10000
-step_per_collect = 1000
-repeat_per_collect = 4
-rew_norm = True
+update_policy_interval = 1000
+update_repeat_count = 4
+rew_norm = False
 vf_coef = 0.25
 ent_coef = 0.01
-gae_lambda = 0.95
-lr_decay = True
+gae_lambda = 0  # 不再使用gae算法计算TD误差
 lr_scheduler = None
-max_grad_norm = 0.5
+max_grad_norm = 40
 eps_clip = 0.1
 dual_clip = None
 value_clip = 1
@@ -58,12 +57,11 @@ recompute_adv = 0
 update_per_step = 0.1
 hidden_size = 100
 
-actor_lr = lr
 set_device = "cuda"
 # icm parameters
 use_icm = True
 icm_hidden_size = 256
-icm_lr_scale = 1e-3
+icm_lr_scale = 10
 icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
 # EC parameters
@@ -74,7 +72,7 @@ scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大
 bonus_reward_additive_term = 0
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
-target_image_shape = [60, 65, 4]  # [96, 96, 4个连续灰度图像的堆叠]
+target_image_shape = [42, 42, 4]  # [96, 96, 4个连续灰度图像的堆叠]
 r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
 # EC online train parameters
 use_EC_online_train = False
@@ -117,7 +115,7 @@ def get_policy(env, optim=None):
     action_shape = env.action_space.shape or env.action_space.n
 
     h, w, c = target_image_shape
-    # net = DQN(**cfg.policy.model)
+
     net = MarioFeatureNet(c, h, w, device=set_device)
 
     if set_device == "cuda":
@@ -148,7 +146,7 @@ def get_policy(env, optim=None):
         action_space=env.action_space,
         eps_clip=eps_clip,
         value_clip=value_clip,
-        dual_clip=dual_clip,
+        dual_clip=None,
         advantage_normalization=norm_adv,
         recompute_advantage=recompute_adv,
     ).to(set_device)
@@ -168,7 +166,7 @@ def get_policy(env, optim=None):
             hidden_sizes=[icm_hidden_size, 100],
             device=set_device,
         )
-        icm_optim = torch.optim.Adam(icm_net.parameters(), lr=actor_lr)
+        icm_optim = torch.optim.Adam(icm_net.parameters(), lr=lr)
         policy = ICMPolicy(
             policy, icm_net, icm_optim, icm_lr_scale, icm_reward_scale,
             icm_forward_loss_weight
@@ -233,16 +231,17 @@ def _get_env(env):
 
 def train(load_check_point=None):
     global parallel_env_num, test_env_num, buffer_size, batch_size, \
-        debug, step_per_collect, episode_per_test, max_epoch, step_per_epoch
+        debug, update_policy_interval, episode_per_test, max_epoch, step_per_epoch
     if debug:
         parallel_env_num, test_env_num, buffer_size = 2, 1, 10000
         max_epoch = 2
         step_per_epoch = 100
-        step_per_collect = 10
+        update_policy_interval = 10
         episode_per_test = 1
         batch_size = 16
     ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_epoch, parallel_env_num,
-                  step_per_collect, step_per_epoch, test_env_num)
+              update_policy_interval, step_per_epoch, test_env_num)
+
 
 def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_epoch, parallel_env_num,
               step_per_collect, step_per_epoch, test_env_num):
@@ -282,11 +281,11 @@ def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_e
 
     # def stop_fn(mean_rewards):
     #     return mean_rewards >= 2500
-    def train_fn(epoch, env_step):
-        policy.set_eps(eps_train)
-
-    def test_fn(epoch, env_step):
-        policy.set_eps(eps_test)
+    # def train_fn(epoch, env_step):
+    #     policy.set_eps(eps_train)
+    #
+    # def test_fn(epoch, env_step):
+    #     policy.set_eps(eps_test)
 
     def reward_metric(rews):
         return rews[:]
@@ -299,12 +298,12 @@ def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_e
         max_epoch=max_epoch,
         step_per_epoch=step_per_epoch,
         step_per_collect=step_per_collect,
-        repeat_per_collect=repeat_per_collect,
+        repeat_per_collect=update_repeat_count,
         episode_per_test=episode_per_test,
         batch_size=batch_size,
         # train_fn=train_fn,
         # test_fn=test_fn,
-        # stop_fn=stop_fn,
+        #stop_fn=stop_fn,
         save_best_fn=save_best_fn,
         save_checkpoint_fn=save_checkpoint_fn,
         update_per_step=update_per_step,
@@ -313,6 +312,7 @@ def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_e
         logger=logger
     )
     pprint.pprint(result)
+
 
 def test():
     global env_test
@@ -337,10 +337,10 @@ def icm_one_experiment():
     train()
 
 
-debug = False
+debug = True
 
 if __name__ == "__main__":
-    #time.sleep(7800)
+    # time.sleep(7800)
     icm_one_experiment()
 
     # train_if = True

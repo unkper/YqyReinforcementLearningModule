@@ -40,7 +40,7 @@ eps_train, eps_test = 0.2, 0.05
 max_epoch = 500
 max_step = 10000  # 环境的最大步数
 step_per_epoch = max_step
-step_per_collect = 1000
+update_policy_interval = 1000
 rew_norm = True
 vf_coef = 0.25
 ent_coef = 0.01
@@ -58,7 +58,7 @@ update_per_step = 0.1
 seed = 1
 train_env_num, test_env_num = 10, 10
 
-actor_lr = lr
+icm_lr = 1e-3
 set_device = "cuda"
 
 cfg = mario_dqn_config
@@ -80,7 +80,6 @@ def get_policy(env, optim=None):
     state_shape = env.observation_space.shape
     action_shape = env.action_space.shape or env.action_space.n
 
-    #net = DQN(**cfg.policy.model)
     net = MarioPolicyHead(*state_shape, device=set_device)
 
     if set_device == "cuda":
@@ -117,7 +116,7 @@ def get_policy(env, optim=None):
     ).to(set_device)
 
     if icm_lr_scale > 0:
-        feature_net = StandardICMFeatureHead(*state_shape, device=set_device)
+        feature_net = Mario(*state_shape, device=set_device)
         if set_device == "cuda":
             feature_net.cuda()
 
@@ -260,7 +259,7 @@ def train(load_check_point=None):
             test_collector=test_collector,
             max_epoch=max_epoch,
             step_per_epoch=step_per_epoch,
-            step_per_collect=step_per_collect,
+            step_per_collect=update_policy_interval,
             repeat_per_collect = 4,
             episode_per_test=episode_per_test,
             batch_size=batch_size,

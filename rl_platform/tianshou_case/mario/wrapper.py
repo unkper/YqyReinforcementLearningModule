@@ -1,16 +1,14 @@
 import logging
 import os
-import pprint
 
 import cv2
 import gym
 import gym_super_mario_bros
 import numpy as np
 from nes_py.wrappers import JoypadSpace
-from numba import njit
 
 from rl_platform.tianshou_case.standard_gym.wrapper import RewardType
-from rl_platform.tianshou_case.utils.common import save_video
+from rl_platform.tianshou_case.utils.common import save_video, rgb2gray
 
 target_image_shape = [4, 42, 42]
 IMAGE_STACK = 4
@@ -39,7 +37,7 @@ class MarioWrapper(gym.Wrapper):
 
         self.die = False
         img_rgb = self.env.reset()
-        img_gray = self.rgb2gray(img_rgb)
+        img_gray = rgb2gray(img_rgb)
         self.stack = [img_gray] * IMAGE_STACK  # four frames for decision
         return np.transpose(resize_images(np.array(self.stack)), (2, 0, 1))
 
@@ -68,21 +66,12 @@ class MarioWrapper(gym.Wrapper):
             total_task_r += task_reward
             if done:
                 break
-            img_gray = self.rgb2gray(img_rgb)
+            img_gray = rgb2gray(img_rgb)
             self.stack.pop(0)
             self.stack.append(img_gray)
             assert len(self.stack) == IMAGE_STACK
         obs = np.transpose(resize_images(np.array(self.stack)), (2, 0, 1))
         return obs, total_reward, done, truncated, {"task_reward": total_task_r}
-
-    @staticmethod
-    def rgb2gray(rgb, norm=True):
-        # rgb image -> gray [0, 1]
-        gray = np.dot(rgb[..., :], [0.299, 0.587, 0.114])
-        if norm:
-            # normalize
-            gray = gray / 128. - 1.
-        return gray
 
 
 def create_mario_env(reward_type: RewardType = RewardType.RAW_REWARD, level="1-2"):

@@ -1,9 +1,11 @@
 from typing import Optional, Tuple, Callable
 
+import numpy as np
 import pettingzoo as pet
 import torch
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
+from numba import njit
 from tianshou.env import PettingZooEnv
 from tianshou.policy import BasePolicy, MultiAgentPolicyManager
 
@@ -43,3 +45,11 @@ def save_video(abs_file_path, obs_arr):
 
     ani = FuncAnimation(fig, update)
     ani.save(abs_file_path, writer='ffmpeg')
+
+def rgb2gray(rgb, norm=True):
+    # rgb image -> gray [0, 1]
+    gray = np.dot(rgb[..., :], [0.299, 0.587, 0.114])
+    if norm:
+        # normalize
+        gray = gray / 128. - 1.
+    return gray

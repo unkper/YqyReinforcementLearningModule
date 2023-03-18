@@ -25,7 +25,7 @@ observation_history_size = 20000
 num_train_epochs = 30
 batch_size = 128
 # target_image_shape = [120, 160, 3]
-target_image_shape = [96, 96, 4]
+target_image_shape = [42, 42, 4]
 step_interval = 500
 train_env_num = 10
 
@@ -41,19 +41,19 @@ debug = True
 
 def test_collector():
     policy = DummyPolicy(make_env().action_space)
-    train_envs = SubprocVectorEnv([make_env for _ in range(2)])
+    train_envs = SubprocVectorEnv([make_env for _ in range(1)])
     buffer = VectorReplayBuffer(100, len(train_envs))
     collector = Collector(policy, train_envs, buffer=buffer)
-    collector.collect(n_step=2, render=1 / 36)
+    collector.collect(n_episode=6, render=1 / 36)
     pprint.pprint(buffer.sample(2))
 
 
 from easydict import EasyDict
 
 if __name__ == '__main__':
-    test_collector()
-    # dic = EasyDict(globals())
-    # train_r_network_with_collector(make_env, file_name, dic)
+    # test_collector()
+    dic = EasyDict(globals())
+    train_r_network_with_collector(make_env, file_name, dic)
 
     # path = r"/rl_platform/tianshou_case/vizdoom/checkpoints/VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
     # train()

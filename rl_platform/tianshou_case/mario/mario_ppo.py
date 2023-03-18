@@ -39,7 +39,7 @@ lr, gamma, n_steps = 1e-4, 0.99, 3
 buffer_size = 100000
 batch_size = 64
 eps_train, eps_test = 0.2, 0.05
-max_epoch = 200
+max_epoch = 120
 step_per_epoch = 10000
 update_policy_interval = 1000
 update_repeat_count = 4
@@ -59,21 +59,21 @@ hidden_size = 100
 
 set_device = "cuda"
 # icm parameters
-use_icm = True
+use_icm = False
 icm_hidden_size = 256
 icm_lr_scale = 10
 icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
 # EC parameters
-use_episodic_memory = False
+use_episodic_memory = True
 exploration_reward = "episodic_curiosity"  # episodic_curiosity,oracle
 scale_task_reward = 1.0
-scale_surrogate_reward = 5.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
+scale_surrogate_reward = 10.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
 bonus_reward_additive_term = 0
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
 target_image_shape = [42, 42, 4]  # [96, 96, 4个连续灰度图像的堆叠]
-r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\checkpoints\VizdoomMyWayHome-v0_PPO_2023_03_11_01_35_53\r_network_weight_500.pt"
+r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_07_02\r_network_weight_600.pt"
 # EC online train parameters
 use_EC_online_train = False
 v_r_network = None
@@ -83,6 +83,8 @@ r_trainer = None
 env_name = "normal"
 task = "Mario_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+if use_episodic_memory and use_icm:
+    raise RuntimeError()
 
 
 def reset_train():
@@ -341,7 +343,8 @@ debug = True
 
 if __name__ == "__main__":
     # time.sleep(7800)
-    icm_one_experiment()
+    #icm_one_experiment()
+    train()
 
     # train_if = True
     #

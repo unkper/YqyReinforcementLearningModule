@@ -17,10 +17,10 @@ def resize_observation(frame, image_shape, reward=None):
     height, width, target_depth = image_shape
     if frame.shape == (height, width, target_depth):
         return frame
-    if frame.shape[-1] != 3 and frame.shape[-1] != 1:
-        raise ValueError(
-            'Expecting color or grayscale images, got shape {}: {}'.format(
-                frame.shape, frame))
+    # if frame.shape[-1] != 3 and frame.shape[-1] != 1:
+    #     raise ValueError(
+    #         'Expecting color or grayscale images, got shape {}: {}'.format(
+    #             frame.shape, frame))
 
     if frame.shape[-1] == 3 and target_depth == 1:
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)

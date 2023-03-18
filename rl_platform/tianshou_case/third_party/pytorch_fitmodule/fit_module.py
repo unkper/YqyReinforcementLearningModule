@@ -6,12 +6,12 @@ from collections import OrderedDict
 from functools import partial
 from torch.autograd import Variable
 from torch.nn import BCELoss, Module
-from torch.optim import Adam
+from torch.optim import RAdam
 
 from .utils import add_metrics_to_log, get_loader, log_to_message, ProgressBar, get_loader_r_training
 
 DEFAULT_LOSS = BCELoss()
-DEFAULT_OPTIMIZER = partial(Adam, lr=0.001)
+DEFAULT_OPTIMIZER = partial(RAdam, lr=0.001)
 
 
 class FitModule(Module):
@@ -64,6 +64,8 @@ class FitModule(Module):
             list of OrderedDicts with training metrics
         """
         # logging.warning(u"start training r-network!")
+        if batch_size == 1:
+            logging.error("batch-size equal to 1!")
         if seed and seed >= 0:
             torch.manual_seed(seed)
         # Prepare validation data

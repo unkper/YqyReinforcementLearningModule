@@ -189,7 +189,7 @@ def create_training_data_from_episode_buffer_v123(episode_buffer,
 
 
 class RNetworkTrainer(object):
-    """Train a R network in an online way."""
+    """Train R network in an online way."""
 
     def __init__(self,
                  r_model: RNetwork,
@@ -269,7 +269,6 @@ class RNetworkTrainer(object):
 
         # Number of environments that generated "observations",
         # and total number of steps.
-        nenvs = 1
         nsteps = len(dones)
 
         # Starting index of the current trajectory.
@@ -320,7 +319,7 @@ class RNetworkTrainer(object):
 
         # Split between train and validation data.
         n = len(x1)
-        train_count = (95 * n) // 100
+        train_count = n
         x1_train, x2_train, labels_train = (
             th.as_tensor(x1[:train_count], device=self.device, dtype=th.float32),
             th.as_tensor(x2[:train_count], device=self.device, dtype=th.float32),

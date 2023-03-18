@@ -18,6 +18,7 @@ class RewardType(Enum):
     ADV_REWARD = 2
     RAW_REWARD = 3
     DEAD_REWARD = 4
+    NO_NEGATIVE_REWARD = 5
 
 
 class WalkerEnvWrapper(gym.Wrapper):
@@ -85,10 +86,10 @@ class CarRacingWrapper(gym.Wrapper):
             done = True if self.av_r(reward) <= -0.1 else False
             if done or die:
                 break
-        img_gray = self.rgb2gray(img_rgb)
-        self.stack.pop(0)
-        self.stack.append(img_gray)
-        assert len(self.stack) == CAR_IMAGE_STACK
+            img_gray = self.rgb2gray(img_rgb)
+            self.stack.pop(0)
+            self.stack.append(img_gray)
+            assert len(self.stack) == CAR_IMAGE_STACK
         return np.array(self.stack), total_reward, done, {"task_reward": total_task_r}
 
     @staticmethod

@@ -360,11 +360,11 @@ class RNetworkTrainer(object):
 from easydict import EasyDict
 
 
-def train_r_network_with_collector(make_env, file_name, params: EasyDict, load_file=None):
+def train_r_network_with_collector(env_func, file_name, params: EasyDict, load_file=None):
     writer = SummaryWriter(file_name)
 
-    policy = DummyPolicy(make_env().action_space)
-    train_envs = SubprocVectorEnv([make_env for _ in range(params.train_env_num)])
+    policy = DummyPolicy(env_func().action_space)
+    train_envs = SubprocVectorEnv([env_func for _ in range(params.train_env_num)])
     buffer = VectorReplayBuffer(1000, len(train_envs))
     collector = Collector(policy, train_envs, buffer=buffer)
 

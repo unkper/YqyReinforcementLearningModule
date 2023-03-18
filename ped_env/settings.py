@@ -23,7 +23,7 @@ for angle in range(0, 360, int(360 / (ACTION_DIM - 1))):  # 逆时针旋转angle
                     [sin(theta), cos(theta)]], dtype=np.float)
     vec = np.squeeze((mat.dot(identity)).tolist())
     actions.append(np.array(vec))
-print(actions)
+# print(actions)
 
 identity = np.array([1, 0])
 DIRECTIONS = [np.zeros([2])]

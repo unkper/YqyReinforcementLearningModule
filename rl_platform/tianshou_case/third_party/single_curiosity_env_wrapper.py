@@ -15,7 +15,7 @@ def resize_observation(frame, image_shape, reward=None):
     """Resize an observation according to the target image shape."""
     # Shapes already match, nothing to be done
     height, width, target_depth = image_shape
-    if frame.shape == (height, width, target_depth):
+    if frame.shape == (target_depth, height, width):
         return frame
     # if frame.shape[-1] != 3 and frame.shape[-1] != 1:
     #     raise ValueError(
@@ -90,10 +90,7 @@ class CuriosityEnvWrapper:
             observation_space_shape = target_image_shape[:]
             if append_ec_reward_as_channel:
                 observation_space_shape[-1] += 1
-            observation_space = gym.spaces.Box(
-                low=0, high=255, shape=observation_space_shape, dtype=np.float)
         else:
-            observation_space = vec_env.observation_space
             assert not append_ec_reward_as_channel, (
                 'append_ec_reward_as_channel not compatible with non-image-like obs.')
         self.venv = vec_env
@@ -161,10 +158,12 @@ class CuriosityEnvWrapper:
         # Computes the surrogate reward.
         # This extra reward is set to 0 when the episode is finished.
         if info.get('frame') is not None:
-            frames = np.array(info['frame'])
+            frame = np.array(info['frame'])
         else:
-            frames = observation
-        embedded_observation = self._observation_embedding_fn(frames)
+            frame = observation
+        if len(frame.shape) == 3:
+            frame = np.expand_dims(frame, 0)
+        embedded_observation = self._observation_embedding_fn(frame)
         similarity_to_memory = episodic_memory.similarity_to_memory(embedded_observation,
                                                                     self._vec_episodic_memory,
                                                                     similarity_aggregation=self._similarity_aggregation)
@@ -200,7 +199,7 @@ class CuriosityEnvWrapper:
         # observation, reward, done, truncated, info = self.venv.step(action)
         # observation = observation['screen']
 
-        observation, reward, done, info = self.venv.step(action)
+        observation, reward, done, truncated, info = self.venv.step(action)
         # observation = np.squeeze(observation)
         # observation = np.expand_dims(observation, 0)  # 为了给单个环境添加一个batch_size维度
         # reward = np.expand_dims(reward, 0)
@@ -251,8 +250,7 @@ class CuriosityEnvWrapper:
             # the R network is totally random and the surrogate reward has no
             # meaning.
             scale_surrogate_reward = 0.0
-        postprocessed_reward = (self._scale_task_reward * reward +
-                                scale_surrogate_reward * bonus_reward)
+        postprocessed_reward = self._scale_task_reward * reward + scale_surrogate_reward * bonus_reward
 
         # Update the statistics.
         self._episode_task_reward += reward
@@ -268,7 +266,7 @@ class CuriosityEnvWrapper:
         postprocessed_observation = self._postprocess_observation(observation,
                                                                   reward_for_input)
 
-        return postprocessed_observation, postprocessed_reward, done, info
+        return postprocessed_observation, postprocessed_reward, done, truncated, info
 
     def get_episodic_memory(self):
         """Returns the episodic memory for the k-th environment."""

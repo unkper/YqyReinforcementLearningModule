@@ -73,7 +73,7 @@ bonus_reward_additive_term = 0
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
 target_image_shape = [42, 42, 4]  # [96, 96, 4个连续灰度图像的堆叠]
-r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_07_02\r_network_weight_600.pt"
+r_network_checkpoint = r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_59_14\r_network_weight_1000.pt"
 # EC online train parameters
 use_EC_online_train = False
 v_r_network = None
@@ -206,7 +206,7 @@ def _get_train_env():
 
 def _get_test_env():
     env = create_mario_env()
-    return _get_env(env)
+    return env
 
 
 def _get_env(env):
@@ -339,7 +339,7 @@ def icm_one_experiment():
     train()
 
 
-debug = True
+debug = False
 
 if __name__ == "__main__":
     # time.sleep(7800)

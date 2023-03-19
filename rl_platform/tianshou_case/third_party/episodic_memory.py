@@ -147,7 +147,8 @@ class EpisodicMemory(object):
         # TODO(damienv): could we avoid replicating the observation ?
         # (with some form of broadcasting).
         size = len(self)
-        obs = np.squeeze(observation.cpu().detach().numpy())
+        obs = np.squeeze(observation if isinstance(observation, np.ndarray) else
+                         observation.cpu().detach().numpy())
         observation = np.stack([np.copy(obs) for _ in range(size)])
         similarities = self._observation_compare_fn(observation,
                                                     self._obs_memory[:size])
@@ -162,8 +163,7 @@ def similarity_to_memory(observation,
   Args:
     observation: The observation the agent transitions to.
     episodic_memory: Episodic memory.
-    similarity_aggregation: 聚合函数，将记忆中的观察与当前观察对比后
-    形成的一列数字，按照一个什么顺序返回最后的那个数作为额外奖励.
+    similarity_aggregation: 聚合函数，将记忆中的观察与当前观察对比后形成的一列数字，按照一个什么顺序返回最后的那个数作为额外奖励.
 
   Returns:
     A scalar corresponding to the similarity to episodic memory. This is

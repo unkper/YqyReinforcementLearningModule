@@ -64,6 +64,7 @@ class RNetwork(FitModule):
          self._similarity_network) = (self.net, self.net.branch, self.net.similarity_network)
 
     def embed_observation(self, x):
+        x = torch.as_tensor(x, device=self.device, dtype=torch.float32)
         return self._embedding_network.forward(x)
 
     def embedding_similarity(self, x, y):

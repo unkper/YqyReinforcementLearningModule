@@ -19,10 +19,21 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import pprint
 import unittest
 
+import torch
+
 from rl_platform.tianshou_case.third_party import episodic_memory
+from rl_platform.tianshou_case.net.r_network import RNetwork
 import numpy as np
+
+from rl_platform.tianshou_case.third_party.episodic_memory import similarity_to_memory
+
+net = torch.load(
+    r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_59_14\r_network_weight_1000.pt")
+net = net.cuda()
+net = net.eval()
 
 
 def embedding_similarity(x1, x2):
@@ -43,21 +54,25 @@ class EpisodicMemoryTest(unittest.TestCase):
         expected_size = min(add_count, memory.capacity)
 
         for _ in range(add_count):
-            observation = np.random.normal(size=observation_shape)
+            observation = net.embed_observation(np.random.normal(size=[1, ] + observation_shape))
             memory.add(observation, dict())
         self.assertEqual(expected_size, len(memory))
 
-        current_observation = np.random.normal(size=observation_shape)
+        current_observation = net.embed_observation(np.random.normal(size=[1, ] + observation_shape))
         similarities = memory.similarity(current_observation)
         self.assertEqual(expected_size, len(similarities))
         self.assertLessEqual(similarities.all(), 1.0)
         self.assertGreaterEqual(similarities.all(), 0.0)
+        similar = similarity_to_memory(current_observation,
+                                       memory)
+        pprint.pprint(similar)
 
     def testEpisodicMemory(self):
-        observation_shape = [9]
+        observation_shape = [4, 42, 42]
+        embed_observation_shape = [512]
         memory = episodic_memory.EpisodicMemory(
-            observation_shape=observation_shape,
-            observation_compare_fn=embedding_similarity,
+            observation_shape=embed_observation_shape,
+            observation_compare_fn=net.embedding_similarity,
             capacity=150)
 
         self.RunTest(memory,
@@ -69,4 +84,3 @@ class EpisodicMemoryTest(unittest.TestCase):
                      observation_shape,
                      add_count=200)
         memory.reset()
-

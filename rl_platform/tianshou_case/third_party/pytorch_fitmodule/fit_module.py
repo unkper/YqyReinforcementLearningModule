@@ -11,7 +11,6 @@ from torch.optim import RAdam
 from .utils import add_metrics_to_log, get_loader, log_to_message, ProgressBar, get_loader_r_training
 
 DEFAULT_LOSS = BCELoss()
-DEFAULT_OPTIMIZER = partial(RAdam, lr=0.001)
 
 
 class FitModule(Module):
@@ -28,7 +27,7 @@ class FitModule(Module):
             initial_epoch=0,
             seed=None,
             loss=DEFAULT_LOSS,
-            optimizer=DEFAULT_OPTIMIZER,
+            optimizer=None,
             metrics=None):
         """Trains the model similar to Keras' .fit(...) method
 
@@ -83,8 +82,7 @@ class FitModule(Module):
         else:
             X1, X2 = X
             train_data = get_loader_r_training(X1, X2, y, batch_size, shuffle)
-        # Compile optimizer
-        opt = optimizer(self.parameters())
+        opt = optimizer
         # Run training loop
         logs = []
         total_loss = 0.0

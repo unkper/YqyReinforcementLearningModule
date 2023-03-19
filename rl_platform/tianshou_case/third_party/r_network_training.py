@@ -29,6 +29,7 @@ import torch as th
 from tensorboardX import SummaryWriter
 from tianshou.data import VectorReplayBuffer, Collector
 from tianshou.env import SubprocVectorEnv
+from torch.optim import RAdam
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.third_party.constants import Const
@@ -198,6 +199,7 @@ class RNetworkTrainer(object):
                  batch_size=32,
                  num_train_epochs=6,
                  checkpoint_dir=None,
+                 lr = 1e-3,
                  writer: SummaryWriter = None,
                  device='cuda' if th.cuda.is_available() else 'cpu'):
         # The training interval is assumed to be the same as the history size
@@ -220,6 +222,7 @@ class RNetworkTrainer(object):
         self._fifo_count = 0
         self.device = device
         self._writer = writer
+        self.optimizer = RAdam(self._r_model.parameters(), lr=lr)
 
         # Used to save checkpoints.
         self._current_epoch = 0
@@ -247,7 +250,8 @@ class RNetworkTrainer(object):
             logging.info('Training the R-network after: {}'.format(
                 self._fifo_count))
             history_observations, history_dones = self._get_flatten_history()
-            self.train(history_observations, history_dones)
+            if len(history_observations) > 1:
+                self.train(history_observations, history_dones)
 
     def _get_flatten_history(self):
         """Convert the history given as a circular fifo to a linear array."""
@@ -341,7 +345,8 @@ class RNetworkTrainer(object):
         logs, loss = self._r_model.fit([x1_train, x2_train], labels_train,
                                        batch_size=self._batch_size,
                                        epochs=self._num_train_epochs,
-                                       validation_data=validation_data)
+                                       validation_data=validation_data,
+                                       optimizer=self.optimizer)
         self._writer.add_scalar("r_training/loss", loss, self._current_epoch)
         # Note: the same could possibly be achieved using parameters "callback",
         # "initial_epoch", "epochs" in fit_generator. However, this is not really

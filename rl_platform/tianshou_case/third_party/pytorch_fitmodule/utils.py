@@ -15,7 +15,7 @@ def get_loader(X, y=None, batch_size=1, shuffle=False):
     """
     if y is None:
         y = torch.Tensor(X.size()[0])
-    return DataLoader(TensorDataset(X, y), batch_size, shuffle)
+    return DataLoader(TensorDataset(X, y), batch_size, shuffle, drop_last=True)
 
 
 def get_loader_r_training(X1, X2, y=None, batch_size=1, shuffle=False):
@@ -25,7 +25,7 @@ def get_loader_r_training(X1, X2, y=None, batch_size=1, shuffle=False):
     """
     if y is None:
         y = torch.Tensor(X1.size()[0])
-    return DataLoader(TensorDataset(X1, X2, y), batch_size, shuffle)
+    return DataLoader(TensorDataset(X1, X2, y), batch_size, shuffle, drop_last=True)
 
 
 ##### Logging #####

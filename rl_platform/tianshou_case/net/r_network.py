@@ -34,13 +34,28 @@ class TopNetwork(nn.Module):
 
 
 class Siamese_Resnet(nn.Module):
-    def __init__(self, channel, device):
+    def __init__(self, channel, height, width, device):
         super().__init__()
         self.device = device
-        self.branch = models.resnet18(pretrained=True)
-        if channel != 3:
-            self.branch.conv1 = torch.nn.Conv2d(channel, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.branch.fc = nn.Linear(512, EMBEDDING_DIM)
+        # self.branch = models.resnet18(pretrained=True)
+        # if channel != 3:
+        #     self.branch.conv1 = torch.nn.Conv2d(channel, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # self.branch.fc = nn.Linear(512, EMBEDDING_DIM)
+        self.branch = nn.Sequential(
+            nn.Conv2d(channel, 32, kernel_size=3, stride=1, padding=1),
+            nn.SELU(inplace=True),
+            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.SELU(inplace=True),
+            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.SELU(inplace=True),
+            nn.MaxPool2d(2, stride=2),
+            nn.Flatten()
+        )
+        with torch.no_grad():
+            temp_dim = np.prod(self.branch(torch.zeros(1, channel, height, width)).shape[1:]).item()
+        self.branch.add_module("fc", nn.Linear(temp_dim, EMBEDDING_DIM))
         self.similarity_network: TopNetwork = TopNetwork(device)
 
     def forward(self, x1, x2):
@@ -59,7 +74,7 @@ class RNetwork(FitModule):
         super().__init__()
         h, w, c = input_shape
         self.device = device
-        self.net: Siamese_Resnet = Siamese_Resnet(c, device)
+        self.net: Siamese_Resnet = Siamese_Resnet(c, h, w, device)
         (self._r_network, self._embedding_network,
          self._similarity_network) = (self.net, self.net.branch, self.net.similarity_network)
 

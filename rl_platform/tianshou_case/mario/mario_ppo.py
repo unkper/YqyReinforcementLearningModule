@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 import pprint
@@ -33,8 +34,8 @@ from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
 parallel_env_num = 5
-test_env_num = 4
-episode_per_test = 4
+test_env_num = 5
+episode_per_test = 40
 lr, gamma, n_steps = 1e-4, 0.99, 3
 buffer_size = 100000
 batch_size = 64
@@ -68,12 +69,12 @@ icm_forward_loss_weight = 0.2
 use_episodic_memory = True
 exploration_reward = "episodic_curiosity"  # episodic_curiosity,oracle
 scale_task_reward = 1.0
-scale_surrogate_reward = 10.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
-bonus_reward_additive_term = 0
+scale_ec_reward = 10.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
+bonus_reward_additive_term = 0 # 0.5 - curiosity_reward + term
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
 target_image_shape = [42, 42, 4]  # [96, 96, 4个连续灰度图像的堆叠]
-r_network_checkpoint = r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_59_14\r_network_weight_1000.pt"
+r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_59_14\r_network_weight_1000.pt"
 # EC online train parameters
 use_EC_online_train = False
 v_r_network = None
@@ -90,6 +91,10 @@ if use_episodic_memory and use_icm:
 def reset_train():
     global file_name, v_r_network, memory, r_trainer
     file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
+    params_dict = globals()
+    with open(os.path.join(file_name, "params.json"), "w") as f:
+        json.dump(params_dict, f, indent=4)
     if use_episodic_memory:
         v_r_network = RNetwork(target_image_shape, device=set_device)
         if set_device == 'cuda':
@@ -224,7 +229,7 @@ def _get_env(env):
             target_image_shape,
             # r_net_trainer=r_trainer,
             scale_task_reward=scale_task_reward,
-            scale_surrogate_reward=scale_surrogate_reward,
+            scale_surrogate_reward=scale_ec_reward,
             exploration_reward_min_step=exploration_reward_min_step,
             test_mode=env_test
         )

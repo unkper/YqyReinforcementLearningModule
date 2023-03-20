@@ -19,6 +19,15 @@ class RewardType(Enum):
     RAW_REWARD = 3
     DEAD_REWARD = 4
     NO_NEGATIVE_REWARD = 5
+    @classmethod
+    def find_enum_key(cls, value):
+        for key, member in cls.__members__.items():
+            if member.value == value:
+                return key
+        return None
+
+    def __json__(self):
+        return self.find_enum_key(self.value)
 
 
 class WalkerEnvWrapper(gym.Wrapper):

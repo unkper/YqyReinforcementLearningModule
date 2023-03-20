@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Callable
+from typing import Optional, Tuple, Callable, List
 
 import numpy as np
 import pettingzoo as pet
@@ -46,6 +46,7 @@ def save_video(abs_file_path, obs_arr):
     ani = FuncAnimation(fig, update)
     ani.save(abs_file_path, writer='ffmpeg')
 
+
 def rgb2gray(rgb, norm=True):
     # rgb image -> gray [0, 1]
     gray = np.dot(rgb[..., :], [0.299, 0.587, 0.114])
@@ -53,3 +54,12 @@ def rgb2gray(rgb, norm=True):
         # normalize
         gray = gray / 128. - 1.
     return gray
+
+
+import json
+import importlib.util
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        return obj.__class__.__name__

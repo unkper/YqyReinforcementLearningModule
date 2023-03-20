@@ -30,12 +30,17 @@ from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.standard_gym.wrapper import RewardType
 from rl_platform.tianshou_case.third_party import r_network_training
 from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
+from rl_platform.tianshou_case.utils.common import CustomJSONEncoder
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
+#环境配置相关
 parallel_env_num = 5
 test_env_num = 5
-episode_per_test = 40
+train_reward_type = RewardType.RAW_REWARD
+level = "1-2"
+#PPO算法相关
+episode_per_test = 20
 lr, gamma, n_steps = 1e-4, 0.99, 3
 buffer_size = 100000
 batch_size = 64
@@ -57,7 +62,6 @@ norm_adv = 1
 recompute_adv = 0
 update_per_step = 0.1
 hidden_size = 100
-
 set_device = "cuda"
 # icm parameters
 use_icm = False
@@ -69,12 +73,12 @@ icm_forward_loss_weight = 0.2
 use_episodic_memory = True
 exploration_reward = "episodic_curiosity"  # episodic_curiosity,oracle
 scale_task_reward = 1.0
-scale_ec_reward = 10.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
+scale_ec_reward = 2.0  # 5.0 for vizdoom in ec,指的是EC奖励的放大倍数
 bonus_reward_additive_term = 0 # 0.5 - curiosity_reward + term
 exploration_reward_min_step = 0  # 用于在线训练，在多少步时加入EC的相关奖励
 similarity_threshold = 0.5
 target_image_shape = [42, 42, 4]  # [96, 96, 4个连续灰度图像的堆叠]
-r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_59_14\r_network_weight_1000.pt"
+r_network_checkpoint = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_20_00_00_25\r_network_weight_650.pt"
 # EC online train parameters
 use_EC_online_train = False
 v_r_network = None
@@ -92,9 +96,6 @@ def reset_train():
     global file_name, v_r_network, memory, r_trainer
     file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
-    params_dict = globals()
-    with open(os.path.join(file_name, "params.json"), "w") as f:
-        json.dump(params_dict, f, indent=4)
     if use_episodic_memory:
         v_r_network = RNetwork(target_image_shape, device=set_device)
         if set_device == 'cuda':
@@ -205,12 +206,12 @@ env_test = False
 
 
 def _get_train_env():
-    env = create_mario_env(reward_type=RewardType.ZERO_REWARD)
+    env = create_mario_env(reward_type=train_reward_type, level=level)
     return _get_env(env)
 
 
 def _get_test_env():
-    env = create_mario_env()
+    env = create_mario_env(level=level)
     return env
 
 
@@ -273,6 +274,10 @@ def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_e
     writer = SummaryWriter('log/' + file_name)
     logger = ts.utils.TensorboardLogger(writer)  # TensorBoard is supported!
 
+    params_dict = globals()
+    f = open(os.path.join("log", file_name, "params.json"), "w")
+    json.dump(params_dict, f, indent=4, cls=CustomJSONEncoder)
+
     def save_best_fn(policy):
         model_save_path = os.path.join('log/' + file_name, "policy.pth")
         os.makedirs(os.path.join('log/' + file_name), exist_ok=True)
@@ -321,26 +326,32 @@ def ppo_train(batch_size, buffer_size, episode_per_test, load_check_point, max_e
     pprint.pprint(result)
 
 
-def test():
+def test(ep=5):
     global env_test
     env_test = True
-    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\vizdoom\log\Vizdoom_normal_PPO_2023_03_11_23_01_22\checkpoint_100.pth"
+    policy_path = r"D:\Projects\python\PedestrainSimlationModule\rl_platform\tianshou_case\mario\log\Mario_normal_PPO_2023_03_20_00_48_28\checkpoint_120.pth"
     test_envs = DummyVectorEnv([_get_test_env for _ in range(1)])
     env = _get_test_env()
     policy, optim, agents = _get_agent(env, None,
                                        file_path=policy_path)
     policy.eval()
     collector = Collector(policy, test_envs)
-    res = collector.collect(n_episode=2, render=1 / 36)
+    res = collector.collect(n_episode=ep, render=1 / 36)
     pprint.pprint(res)
 
 
 def icm_one_experiment():
-    global use_icm
+    global use_icm, use_episodic_memory
     # use_icm
+    use_icm = True
+    use_episodic_memory = False
     train()
     # not use_icm
     use_icm = False
+    use_episodic_memory = False
+    train()
+    use_icm = False
+    use_episodic_memory = True
     train()
 
 
@@ -348,8 +359,9 @@ debug = False
 
 if __name__ == "__main__":
     # time.sleep(7800)
-    #icm_one_experiment()
-    train()
+    icm_one_experiment()
+    #train()
+    # test()
 
     # train_if = True
     #

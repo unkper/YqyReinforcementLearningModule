@@ -50,12 +50,16 @@ class WalkerEnvWrapper(gym.Wrapper):
 
 
 class CarRacingWrapper(gym.Wrapper):
-    def __init__(self, env, discrete_reward: RewardType = RewardType.ZERO_REWARD):
+    def __init__(self, env, discrete_reward: RewardType = RewardType.ZERO_REWARD,
+                 max_step=10000):
         super().__init__(env)
         self._d_reward: RewardType = discrete_reward
+        self._step = 0
+        self._max_step = max_step
 
     def reset(self):
         self.counter = 0
+        self._step = 0
         self.av_r = self.reward_memory()
 
         self.die = False
@@ -98,7 +102,11 @@ class CarRacingWrapper(gym.Wrapper):
             img_gray = self.rgb2gray(img_rgb)
             self.stack.pop(0)
             self.stack.append(img_gray)
+            self._step += 1
             assert len(self.stack) == CAR_IMAGE_STACK
+        if self._step >= self._max_step:
+            self._step = 0
+            done = True
         return np.array(self.stack), total_reward, done, {"task_reward": total_task_r}
 
     @staticmethod

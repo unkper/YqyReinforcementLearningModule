@@ -40,7 +40,7 @@ test_env_num = 5
 train_reward_type = RewardType.RAW_REWARD
 level = "1-2"
 #PPO算法相关
-episode_per_test = 20
+episode_per_test = 5
 lr, gamma, n_steps = 1e-4, 0.99, 3
 buffer_size = 100000
 batch_size = 64
@@ -86,7 +86,7 @@ memory = None
 r_trainer = None
 # 文件配置相关
 env_name = "normal"
-task = "Mario_{}".format(env_name)
+task = "CarRacing_{}".format(env_name)
 file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 if use_episodic_memory and use_icm:
     raise RuntimeError()

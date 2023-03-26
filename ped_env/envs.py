@@ -33,7 +33,6 @@ from ped_env.objects import BoxWall, Person, Exit, Group
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed, ColorYellow)
 from ped_env.utils.misc import ObjectType
 from ped_env.utils.maps import Map
-from ped_env.utils.viewer import PedsMoveEnvViewer
 from ped_env.functions import calculate_each_group_num, calculate_groups_person_num, calc_triangle_points, \
     transfer_to_render, gray_scale_image
 from ped_env.settings import TICKS_PER_SEC, vel_iters, pos_iters, ACTION_DIM, GROUP_SIZE, RENDER_SCALE

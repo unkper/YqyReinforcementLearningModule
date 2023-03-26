@@ -207,9 +207,9 @@ class PedPolicyHead(nn.Module):
         self.net = nn.Sequential(
             layer_init(nn.Conv2d(channel, 32, kernel_size=3, stride=2, padding=1)),
             nn.ELU(inplace=True),
-            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            layer_init(nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)),
             nn.ELU(inplace=True),
-            layer_init(nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)),
+            layer_init(nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)),
             nn.ELU(inplace=True), nn.Flatten()
         )
         with torch.no_grad():

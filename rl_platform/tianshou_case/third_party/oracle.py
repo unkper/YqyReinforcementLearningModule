@@ -26,10 +26,10 @@ class OracleExplorationReward(object):
     def __init__(self, reward_grid_size=30.0, cell_reward_normalizer=900.0):
         """Creates a new oracle to compute the exploration reward.
 
-    Args:
-      reward_grid_size: Size of a cell that contains a unique reward.
-      cell_reward_normalizer: Denominator for computation of a cell reward
-    """
+        Args:
+          reward_grid_size: Size of a cell that contains a unique reward.
+          cell_reward_normalizer: Denominator for computation of a cell reward
+        """
         self._reward_grid_size = reward_grid_size
 
         # Make the total sum of exploration reward that can be collected
@@ -50,12 +50,12 @@ class OracleExplorationReward(object):
     def update_position(self, agent_position):
         """Set the new state (i.e. the position).
 
-    Args:
-      agent_position: x,y,z position of the agent.
+        Args:
+          agent_position: x,y,z position of the agent.
 
-    Returns:
-      The exploration bonus for having visited this position.
-    """
+        Returns:
+          The exploration bonus for having visited this position.
+        """
         x, y, z = agent_position
         quantized_x = int(x / self._reward_grid_size)
         quantized_y = int(y / self._reward_grid_size)

@@ -1,3 +1,4 @@
+import copy
 from collections import deque, defaultdict
 from typing import Optional
 
@@ -107,7 +108,7 @@ class FrameStackWrapper:
         obs = self.venv.reset(seed=seed)
         for _ in range(self.n_frames):
             for agentid in self.venv.possible_agents:
-                self.frames[agentid].append(obs[agentid])
+                self.frames[agentid].extend(copy.copy(obs[agentid]) for _ in range(self.n_frames))
         return self._get_ob()
 
     def step(self, action):

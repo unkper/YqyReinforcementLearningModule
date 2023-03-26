@@ -30,38 +30,49 @@ from ped_env.envs import PedsMoveEnv
 from ped_env.utils.maps import map_09, map_10, map_simple
 from rl_platform.tianshou_case.utils.common import _get_agents
 
+#环境配置相关
 parallel_env_num = 5
-test_env_num = 1
-lr, gamma, n_steps = 2.5e-4, 0.99, 3
-buffer_size = 200000 // parallel_env_num
-batch_size = 128
+test_env_num = 5
+#PPO算法相关
+episode_per_test = 5
+lr, gamma, n_steps = 1e-4, 0.99, 3
+buffer_size = 100000
+batch_size = 64
 eps_train, eps_test = 0.2, 0.05
-max_epoch = 500
-max_step = 10000  # 环境的最大步数
-step_per_epoch = max_step
+max_epoch = 120
+step_per_epoch = 10000
 update_policy_interval = 1000
-rew_norm = True
+update_repeat_count = 4
+rew_norm = False
 vf_coef = 0.25
 ent_coef = 0.01
-gae_lambda = 0.95
-lr_decay = True
+gae_lambda = 0  # 不再使用gae算法计算TD误差
 lr_scheduler = None
-max_grad_norm = 0.5
+max_grad_norm = 40
 eps_clip = 0.1
 dual_clip = None
 value_clip = 1
 norm_adv = 1
 recompute_adv = 0
-episode_per_test = 5
 update_per_step = 0.1
-seed = 1
-
-icm_lr_scale = 1e-3
+hidden_size = 100
+set_device = "cuda"
+# icm parameters
+use_icm = False
+icm_hidden_size = 256
+icm_lr_scale = 10
 icm_reward_scale = 0.1
 icm_forward_loss_weight = 0.2
-icm_hidden_size = 128
 
-set_device = "cuda"
+# 文件配置相关
+env_name = "normal"
+task = "PedsMoveEnv_{}".format(env_name)
+file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
+
+def reset_train():
+    global file_name, v_r_network, memory, r_trainer
+    file_name = task + "_PPO_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
 
 def get_policy(env, optim=None):
@@ -160,21 +171,23 @@ def _get_agents(
 
 
 train_map = map_10
-agent_num_map = 20
+agent_num_map = 4
 
 train_if = False  # 是否采用test模式，即在icm模式下采用奖励模型来评判
+
+
+def create_peds_move_env(train_if):
+    return FrameStackWrapper(PedsMoveEnv(train_map, person_num=agent_num_map, group_size=(1, 1), random_init_mode=True,
+                                            maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler))
 
 
 def _get_env():
     global train_if, max_step
     """This function is needed to provide callables for DummyVectorEnv."""
     if train_if:
-        env = FrameStackWrapper(PedsMoveEnv(train_map, person_num=agent_num_map, group_size=(1, 1), random_init_mode=True,
-                                            maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler))
+        env = create_peds_move_env(train_if)
     else:
-        env = FrameStackWrapper(PedsMoveEnv(train_map, person_num=agent_num_map, group_size=(1, 1), random_init_mode=True,
-                                            maxStep=max_step, disable_reward=train_if, person_handler=PedsVisionRLHandler,
-                                            test_reward_mode=True))
+        env = create_peds_move_env(train_if)
     env = pet.utils.parallel_to_aec(env)
     return PettingZooEnv(env)
 
@@ -184,7 +197,7 @@ def train(load_check_point=None, debug=False):
     if __name__ == "__main__":
         # ======== Step 1: Environment setup =========
         if debug:
-            parallel_env_num, test_env_num = 3, 1
+            parallel_env_num, test_env_num = 1, 1
             max_step = 1000
             buffer_size = 200
             batch_size = 12
@@ -324,7 +337,7 @@ if __name__ == "__main__":
     # parser.add_argument("max_step", type=int, default=5000)
     # args = parser.parse_args()
     # train()
-    train(debug=False)
+    train(debug=True)
     # test()
 
     # python run_tianshou_ppo.py --file=D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\log\PedsMoveEnv_map_10_40_PPO_2022_12_24_01_48_33\checkpoint_17.pth

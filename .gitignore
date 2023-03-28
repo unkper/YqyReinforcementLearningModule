@@ -3,6 +3,13 @@ data/
 __pycache__/
 *.ini
 *.pyc
+
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
 rl_platform/d3rl_case/d3rlpy_logs
 rl_platform/tianshou_case/ped_env/log
 rl_platform/tianshou_case/derk/chromedata
@@ -14,3 +21,4 @@ rl_platform/tianshou_case/standard_gym/r_network
 venv
 venv_vizdoom
 /rl_platform/tianshou_case/mario/r_network/
+/third_party/multi_explore/test/

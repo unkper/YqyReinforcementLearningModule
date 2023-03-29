@@ -388,8 +388,8 @@ def run(config):
 from third_party.multi_explore.params.gridworld import params1 as p
 
 if __name__ == '__main__':
-    p.debug_mode()
+    params = p.Params()
+    args = p.debug_mode(params.args)
     for i in range(6):
-        config = p.different_explore_type_exp()
-
+        config = p.change_explore_type_exp(args)
         run(config)

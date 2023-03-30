@@ -25,7 +25,7 @@ class Params:
     beta = 0.1  # Weighting for intrinsic reward
     decay = 0.7  # Decay rate for state-visit counts in intrinsic reward, f(n) = 1 / N ^ decay
     n_rollout_threads = 12  # 启用的总线程数，用于环境经验的收集工作
-    buffer_length = 1e6  # "Set to 5e5 for ViZDoom (if memory limited)"
+    buffer_length = int(1e6)  # "Set to 5e5 for ViZDoom (if memory limited)"
     train_time = int(1e6)
     max_episode_length = 500  # 一集的最大长度
     steps_per_update = 100
@@ -85,6 +85,8 @@ exp_count = 0
 def change_explore_type_exp(args):
     global exp_count
     ways = [[0], [1], [2], [3], [4], [0, 1, 2, 3, 4]]
+    args.temp_value = args.train_time
+    args.train_time = int(args.temp_value / 3)
     args.explr_types = ways[exp_count]
     exp_count += 1
     return args

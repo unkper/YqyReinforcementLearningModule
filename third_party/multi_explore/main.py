@@ -3,6 +3,7 @@ import torch
 import os
 import multiprocessing
 import numpy as np
+import tqdm
 from vizdoom import ViZDoomErrorException, ViZDoomIsNotRunningException, ViZDoomUnexpectedExitException
 from gym.spaces import Box, Discrete
 from pathlib import Path
@@ -195,6 +196,8 @@ def run(config):
 
     state, obs = env.reset()
 
+    pbar = tqdm.tqdm(total=config.train_time)
+
     while t < config.train_time:
         model.prep_rollouts(device='cuda' if config.gpu_rollout else 'cpu')
         # convert to torch tensor
@@ -333,7 +336,7 @@ def run(config):
                                       config.steps_before_update) and
                 (steps_since_update >= config.steps_per_update)):
             steps_since_update = 0
-            print('Updating at time step %i' % t)
+            #print('Updating at time step %i' % t)
             model.prep_training(device='cuda' if config.use_gpu else 'cpu')
 
             for u_i in range(config.num_updates):
@@ -380,6 +383,7 @@ def run(config):
             model.save(run_dir / 'model.pt')
 
         t += active_envs.sum()
+        pbar.update(active_envs.sum())
     model.prep_training(device='cpu')
     model.save(run_dir / 'model.pt')
     logger.close()
@@ -389,7 +393,7 @@ from third_party.multi_explore.params.gridworld import params1 as p
 
 if __name__ == '__main__':
     params = p.Params()
-    args = p.debug_mode(params.args)
+    #args = p.debug_mode(params.args)
     for i in range(6):
-        config = p.change_explore_type_exp(args)
+        config = p.change_explore_type_exp(params.args)
         run(config)

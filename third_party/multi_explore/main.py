@@ -393,6 +393,7 @@ from third_party.multi_explore.params.gridworld import params1 as p
 
 if __name__ == '__main__':
     params = p.Params()
+    params.args.model_name = "one_icm_test"
     #args = p.debug_mode(params.args)
     for i in range(6):
         config = p.change_explore_type_exp(params.args)

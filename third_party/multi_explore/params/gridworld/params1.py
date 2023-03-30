@@ -24,7 +24,7 @@ class Params:
     uniform_heads = True  # Meta-policy samples all heads uniformly
     beta = 0.1  # Weighting for intrinsic reward
     decay = 0.7  # Decay rate for state-visit counts in intrinsic reward, f(n) = 1 / N ^ decay
-    n_rollout_threads = 12  # 启用的总线程数，用于环境经验的收集工作
+    n_rollout_threads = 24  # 启用的总线程数，用于环境经验的收集工作
     buffer_length = int(1e6)  # "Set to 5e5 for ViZDoom (if memory limited)"
     train_time = int(1e6)
     max_episode_length = 500  # 一集的最大长度
@@ -80,12 +80,14 @@ def debug_mode(args):
 
 
 exp_count = 0
-
+init = False
 
 def change_explore_type_exp(args):
-    global exp_count
+    global exp_count, init
     ways = [[0], [1], [2], [3], [4], [0, 1, 2, 3, 4]]
-    args.temp_value = args.train_time
+    if not init:
+        args.temp_value = args.train_time
+        init = True
     args.train_time = int(args.temp_value / 3)
     args.explr_types = ways[exp_count]
     exp_count += 1
@@ -94,8 +96,8 @@ def change_explore_type_exp(args):
 
 if __name__ == '__main__':
     p = Params()
-    args = debug_mode(p.args)
-    pprint.pprint(args)
+    #args = debug_mode(p.args)
+    #pprint.pprint(args)
     for i in range(6):
         args = change_explore_type_exp(p.args)
-        pprint.pprint(args.explr_types)
+        pprint.pprint(args.train_time)

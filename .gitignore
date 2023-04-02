@@ -22,3 +22,5 @@ venv
 venv_vizdoom
 /rl_platform/tianshou_case/mario/r_network/
 /third_party/multi_explore/test/
+/rl_platform/tianshou_case/vizdoom/checkpoints/
+/rl_platform/tianshou_case/ped_env/saved_checkpoints/

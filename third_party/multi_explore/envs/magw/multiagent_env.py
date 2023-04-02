@@ -1,3 +1,5 @@
+import pprint
+
 import numpy as np
 import gym
 import os
@@ -17,7 +19,8 @@ DOWN = 1
 LEFT = 2
 RIGHT = 3
 GET = 4
-ACTION_NAMES= ['UP', 'DOWN', 'LEFT', 'RIGHT', 'GET']
+ACTION_NAMES = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'GET']
+
 
 class ImgSprite(pygame.sprite.Sprite):
     def __init__(self, rect_pos=(5, 5, 64, 64)):
@@ -31,11 +34,12 @@ class ImgSprite(pygame.sprite.Sprite):
         else:
             self.image = pygame.surfarray.make_surface(image)
 
+
 class Render(object):
     def __init__(self, size=(320, 320)):
         pygame.init()
         self.screen = pygame.display.set_mode(size)
-        self.group = pygame.sprite.Group(ImgSprite()) # the group of all sprites
+        self.group = pygame.sprite.Group(ImgSprite())  # the group of all sprites
 
     def render(self, img):
         img = np.asarray(img).transpose(1, 0, 2)
@@ -44,11 +48,13 @@ class Render(object):
         pygame.display.flip()
         e = pygame.event.poll()
 
+
 def chunk(l, n):
     sz = len(l)
     assert sz % n == 0, 'cannot be evenly chunked'
     for i in range(0, sz, n):
-        yield l[i:i+n]
+        yield l[i:i + n]
+
 
 class Agent():
     def __init__(self, agent_id):
@@ -65,6 +71,7 @@ class Agent():
         self.start_pos = None
         self.curr_tier = 0
         self.found_treasures = []
+
 
 class Pit():
     def __init__(self, mag=0.05):
@@ -85,50 +92,51 @@ class Pit():
             self.prob_open = np.clip(self.prob_open, 0.0, 1.0)
 
 
-
 def color_interpolate(x, start_color, end_color):
-    assert ( x <= 1 ) and ( x >= 0 )
+    assert (x <= 1) and (x >= 0)
     if not isinstance(start_color, np.ndarray):
         start_color = np.asarray(start_color[:3])
     if not isinstance(end_color, np.ndarray):
         end_color = np.asarray(end_color[:3])
-    return np.round( (x * end_color + (1 - x) * start_color) * 255.0 ).astype(np.uint8)
+    return np.round((x * end_color + (1 - x) * start_color) * 255.0).astype(np.uint8)
+
 
 CUR_DIR = os.path.dirname(__file__)
 
 render_map_funcs = {
-              '$': lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
-              '%': lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
-              '&': lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
-              "'": lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
-              ' ': lambda x: color_interpolate(x, plt.cm.Greys(0.02), plt.cm.Greys(0.2)),
-              '#': lambda x: color_interpolate(x, np.array([73, 49, 28]) / 255.0, np.array([219, 147, 86]) / 255.0),
-              #'%': lambda x: color_interpolate(x, np.array([0.3, 0.3, 0.3]), np.array([.3, .3, .3])),
-              #' ': lambda x: color_interpolate(x, plt.cm.Greys(0.02), plt.cm.Greys(0.02)),
-              #'#': lambda x: color_interpolate(x, np.array([219, 147, 86]) / 255.0, np.array([219, 147, 86]) / 255.0),
-              # 'A': lambda x: (np.asarray(plt.cm.Reds(0.8)[:3]) * 255).astype(np.uint8),
-              # 'B': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
-              # 'C': lambda x: (np.asarray(plt.cm.Greens(0.8)[:3]) * 255).astype(np.uint8),
-              # 'D': lambda x: (np.asarray(plt.cm.Wistia(0.8)[:3]) * 255).astype(np.uint8),
-              '1': lambda x: (np.asarray(plt.cm.Reds(0.8)[:3]) * 255).astype(np.uint8),
-              '2': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
-              '3': lambda x: (np.asarray(plt.cm.Greens(0.8)[:3]) * 255).astype(np.uint8),
-              '4': lambda x: (np.asarray(plt.cm.Wistia(0.8)[:3]) * 255).astype(np.uint8),
-              'A': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              'B': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              'C': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              'D': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              'E': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              'F': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              'G': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              'H': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
-              # '1': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
-              # '2': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
-              # '3': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
-              # '4': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
-             }# hard-coded
+    '$': lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
+    '%': lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
+    '&': lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
+    "'": lambda x: color_interpolate(x, np.array([0.7, 0.35, 0.0]), np.array([0.7, 0.35, 0.0])),
+    ' ': lambda x: color_interpolate(x, plt.cm.Greys(0.02), plt.cm.Greys(0.2)),
+    '#': lambda x: color_interpolate(x, np.array([73, 49, 28]) / 255.0, np.array([219, 147, 86]) / 255.0),
+    # '%': lambda x: color_interpolate(x, np.array([0.3, 0.3, 0.3]), np.array([.3, .3, .3])),
+    # ' ': lambda x: color_interpolate(x, plt.cm.Greys(0.02), plt.cm.Greys(0.02)),
+    # '#': lambda x: color_interpolate(x, np.array([219, 147, 86]) / 255.0, np.array([219, 147, 86]) / 255.0),
+    # 'A': lambda x: (np.asarray(plt.cm.Reds(0.8)[:3]) * 255).astype(np.uint8),
+    # 'B': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
+    # 'C': lambda x: (np.asarray(plt.cm.Greens(0.8)[:3]) * 255).astype(np.uint8),
+    # 'D': lambda x: (np.asarray(plt.cm.Wistia(0.8)[:3]) * 255).astype(np.uint8),
+    '1': lambda x: (np.asarray(plt.cm.Reds(0.8)[:3]) * 255).astype(np.uint8),
+    '2': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
+    '3': lambda x: (np.asarray(plt.cm.Greens(0.8)[:3]) * 255).astype(np.uint8),
+    '4': lambda x: (np.asarray(plt.cm.Wistia(0.8)[:3]) * 255).astype(np.uint8),
+    'A': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    'B': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    'C': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    'D': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    'E': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    'F': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    'G': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    'H': lambda x: (np.asarray(plt.cm.Wistia(0.2)[:3]) * 255).astype(np.uint8),
+    # '1': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
+    # '2': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
+    # '3': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
+    # '4': lambda x: (np.asarray(plt.cm.Blues(0.8)[:3]) * 255).astype(np.uint8),
+}  # hard-coded
 
-render_map = { k: render_map_funcs[k](1) for k in render_map_funcs }
+render_map = {k: render_map_funcs[k](1) for k in render_map_funcs}
+
 
 def construct_render_map(vc):
     np_random = np.random.RandomState(9487)
@@ -143,6 +151,7 @@ def construct_render_map(vc):
         pertbs[i] = pertb
     return pertbs
 
+
 # TODO: need_get, hindsight
 
 def read_map(filename):
@@ -153,32 +162,36 @@ def read_map(filename):
 
     return m
 
+
 def dis(a, b, p=2):
     res = 0
     for i, j in zip(a, b):
-        res += np.power(np.abs(i-j), p)
-    return np.power(res, 1.0/p)
+        res += np.power(np.abs(i - j), p)
+    return np.power(res, 1.0 / p)
+
 
 def not_corner(m, i, j):
-    if i == 0 or i == len(m)-1 or j == 0 or j == len(m[0])-1:
+    if i == 0 or i == len(m) - 1 or j == 0 or j == len(m[0]) - 1:
         return False
-    if m[i-1][j] == '#' or m[i+1][j] == '#' or m[i][j-1] == '#' or m[i][j+1] == '#':
+    if m[i - 1][j] == '#' or m[i + 1][j] == '#' or m[i][j - 1] == '#' or m[i][j + 1] == '#':
         return False
     return True
+
 
 def build_gaussian_grid(grid, mean, std_coeff):
     row, col = grid.shape
     x, y = np.meshgrid(np.arange(row), np.arange(col))
-    d = np.sqrt(x*x + y*y)
-    return np.exp(-((x-mean[0]) ** 2 + (y-mean[1]) ** 2)/(2.0 * (std_coeff * min(row, col)) ** 2))
+    d = np.sqrt(x * x + y * y)
+    return np.exp(-((x - mean[0]) ** 2 + (y - mean[1]) ** 2) / (2.0 * (std_coeff * min(row, col)) ** 2))
+
 
 # roll list when task length is 2
 def roll_list(l, n):
     res = []
-    l = list(chunk(l, n-1))
-    for i in range(n-1):
+    l = list(chunk(l, n - 1))
+    for i in range(n - 1):
         for j in range(n):
-            res.append(l[j][(i+j)%(n-1)])
+            res.append(l[j][(i + j) % (n - 1)])
     return res
 
 
@@ -207,9 +220,11 @@ def can_make_path(base_map, curr_pos, next_pos):
     return base_map[nx, ny] == '#' and all(base_map[npx, npy] == '#' for npx, npy in nps)
 
 
+
 def generate_rand_map(size=(20, 20), num_agents=2, num_tiers=2, paths_per_tier=2, pit_prob=0.15, rs=None):
     if rs is None:
         rs = np.random.RandomState(0)
+    rs = np.random
 
     num_paths = paths_per_tier * num_tiers
     assert num_paths <= 8
@@ -219,7 +234,7 @@ def generate_rand_map(size=(20, 20), num_agents=2, num_tiers=2, paths_per_tier=2
     dist_map = -np.ones(size)
 
     start_box_size = 1
-    while start_box_size**2 <= num_agents or (start_box_size * 4) // 2 <= num_paths:
+    while start_box_size ** 2 <= num_agents or (start_box_size * 4) // 2 <= num_paths:
         start_box_size += 1
 
     box_corner = ((size[0] - start_box_size) // 2, (size[1] - start_box_size) // 2)
@@ -241,7 +256,8 @@ def generate_rand_map(size=(20, 20), num_agents=2, num_tiers=2, paths_per_tier=2
         start_loc = start_cands.pop(rs.randint(len(start_cands)))
         base_map[start_loc[0], start_loc[1]] = str(i)
 
-    path_bases = sum([[(p, path_start) for p in get_neighboring_points(base_map, *path_start) if can_make_path(base_map, path_start, p)] for path_start in path_cands], [])
+    path_bases = sum([[(p, path_start) for p in get_neighboring_points(base_map, *path_start) if
+                       can_make_path(base_map, path_start, p)] for path_start in path_cands], [])
     path_stacks = [path_bases.copy() for _ in range(num_paths)]
     for stack in path_stacks:
         rs.shuffle(stack)
@@ -281,6 +297,7 @@ def generate_rand_map(size=(20, 20), num_agents=2, num_tiers=2, paths_per_tier=2
 
 class GridWorld(Env):
     metadata = {'render.modes': ['human', 'ansi']}
+
     def __init__(
             self,
             map_ind,
@@ -294,7 +311,7 @@ class GridWorld(Env):
             num_agents=2,
             rand_trans=0.1,  # probability of random transition
             size=(20, 20),  # size of map if generating
-            ):
+    ):
         self.seed(seed)
         self.task_config = task_config
         self.num_agents = num_agents
@@ -348,7 +365,8 @@ class GridWorld(Env):
         self.img_stack = deque(maxlen=window)
         self.window = window
         if reward_config is None:
-            reward_config = {'wall_penalty': 0.0, 'time_penalty': -0.1, 'complete_sub_task': 10., 'get_same_treasure': 5., 'get_treasure': 10., 'fail': -10.}
+            reward_config = {'wall_penalty': 0.0, 'time_penalty': -0.1, 'complete_sub_task': 10.,
+                             'get_same_treasure': 5., 'get_treasure': 10., 'fail': -10.}
         self.reward_config = reward_config
         self.need_get = need_get  # need to explicitly act to pick up treasure
         self.stay_act = stay_act  # separate action for staying put
@@ -408,7 +426,7 @@ class GridWorld(Env):
                 elif self.m[i][j].isalpha():
                     pos_idx = ord(self.m[i][j]) - ord('A')
                     self.pos[pos_idx] = (i, j)
-                elif self.m[i][j] == ' ' or self.m[i][j].isalpha(): #and not_corner(self.m, i, j):
+                elif self.m[i][j] == ' ' or self.m[i][j].isalpha():  # and not_corner(self.m, i, j):
                     self.pos_candidates.append((i, j))
 
         if sample_pos:
@@ -677,6 +695,7 @@ class VectObsEnv(EnvWrapper):
             coll_treasure[t] = 1
 
         agent_state = np.concatenate([surr_walls, surr_pit_probs, coll_treasure])
+        # 四个方向上是否有墙（1代表有），四个方向加自身位置是否有传送门，是否找到四个宝藏（找到为1）
         return agent_state
 
     def _get_state(self):
@@ -686,6 +705,7 @@ class VectObsEnv(EnvWrapper):
             agent_coords.append((np.arange(self.row) == a.x).astype(np.float32))
             agent_coords.append((np.arange(self.col) == a.y).astype(np.float32))
             # agent_coords.append(np.array([a.x / self.row, a.y / self.col] , dtype=np.float32))
+        # 返回的全局状态为[每个智能体的状态,每个智能体的x,y坐标的one_hot编码]
         return np.concatenate(agent_states + agent_coords)
 
     def _get_agent_obs(self, agent):
@@ -701,6 +721,7 @@ class VectObsEnv(EnvWrapper):
                 rel_loc = np.zeros(2)
             other_locs.append(rel_loc)
         out = np.concatenate([agent_state, agent_loc] + other_locs)
+        #[智能体的状态，智能体当前位置，其他智能体相对于该智能体的位置]
         return out
 
     def _get_obs(self):
@@ -716,7 +737,8 @@ class VectObsEnv(EnvWrapper):
 
         for x in range(len(self.env.unwrapped.m)):
             for y in range(len(self.env.unwrapped.m[x])):
-                if not m[x][y].isalnum() and not m[x][y] in ['!'] + self.env.unwrapped.door_types:  # not an agent's starting position, treasure, pit, or door
+                if not m[x][y].isalnum() and not m[x][y] in [
+                    '!'] + self.env.unwrapped.door_types:  # not an agent's starting position, treasure, pit, or door
                     img[:, x, y] = pertb[m[x][y]]
         return img
 
@@ -748,7 +770,7 @@ class VectObsEnv(EnvWrapper):
                 img[:, x, y] = pertb[m[x][y]]
 
         for x, y in self.env.unwrapped.pits:
-            pit = self.env.unwrapped.pits[(x,y)]
+            pit = self.env.unwrapped.pits[(x, y)]
             if not pit.is_open:
                 img[:, x, y] = int((1. - pit.prob_open) * 200) + 55
 
@@ -757,7 +779,7 @@ class VectObsEnv(EnvWrapper):
             img[:, x, y] = pertb[str(agent.agent_id)]
 
         for x, y in self.env.unwrapped.pits:
-            pit = self.env.unwrapped.pits[(x,y)]
+            pit = self.env.unwrapped.pits[(x, y)]
             if pit.is_open:
                 img[:, x, y] = 0
 
@@ -789,13 +811,13 @@ if __name__ == '__main__':
                 }
     env = VectObsEnv(GridWorld(-1,
                                seed=0,
-                               task_config=4,
+                               task_config=1,
                                num_agents=2,
                                rand_trans=0.0,
                                need_get=False,
                                stay_act=True), l=3)
 
-    env.reset()
+    obs, _obs = env.reset()
     img = env.render()
 
     done = False
@@ -803,6 +825,9 @@ if __name__ == '__main__':
         while True:
             # poll for actions (one agent at a time)
             events = pygame.event.get()
+            # actions = []
+            # for agent in range(len(env.agents)):
+            #     actions.append(env.action_space.sample())
             actions = None
             for event in events:
                 if event.type == pygame.KEYDOWN:
@@ -810,8 +835,9 @@ if __name__ == '__main__':
                     break
             if actions is not None:
                 break
-        _, _, rew, done, infos = env.step(actions)
-        print(rew, infos['n_found_treasures'], infos['tiers_completed'])
+        gl_ob, obs, rew, done, infos = env.step(actions)
+        pprint.pprint(rew)
+        #print(rew, infos['n_found_treasures'], infos['tiers_completed'])
         env.render()
 
     env.close()

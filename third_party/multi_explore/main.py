@@ -15,6 +15,7 @@ from utils.misc import apply_to_all_elements, timeout, RunningMeanStd
 from algorithms.sac import SAC
 from envs.ma_vizdoom.ma_vizdoom import VizdoomMultiAgentEnv
 from envs.magw.multiagent_env import GridWorld, VectObsEnv
+from ped_env.utils.maicm_interface import create_ped_env
 
 AGENT_CMAPS = ['Reds', 'Blues', 'Greens', 'Wistia']
 
@@ -98,13 +99,11 @@ def make_parallel_env(config, seed):
                                            num_agents=config.num_agents,
                                            need_get=False,
                                            stay_act=True), l=3)
+            elif config.env_type == 'pedsmove':
+                env = create_ped_env(ped_num=config.num_agents,
+                                     seed=(seed * 1000))
             else:  # vizdoom
-                env = VizdoomMultiAgentEnv(task_id=config.task_config,
-                                           env_id=(seed - 1) * 64 + rank,
-                                           # assumes no more than 64 environments per run
-                                           seed=seed * 640 + rank * 10,  # assumes no more than 10 agents per run
-                                           lock=lock,
-                                           skip_frames=config.frame_skip)
+                raise Exception("该修改代码不支持Vizdoom环境!")
             return env
 
         return init_env
@@ -209,25 +208,8 @@ def run(config):
         agent_actions = apply_to_all_elements(torch_agent_actions, lambda x: x.cpu().data.numpy())
         # rearrange actions to be per environment
         actions = [[ac[i] for ac in agent_actions] for i in range(int(active_envs.sum()))]
-        try:
-            with timeout(seconds=1):
-                next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
-        # either environment got stuck or vizdoom crashed (vizdoom is unstable w/ multi-agent scenarios)
-        except (TimeoutError, ViZDoomErrorException, ViZDoomIsNotRunningException, ViZDoomUnexpectedExitException) as e:
-            print("Environments are broken...")
-            env.close(force=True)
-            print("Closed environments, starting new...")
-            env = make_parallel_env(config, run_num)
-            state, obs = env.reset()
-            env_ep_extr_rews[active_envs.astype(bool)] = 0.0
-            env_extr_rets[active_envs.astype(bool)] = 0.0
-            for i in range(n_intr_rew_types):
-                for j in range(config.num_agents):
-                    env_ep_intr_rews[i][j][active_envs.astype(bool)] = 0.0
-            env_times = np.zeros(config.n_rollout_threads, dtype=int)
-            state = apply_to_all_elements(state, lambda x: x[active_envs.astype(bool)])
-            obs = apply_to_all_elements(obs, lambda x: x[active_envs.astype(bool)])
-            continue
+
+        next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
 
         steps_since_update += int(active_envs.sum())
         if config.intrinsic_reward == 1:
@@ -250,7 +232,7 @@ def run(config):
                            state_inds=state_inds)
         env_ep_extr_rews[active_envs.astype(bool)] += np.array(rewards)
         env_extr_rets[active_envs.astype(bool)] += np.array(rewards) * config.gamma_e ** (
-        env_times[active_envs.astype(bool)])
+            env_times[active_envs.astype(bool)])
         env_times += active_envs.astype(int)
         if intr_rews is not None:
             for i in range(n_intr_rew_types):
@@ -265,26 +247,8 @@ def run(config):
         active_over_time = env_times[active_envs.astype(bool)] >= config.max_episode_length
         active_need_reset = np.logical_or(dones, active_over_time)
         if any(need_reset):
-            try:
-                with timeout(seconds=1):
-                    # reset any environments that are past the max number of time steps or done
-                    state, obs = env.reset(need_reset=need_reset)
-            # either environment got stuck or vizdoom crashed (vizdoom is unstable w/ multi-agent scenarios)
-            except (
-            TimeoutError, ViZDoomErrorException, ViZDoomIsNotRunningException, ViZDoomUnexpectedExitException) as e:
-                print("Environments are broken...")
-                env.close(force=True)
-                print("Closed environments, starting new...")
-                env = make_parallel_env(config, run_num)
-                state, obs = env.reset()
-                # other envs that were force reset (rest taken care of in subsequent code)
-                other_reset = np.logical_not(need_reset)
-                env_ep_extr_rews[other_reset.astype(bool)] = 0.0
-                env_extr_rets[other_reset.astype(bool)] = 0.0
-                for i in range(n_intr_rew_types):
-                    for j in range(config.num_agents):
-                        env_ep_intr_rews[i][j][other_reset.astype(bool)] = 0.0
-                env_times = np.zeros(config.n_rollout_threads, dtype=int)
+            # reset any environments that are past the max number of time steps or done
+            state, obs = env.reset(need_reset=need_reset)
         else:
             state, obs = next_state, next_obs
         for env_i in np.where(need_reset)[0]:
@@ -336,7 +300,7 @@ def run(config):
                                       config.steps_before_update) and
                 (steps_since_update >= config.steps_per_update)):
             steps_since_update = 0
-            #print('Updating at time step %i' % t)
+            # print('Updating at time step %i' % t)
             model.prep_training(device='cuda' if config.use_gpu else 'cpu')
 
             for u_i in range(config.num_updates):
@@ -376,7 +340,7 @@ def run(config):
                 if config.env_type == 'gridworld':
                     logger.add_scalar('tiers_completed', np.mean(recent_tiers_completed), t)
 
-        if t % config.save_interval < config.n_rollout_threads:
+        if t % config.save_interval == 0:
             model.prep_training(device='cpu')
             os.makedirs(run_dir / 'incremental', exist_ok=True)
             model.save(run_dir / 'incremental' / ('model_%isteps.pt' % (t + 1)))
@@ -389,12 +353,15 @@ def run(config):
     logger.close()
     env.close(force=(config.env_type == 'vizdoom'))
 
+
 from third_party.multi_explore.params.gridworld import params1 as p
+from third_party.multi_explore.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
-    params = p.Params()
-    params.args.model_name = "one_icm_test"
-    #args = p.debug_mode(params.args)
-    for i in range(6):
-        config = p.change_explore_type_exp(params.args)
-        run(config)
+    params = ped_p.Params()
+    #params.args.model_name = "one_icm_test"
+    config = ped_p.debug_mode(params.args)
+    run(config)
+    # for i in range(6):
+    #     config = p.change_explore_type_exp(params.args)
+    #     run(config)

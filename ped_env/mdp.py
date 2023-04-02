@@ -6,6 +6,7 @@ import kdtree
 from math import inf
 from typing import List, Dict, cast
 
+import numpy as np
 from gym.spaces import Box, Discrete
 
 from ped_env.functions import parse_discrete_action_one_hot, calculate_nij, normalized, angle_of_vector, \
@@ -80,7 +81,7 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
     DETECT_OBSTACLE_COUNT = 3
 
     def __init__(self, env, r_move=-0.1, r_wait=-0.1, r_collision_person=-0.1, r_collision_wall=-2.0, r_reach=100,
-                 use_planner=False):
+                 use_planner=False, test_mode=None):
         super().__init__(env)
         self.last_observation = {}
         self.env = env
@@ -91,8 +92,8 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
 
         # 强化学习MDP定义区域
         # 定义观察空间为[智能体位置, 智能体速度, 三个最近智能体的位置, 三个最近障碍物的位置]一共16个值
-        self.observation_space = [Box(-inf, inf, (4 + PedsRLHandlerWithForce.DETECT_PED_COUNT * 2 +
-                                                  PedsRLHandlerWithForce.DETECT_OBSTACLE_COUNT * 2,))
+        self._obs_shape = (4 + PedsRLHandlerWithForce.DETECT_PED_COUNT * 2 + PedsRLHandlerWithForce.DETECT_OBSTACLE_COUNT * 2,)
+        self.observation_space = [Box(-inf, inf, self._obs_shape)
                                   for _ in range(self.agent_count)]
         if self.env.discrete:
             # 定义动作空间为修改智能体速度和角度，具体参见论文的动作空间设计
@@ -114,7 +115,8 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
         observation = []
 
         if ped.is_done:
-            return self.last_observation[ped.id]
+            # 根据 The Surprising Effectiveness of PPO in Cooperative Multi-Agent Games结果，这里给予零奖励
+            return np.zeros(self._obs_shape)
         # 给予智能体当前速度大小，速度相对于参考向量的夹角
         observation.append(ped.vec_norm)
         observation.append(ped.vec_angle)
@@ -150,7 +152,6 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
 
     def set_action(self, ped: Person, action):
         ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
-        # ped.set_norm_velocity(action)
 
     def set_follower_action(self, ped: Person, action, group: Group, exit_pos):
         diff = group.get_distance_to_leader(ped)
@@ -210,8 +211,8 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
             else:
                 last_pos = self.env.points_in_last_step[ped_index]
                 now_pos = (ped.getX, ped.getY)
-                if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and last_pos[1] - 0.001 <= now_pos[
-                    1] <= last_pos[1] + 0.001):
+                if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and
+                        last_pos[1] - 0.001 <= now_pos[1] <= last_pos[1] + 0.001):
                     lr += self.r_move  # 给予-0.1以每步
                     self.env.points_in_last_step[ped_index] = now_pos
                 else:

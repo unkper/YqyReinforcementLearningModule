@@ -2,8 +2,8 @@ from torch import Tensor
 from torch.autograd import Variable
 from torch.optim import Adam
 from itertools import chain
-from utils.misc import hard_update
-from utils.policies import DiscretePolicy
+from third_party.multi_explore.utils.misc import hard_update
+from third_party.multi_explore.utils.policies import DiscretePolicy
 import torch.nn.functional as F
 
 

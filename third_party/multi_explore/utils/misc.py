@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 import numpy as np
 
+
 # https://github.com/ikostrikov/pytorch-ddpg-naf/blob/master/ddpg.py#L11
 def soft_update(target, source, tau):
     """
@@ -18,6 +19,7 @@ def soft_update(target, source, tau):
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
+
 # https://github.com/ikostrikov/pytorch-ddpg-naf/blob/master/ddpg.py#L15
 def hard_update(target, source):
     """
@@ -29,6 +31,7 @@ def hard_update(target, source):
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(param.data)
 
+
 # https://github.com/seba-1511/dist_tuto.pth/blob/gh-pages/train_dist.py
 def average_gradients(model):
     """ Gradient averaging. """
@@ -36,6 +39,7 @@ def average_gradients(model):
     for param in model.parameters():
         dist.all_reduce(param.grad.data, op=dist.reduce_op.SUM, group=0)
         param.grad.data /= size
+
 
 # https://github.com/seba-1511/dist_tuto.pth/blob/gh-pages/train_dist.py
 def init_processes(rank, size, fn, backend='gloo'):
@@ -45,6 +49,7 @@ def init_processes(rank, size, fn, backend='gloo'):
     dist.init_process_group(backend, rank=rank, world_size=size)
     fn(rank, size)
 
+
 def onehot_from_logits(logits, dim=1):
     """
     Given batch of logits, return one-hot sample using epsilon greedy strategy
@@ -53,17 +58,20 @@ def onehot_from_logits(logits, dim=1):
     # get best (according to current policy) actions in one-hot form
     return (logits == logits.max(dim, keepdim=True)[0]).float()
 
+
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
 def sample_gumbel(shape, eps=1e-20, device='cpu'):
     """Sample from Gumbel(0, 1)"""
     U = torch.rand(shape, device=device)
     return -torch.log(-torch.log(U + eps) + eps)
 
+
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
 def gumbel_softmax_sample(logits, temperature, dim=1):
     """ Draw a sample from the Gumbel-Softmax distribution"""
     y = logits + sample_gumbel(logits.shape, device=logits.device)
     return F.softmax(y / temperature, dim=dim)
+
 
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
 def gumbel_softmax(logits, temperature=1.0, hard=False, dim=1):
@@ -83,18 +91,22 @@ def gumbel_softmax(logits, temperature=1.0, hard=False, dim=1):
         y = (y_hard - y).detach() + y
     return y
 
+
 def categorical_sample(probs):
     int_acs = torch.multinomial(probs, 1)
     acs = torch.zeros(probs.shape, device=probs.device).scatter_(1, int_acs, 1)
     return int_acs, acs
 
+
 def disable_gradients(module):
     for p in module.parameters():
         p.requires_grad = False
 
+
 def enable_gradients(module):
     for p in module.parameters():
         p.requires_grad = True
+
 
 def sep_clip_grad_norm(parameters, max_norm, norm_type=2):
     """
@@ -114,12 +126,14 @@ def sep_clip_grad_norm(parameters, max_norm, norm_type=2):
         if clip_coef < 1:
             p.grad.data.mul_(clip_coef)
 
+
 def pol_kl(p_probs, p_log_probs, q_log_probs):
     """
     KL divergence between 2 policies, assuming input probabilities are
     calculated from the same states
     """
     return -(p_probs * (q_log_probs - p_log_probs)).sum(dim=1).mean()
+
 
 def apply_to_all_elements(x, fn):
     """
@@ -129,15 +143,19 @@ def apply_to_all_elements(x, fn):
         return fn(x)
     return [apply_to_all_elements(y, fn) for y in x]
 
+
 class timeout:
     def __init__(self, seconds=1, error_message='Timeout'):
         self.seconds = seconds
         self.error_message = error_message
+
     def handle_timeout(self, signum, frame):
         raise TimeoutError(self.error_message)
+
     def __enter__(self):
         signal.signal(signal.SIGALRM, self.handle_timeout)
         signal.alarm(self.seconds)
+
     def __exit__(self, type, value, traceback):
         signal.alarm(0)
 

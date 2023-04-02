@@ -178,7 +178,7 @@ class Parser:
     def parse_and_create(self, map, spawn_map):
         inc = BoxWall.PIECE_WALL_WIDTH / 2
         exit_symbol = set(str(ele) for ele in range(3, 10))
-        # 按照从左往右，从上到下的遍历顺序
+        # 按照从左往右，从上到下的遍历顺序，对地图数据进行解析
         for j in range(map.shape[1]):
             for i in range(map.shape[0]):
                 if map[i, j] == '1':
@@ -255,7 +255,7 @@ class PedsMoveEnv(gym.Env):
         :param maxStep: 经过多少次step后就强行结束环境，所有行人到达终点时也会结束环境
         :param person_handler: 用于处理有关于行人状态空间，动作与返回奖励的类
         :param random_init_mode: 用于planner的规划时使用，主要区别是在全场随机生成智能体
-        :param train_mode: 当为False时，直到所有行人到达出口才会重置环境，当为True时，一旦所有leader到达出口才会重置环境
+        :param train_mode: 当为False时，直到所有行人到达出口才会重置环境，当为True时，一旦有leader到达出口就会重置环境
         :param debug_mode: 是否debug
         :param group_size:一个团体的人数，其中至少包含1个leader和多个follower
         """
@@ -317,7 +317,7 @@ class PedsMoveEnv(gym.Env):
     def num_agents(self):
         return len(self.agents)
 
-    def reset_property(self):
+    def _reset_property(self):
         # reset ped_env,清空所有全局变量以供下一次使用
         Person.counter = 0
         BoxWall.counter = 0
@@ -333,7 +333,7 @@ class PedsMoveEnv(gym.Env):
         np.random.seed(seed)
         random.seed(seed)
 
-    def initialize_env(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
+    def _initialize_env(self, maps: np.ndarray, spawn_maps: np.ndarray, person_num_sum: int = 60):
         # 创建物理引擎
         self.world = b2World(gravity=(0, 0), doSleep=True)
         self.listener = MyContactListener(self)  # 现在使用aabb_query的方式来判定
@@ -400,14 +400,18 @@ class PedsMoveEnv(gym.Env):
                 self.leaders.append(ped)
                 idx += 1
 
-    def delete_person(self, per: Person):
-        self.pop_from_render_list(per.id)
+    def _delete_person(self, per: Person):
+        self._pop_from_render_list(per.id)
         self.left_person_num -= 1
         per.delete(self.world)
         if per.is_leader:
             self.left_leader_num -= 1
+        try:
+            self.not_arrived_peds.remove(per)
+        except ValueError:
+            pass
 
-    def pop_from_render_list(self, person_id):
+    def _pop_from_render_list(self, person_id):
         """
         将行人从渲染队列中移除
         :param person_id:
@@ -471,9 +475,9 @@ class PedsMoveEnv(gym.Env):
     def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> Dict[
         str, Any]:
         self.seed(seed)
-        self.reset_property()
+        self._reset_property()
         # 开始初始化环境
-        self.initialize_env(self.terrain.map, self.terrain.map_spawn, person_num_sum=self.person_num)
+        self._initialize_env(self.terrain.map, self.terrain.map_spawn, person_num_sum=self.person_num)
         if self.person_handler.use_planner:
             self.person_handler.init_exit_kd_trees()  # 初始化KDTree以供后续使用
         # 添加初始观察状态
@@ -524,7 +528,7 @@ class PedsMoveEnv(gym.Env):
         for ped in self.peds:
             if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
                 logging.warning("Agent{}:Leave the exit{}!".format(ped.id, ped.exit_type))
-                self.delete_person(ped)
+                self._delete_person(ped)
                 if ped.is_leader:
                     pass
                     # self.agents.remove(self.agents_rev_dict[ped]) # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
@@ -631,11 +635,10 @@ class PedsMoveEnv(gym.Env):
             return data if mode == "rgb_array" else cv2.cvtColor(data, cv2.COLOR_RGB2GRAY)
 
     def render(self, mode="human", ratio=1):
-        # if self.viewer is None:  # 如果调用了 render, 而且没有 viewer, 就生成一个
-        #     self.viewer = PedsMoveEnvViewer(self, render_ratio=ratio)
         self.render_data = self._render(mode)
 
     def close(self):
+        pygame.quit()
         if self.viewer is not None:
             self.viewer.close()
             self.viewer = None

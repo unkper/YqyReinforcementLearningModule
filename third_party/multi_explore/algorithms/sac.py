@@ -4,20 +4,23 @@ import numpy as np
 from torch.optim import Adam, SGD
 from gym import spaces
 from itertools import chain
-from utils.misc import soft_update, hard_update, enable_gradients, disable_gradients, pol_kl, RunningMeanStd, apply_to_all_elements
-from utils.agents import Agent
-from utils.policies import HeadSelector
-from utils.critics import CentralCritic
+from third_party.multi_explore.utils.misc import soft_update, hard_update, enable_gradients, disable_gradients, pol_kl, \
+    RunningMeanStd, apply_to_all_elements
+from third_party.multi_explore.utils.agents import Agent
+from third_party.multi_explore.utils.policies import HeadSelector
+from third_party.multi_explore.utils.critics import CentralCritic
 
 MSELoss = torch.nn.MSELoss()
 SmoothL1Loss = torch.nn.SmoothL1Loss()
 CrossEntropyLoss = torch.nn.CrossEntropyLoss()
+
 
 class SAC(object):
     """
     Training decentralized policies w/ centralized critic using
     (discrete action) Soft Actor-Critic
     """
+
     def __init__(self, nagents, obs_shape,
                  state_shape, action_size, gamma_e=0.95, gamma_i=0.95, tau=0.01,
                  hard_update_interval=None,
@@ -238,7 +241,7 @@ class SAC(object):
         critic_rets = self.critic(critic_in, return_all_q=True)
         for a_i, probs, log_pi, pol_regs, ((eqs, iqs), (all_eqs, all_iqs)) in zip(
                 range(self.nagents), all_probs, all_log_pis, all_pol_regs,
-                      critic_rets):
+                critic_rets):
             curr_agent = self.agents[a_i]
             pol_loss = 0.0
             if self.sep_extr_head:
@@ -274,7 +277,7 @@ class SAC(object):
             curr_agent.policy.scale_shared_grads()
             enable_gradients(self.critic)
 
-            grad_norm = torch.nn.utils.clip_grad_norm_(curr_agent.policy.parameters(), self.grad_norm_clip/100.)
+            grad_norm = torch.nn.utils.clip_grad_norm_(curr_agent.policy.parameters(), self.grad_norm_clip / 100.)
             curr_agent.policy_optimizer.step()
             curr_agent.policy_optimizer.zero_grad()
 
@@ -297,7 +300,6 @@ class SAC(object):
             hard_update(self.target_critic, self.critic)
             for a in self.agents:
                 hard_update(a.target_policy, a.policy)
-
 
     def prep_training(self, device='cuda'):
         self.critic.train()

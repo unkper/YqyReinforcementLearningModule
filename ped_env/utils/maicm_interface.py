@@ -23,6 +23,9 @@ class PedEnvWrapper:
         else:
             self.visit_counts = np.zeros((self.num_agents, self.row * 2, self.col * 2))
 
+        self._prv_state = None
+        self._prv_obs = None
+
     def reset(self):
         obs_dict = self.env.reset()
         _obs = []
@@ -41,7 +44,12 @@ class PedEnvWrapper:
             for a in self.env.peds:
                 idx = int(self.env.agents_rev_dict[a])
                 self.visit_counts[idx, int(a.x), int(a.y)] += 1
+        self._prv_state = global_obs
+        self._prv_obs = _obs
         return global_obs, _obs
+
+    def get_st_obs(self):
+        return self._prv_state, self._prv_obs
 
     def step(self, actions):
         acts = {}
@@ -73,6 +81,8 @@ class PedEnvWrapper:
             for a in self.env.peds:
                 idx = int(self.env.agents_rev_dict[a])
                 self.visit_counts[idx, int(a.x), int(a.y)] += 1
+        self._prv_state = global_obs
+        self._prv_obs = _obs
         return global_obs, _obs, sum(_rew), all(_done), _info
 
     def render(self, mode="human", ratio=1.0):

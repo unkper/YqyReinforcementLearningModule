@@ -176,7 +176,7 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
             int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
             mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         ped.self_driven_force(mix_dir)  # 跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
-        logging.error("该奖励模型中不应该出现follower!")
+        # logging.error("该奖励模型中不应该出现follower!")
         # ped.ij_group_force(group)
 
     def get_follower_a_star_path(self, ped, pos_i, pos_j, force=False):

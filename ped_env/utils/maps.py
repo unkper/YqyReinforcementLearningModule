@@ -58,7 +58,6 @@ class Map:
     def height(self):
         return self.map.shape[1]
 
-
     def get_random_exit(self, index):
         return sample(self.random_exits[index], 1)[0]
 
@@ -323,7 +322,7 @@ map9 = np.array([
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 'dw', 0, 0, 'dw', 'dw', 'dw', 'dw', 'dw', 0, 0, 0, 0, 'dw', 2],
+    [2, 'dw', 0, 'dw', 'dw', 'dw', 'dw', 'dw', 'dw', 0, 0, 0, 0, 'dw', 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
@@ -337,7 +336,7 @@ map9 = np.array([
 ])
 
 map9_spawn = np.array([
-    [2, 2, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
@@ -452,7 +451,6 @@ test_map = np.array([
     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
 ])
 
-
 start_points_map13 = [(1, 6), (1, 6)]
 exit_map13 = [(6.5, 12), (12, 6.5)]
 radius_map13 = 1.5
@@ -531,3 +529,16 @@ map_12 = Map(map12, exit_map12, start_points_map12, random_exits12, "map_12", ra
 map_13 = Map(map13, exit_map13, start_points_map13, random_exits13, "map_13", radius_map13, map13_spawn)
 
 # map_test = Map(test_map, exit_test_map, start_points_test_map, "map_test", radius_test_map)
+
+register_dict = {
+    'map_simple': map_simple,
+    'map_09': map_09,
+    'map_10': map_10,
+    'map_11': map_11,
+    'map_12': map_12,
+    'map_13': map_13,
+}
+
+
+def parse_map(map_name: str):
+    return register_dict[map_name]

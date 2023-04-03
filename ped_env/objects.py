@@ -344,7 +344,8 @@ class Person(Agent):
             if self.is_leader:
                 self.leader_pic.delete()
                 del self.leader_pic
-        env.DestroyBody(self.body)
+        # if self.body != None:
+        #     env.DestroyBody(self.body)
         # self.has_removed = True  # 因为逻辑可能不对，选择了在奖励模型处设置has_removed
 
     def __str__(self):

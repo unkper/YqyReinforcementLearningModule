@@ -8,9 +8,9 @@ vel_iters, pos_iters = 6, 2
 ACTION_DIM = 9  # 离散动作的维数
 GROUP_SIZE = 0.5  # 一个团体中的人在半径为多大(m)的区域生成
 
-RENDER_RATIO = 1.0
-VIEWPORT_W, VIEWPORT_H = int(500 * RENDER_RATIO), int(500 * RENDER_RATIO)
-RENDER_SCALE = int(1 * RENDER_RATIO)
+
+VIEWPORT_W, VIEWPORT_H = int(500), int(500)
+RENDER_SCALE = int(85)
 RENDER_RATIO_CHANGED = False
 
 # 动作常量区
@@ -38,8 +38,7 @@ logging.warning(u"在使用渲染前一定要调用init_settings初始化")
 
 
 def init_settings(map_width, map_height):
-    global RENDER_RATIO, VIEWPORT_H, VIEWPORT_W, RENDER_SCALE, RENDER_RATIO_CHANGED
+    global VIEWPORT_H, VIEWPORT_W, RENDER_SCALE, RENDER_RATIO_CHANGED
     assert map_width == map_height, u"当前地图必须保证输入的是正方形!"
-    VIEWPORT_W, VIEWPORT_H = int(500 * RENDER_RATIO), int(500 * RENDER_RATIO)
-    RENDER_SCALE = int(VIEWPORT_W / map_width)
+    RENDER_SCALE = 500 // map_width
     RENDER_RATIO_CHANGED = True

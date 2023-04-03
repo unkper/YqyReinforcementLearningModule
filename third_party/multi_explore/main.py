@@ -100,7 +100,11 @@ def make_parallel_env(config, seed):
                                            need_get=False,
                                            stay_act=True), l=3)
             elif config.env_type == 'pedsmove':
-                env = create_ped_env(ped_num=config.num_agents,
+                env = create_ped_env(map=config.map_ind,
+                                     leader_num=config.num_agents,
+                                     group_size=config.group_size,
+                                     maxStep=config.max_episode_length,
+                                     frame_skip=config.frame_skip,
                                      seed=(seed * 1000))
             else:  # vizdoom
                 raise Exception("该修改代码不支持Vizdoom环境!")
@@ -114,8 +118,8 @@ def make_parallel_env(config, seed):
 
 def run(config):
     torch.set_num_threads(1)
-    env_descr = 'map%i_%iagents_task%i' % (config.map_ind, config.num_agents,
-                                           config.task_config)
+    env_descr = '{}_{}agents_task{}'.format(config.map_ind, config.num_agents,
+                                               config.task_config)
     model_dir = Path('./models') / config.env_type / env_descr / config.model_name
     if not model_dir.exists():
         run_num = 1
@@ -358,10 +362,15 @@ from third_party.multi_explore.params.gridworld import params1 as p
 from third_party.multi_explore.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
-    params = ped_p.Params()
-    #params.args.model_name = "one_icm_test"
-    config = ped_p.debug_mode(params.args)
-    run(config)
+    params = ped_p.Params("map_09", 6, 5)
+    # params.args.model_name = "one_icm_test"
+    #params.args = ped_p.debug_mode(params.args)
+    #run(params.args)
+
+    for i in range(2):
+        config = ped_p.icm_compare_test(params.args)
+        run(config)
+
     # for i in range(6):
     #     config = p.change_explore_type_exp(params.args)
     #     run(config)

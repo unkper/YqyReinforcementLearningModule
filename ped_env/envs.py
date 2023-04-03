@@ -32,7 +32,7 @@ from ped_env.listener import MyContactListener
 from ped_env.objects import BoxWall, Person, Exit, Group
 from ped_env.utils.colors import (ColorBlue, ColorWall, ColorRed, ColorYellow)
 from ped_env.utils.misc import ObjectType
-from ped_env.utils.maps import Map
+from ped_env.utils.maps import Map, parse_map
 from ped_env.functions import calculate_each_group_num, calculate_groups_person_num, calc_triangle_points, \
     transfer_to_render, gray_scale_image
 from ped_env.settings import TICKS_PER_SEC, vel_iters, pos_iters, ACTION_DIM, GROUP_SIZE, RENDER_SCALE
@@ -265,7 +265,7 @@ class PedsMoveEnv(gym.Env):
         self.left_person_num = 0
         self.step_in_env = 0
         self.elements = []
-        self.terrain = terrain
+        self.terrain = terrain if isinstance(terrain, Map) else parse_map(terrain)
         self.screen: Optional[pygame.Surface] = None
         self.clock = None
         self.render_data = None
@@ -421,7 +421,7 @@ class PedsMoveEnv(gym.Env):
             if per.type == ObjectType.Agent and per.id == person_id:
                 self.elements.pop(idx)
                 return
-        raise Exception(u"移除一个不存在的行人!")
+        #logging.error(u"移除一个不存在的行人!")
 
     def get_peds_distance_to_exit(self):
         for ped in self.peds:
@@ -511,7 +511,7 @@ class PedsMoveEnv(gym.Env):
                 else:
                     # 是follower用社会力模型来控制
                     self.person_handler.set_follower_action(ped,
-                                                            actions[belong_group.id],
+                                                            actions[str(belong_group.id)],
                                                             belong_group,
                                                             self.terrain.exits[ped.exit_type - 3])
                 # 施加合力给行人
@@ -588,6 +588,7 @@ class PedsMoveEnv(gym.Env):
             pygame.init()
             pygame.display.init()
             self.screen = pygame.display.set_mode((set.VIEWPORT_W, set.VIEWPORT_H))
+            set.init_settings(self.terrain.width, self.terrain.height)
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
@@ -598,6 +599,7 @@ class PedsMoveEnv(gym.Env):
 
         self.surf = pygame.Surface((set.VIEWPORT_W, set.VIEWPORT_H))
         SCALE = self.render_scale = set.RENDER_SCALE
+
 
         #pygame.transform.scale(self.surf, (SCALE, SCALE))
         self.surf.fill((255, 255, 255))

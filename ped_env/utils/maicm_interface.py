@@ -38,12 +38,13 @@ class PedEnvWrapper:
             global_obs = _obs
 
         if self.joint_count:
-            visit_inds = tuple(sum([[int(a.x), int(a.y)] for a in self.env.peds], []))
+            visit_inds = tuple(sum([[int(a.x), int(a.y)] for a in self.env.possible_agents], []))
             self.visit_counts[visit_inds] += 1
         else:
-            for a in self.env.peds:
-                idx = int(self.env.agents_rev_dict[a])
-                self.visit_counts[idx, int(a.x), int(a.y)] += 1
+            for a in self.env.possible_agents:
+                idx = int(a)
+                agent = self.env.agents_dict[a]
+                self.visit_counts[idx, int(agent.x), int(agent.y)] += 1
         self._prv_state = global_obs
         self._prv_obs = _obs
         return global_obs, _obs
@@ -67,20 +68,26 @@ class PedEnvWrapper:
             _obs.append(np.array(next_o[agent]))
             _rew.append(r[agent])
             _done.append(done[agent])
-        _info['visit_count_lookup'] = [[int(a.x), int(a.y)] for a in self.env.peds]
-        _info['n_found_treasures'] = [1 if a.is_done else 0 for a in self.env.peds]
+
+        _info['visit_count_lookup'] = []
+        _info['n_found_treasures'] = []
+        for a in self.env.possible_agents:
+            agent = self.env.agents_dict[a]
+            _info['visit_count_lookup'].append([int(agent.x), int(agent.y)])
+            _info['n_found_treasures'].append(1 if agent.is_done else 0)
         if len(_obs) > 0:
             global_obs = np.concatenate(_obs)
         else:
             global_obs = _obs
 
         if self.joint_count:
-            visit_inds = tuple(sum([[int(a.x), int(a.y)] for a in self.env.peds], []))
+            visit_inds = tuple(sum([[int(a.x), int(a.y)] for a in self.env.possible_agents], []))
             self.visit_counts[visit_inds] += 1
         else:
-            for a in self.env.peds:
-                idx = int(self.env.agents_rev_dict[a])
-                self.visit_counts[idx, int(a.x), int(a.y)] += 1
+            for a in self.env.possible_agents:
+                idx = int(a)
+                agent = self.env.agents_dict[a]
+                self.visit_counts[idx, int(agent.x), int(agent.y)] += 1
         self._prv_state = global_obs
         self._prv_obs = _obs
         return global_obs, _obs, sum(_rew), all(_done), _info
@@ -95,10 +102,9 @@ class PedEnvWrapper:
         self.env.seed(seed)
 
 
-def create_ped_env(map=map_09, ped_num=4, maxStep=10000, disable_reward=False, seed=None):
-    env = PedEnvWrapper(PedsMoveEnv(terrain=map, person_num=ped_num,
-                                    maxStep=maxStep, disable_reward=disable_reward,
-                                    discrete=True, frame_skipping=4))
+def create_ped_env(map="map_09", leader_num=4, group_size=1, maxStep=10000, disable_reward=False, frame_skip=8, seed=None):
+    env = PedEnvWrapper(PedsMoveEnv(terrain=map, person_num=leader_num * group_size, group_size=(group_size, group_size),
+                                    maxStep=maxStep, disable_reward=disable_reward, discrete=True, frame_skipping=frame_skip))
     env.seed(seed)
     return env
 
@@ -107,7 +113,7 @@ def test_wrapper_api(debug=False):
     import time
 
     person_num = 20
-    env = create_ped_env(map_simple, 4)
+    env = create_ped_env("map_simple", 2, 5)
     # env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
     #           random_init_mode=True, person_handler=PedsRLHandlerWithForce)
 
@@ -127,10 +133,12 @@ def test_wrapper_api(debug=False):
             state, obs, reward, is_done, info = env.step(action)
             #env.render()
             #print("is_done:")
-            pprint.pprint(info)
+            #pprint.pprint(info)
             step += env.env.frame_skipping
+            time.sleep(0.1)
     env.close()
 
 
 if __name__ == '__main__':
-    test_wrapper_api()
+    for i in range(10):
+        test_wrapper_api()

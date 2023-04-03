@@ -36,7 +36,6 @@ def transfer_to_render(x, y, X, Y, scale=30):
     return x_ * scale, y_ * scale, X * scale, Y * scale
 
 
-@njit
 def calculate_nij(i, j):
     pos_i = i.pos
     pos_j = j.pos
@@ -65,7 +64,7 @@ def parse_discrete_action(type: np.ndarray):
     return actions[type]
 
 
-@njit
+#@njit
 def normalized(a, axis=-1, order=2):
     l2 = np.atleast_1d(np.linalg.norm(a, order, axis))
     l2[l2 == 0] = 1
@@ -103,7 +102,7 @@ def random_pick(some_list, probabilities):
             break
     return item
 
-
+@njit
 def ij_power(r, A=0.01610612736, B=3.93216):
     ij_group_f = (A / (pow(r, 12)) - B / (pow(r, 6)))
     return ij_group_f

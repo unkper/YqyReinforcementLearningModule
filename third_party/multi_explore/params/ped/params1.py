@@ -62,10 +62,12 @@ class Params:
     """
     gpu_rollout = True
 
-    def __init__(self, map="map_09", agent_num = 4, group_size = 1):
+    def __init__(self, map="map_09", agent_num = 4, group_size = 1, pol_h_dim=32, cri_h_dim=128):
         Params.map_ind = map
         Params.num_agents = agent_num
         Params.group_size = group_size
+        Params.pol_hidden_dim = pol_h_dim
+        Params.critic_hidden_dim = cri_h_dim
 
         filtered_dict = {k: v for k, v in vars(Params).items() if not k.startswith("__")}
         filtered_dict = {k: v for k, v in filtered_dict.items() if not isinstance(v, classmethod)}

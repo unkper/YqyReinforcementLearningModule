@@ -400,16 +400,14 @@ class PedsMoveEnv(gym.Env):
                 self.leaders.append(ped)
                 idx += 1
 
-    def _delete_person(self, per: Person):
+    def _delete_person(self, per: Person, ready_to_remove: List[Person]):
         self._pop_from_render_list(per.id)
         self.left_person_num -= 1
         per.delete(self.world)
         if per.is_leader:
             self.left_leader_num -= 1
-        try:
-            self.not_arrived_peds.remove(per)
-        except ValueError:
-            pass
+        ready_to_remove.append(per)
+
 
     def _pop_from_render_list(self, person_id):
         """
@@ -525,13 +523,16 @@ class PedsMoveEnv(gym.Env):
             for group in self.groups:
                 group.update()
 
-        for ped in self.peds:
+        ready_to_remove = []
+        for ped in self.not_arrived_peds:
             if ped.is_done and not ped.has_removed:  # 移除到达出口的leader和follower
                 logging.warning("Agent{}:Leave the exit{}!".format(ped.id, ped.exit_type))
-                self._delete_person(ped)
+                self._delete_person(ped, ready_to_remove)
                 if ped.is_leader:
                     pass
                     # self.agents.remove(self.agents_rev_dict[ped]) # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
+        for ped in ready_to_remove:
+            self.not_arrived_peds.remove(ped)
 
         # 该环境中智能体是合作关系，因此使用统一奖励为好，此处使用了pettingzoo的形式
         obs, rewards = self.person_handler.step(self.peds, self.ped_to_group_dic, self.agents_rev_dict,
@@ -540,10 +541,10 @@ class PedsMoveEnv(gym.Env):
             for key in rewards.keys():
                 rewards[key] = 0.0
 
-        for idx, group in enumerate(self.groups):
-            if group.leader.is_done:
-                # is_done[self.agents_rev_dict[group.leader]] = True     # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
-                pass
+        # for idx, group in enumerate(self.groups):
+        #     if group.leader.is_done:
+        #         # is_done[self.agents_rev_dict[group.leader]] = True     # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
+        #         pass
 
         def is_done_operation():
             is_done = {agent: True for agent in self.agents}
@@ -600,8 +601,6 @@ class PedsMoveEnv(gym.Env):
         self.surf = pygame.Surface((set.VIEWPORT_W, set.VIEWPORT_H))
         SCALE = self.render_scale = set.RENDER_SCALE
 
-
-        #pygame.transform.scale(self.surf, (SCALE, SCALE))
         self.surf.fill((255, 255, 255))
         for ele in self.elements:
             if isinstance(ele, Person):

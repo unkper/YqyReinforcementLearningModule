@@ -17,8 +17,8 @@ class ReplayBuffer(object):
         """
         self.max_steps = max_steps
         self.num_agents = num_agents
-        self.state_vect_buff = np.zeros((max_steps, state_space.shape[0]), dtype=np.float32)
-        self.next_state_vect_buff = np.zeros((max_steps, state_space.shape[0]), dtype=np.float32)
+        self.state_vect_buff = np.zeros((max_steps, ) + state_space.shape, dtype=np.float32)
+        self.next_state_vect_buff = np.zeros((max_steps, ) + state_space.shape, dtype=np.float32)
         self.rew_buff = np.zeros(max_steps, dtype=np.float32)
         self.done_buff = np.zeros(max_steps, dtype=np.uint8)
         self.obs_buffs = []

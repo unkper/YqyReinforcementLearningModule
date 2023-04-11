@@ -1,3 +1,4 @@
+import os.path
 import pprint
 import random
 
@@ -192,23 +193,32 @@ def test_wrapper_api(debug=False):
             #env.render()
 
         if debug and isinstance(env.venv.person_handler, PedsVisionRLHandler):
-            fig, ax = plt.subplots()
+            save_video(obs_arr)
 
-            now_obs_idx = 0
 
-            def update(frame):
-                nonlocal now_obs_idx, obs_arr
-                ax.clear()
+def save_video(obs_arr, name="animation"):
+    """
+    obs_arr是一系列帧堆叠成的数组
+    """
+    fig, ax = plt.subplots()
+    now_obs_idx = 0
 
-                ax.imshow(obs_arr[now_obs_idx])
-                # ax.imshow(np.transpose(obs_arr[now_obs_idx], (1, 2, 0)))
-                now_obs_idx += 1
-                now_obs_idx %= len(obs_arr)
-                # 隐藏坐标轴
-                ax.axis('off')
+    def update(frame):
+        nonlocal now_obs_idx, obs_arr
+        ax.clear()
 
-            ani = FuncAnimation(fig, update)
-            ani.save('./animation.mp4', writer='ffmpeg')
+        ax.imshow(obs_arr[now_obs_idx])
+        # ax.imshow(np.transpose(obs_arr[now_obs_idx], (1, 2, 0)))
+        now_obs_idx += 1
+        now_obs_idx %= len(obs_arr)
+        # 隐藏坐标轴
+        ax.axis('off')
+
+    ani = FuncAnimation(fig, update)
+    path = './{}.mp4'.format(name)
+    if os.path.exists(path):
+        os.remove(path)
+    ani.save(path, writer='ffmpeg')
 
 
 if __name__ == '__main__':

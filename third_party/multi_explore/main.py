@@ -1,4 +1,6 @@
 import argparse
+import logging
+
 import torch
 import os
 import multiprocessing
@@ -116,8 +118,8 @@ def make_parallel_env(config, seed):
                           range(config.n_rollout_threads)])
 
 
-def run(config):
-    torch.set_num_threads(1)
+def run(config, load_file=None):
+    #torch.set_num_threads(1)
     env_descr = '{}_{}agents_task{}'.format(config.map_ind, config.num_agents,
                                                config.task_config)
     model_dir = Path('./models') / config.env_type / env_descr / config.model_name
@@ -152,26 +154,32 @@ def run(config):
         sep_extr_head = False
     n_rew_heads = n_intr_rew_types + int(sep_extr_head)
 
-    model = SAC.init_from_env(env,
-                              nagents=config.num_agents,
-                              tau=config.tau,
-                              hard_update_interval=config.hard_update,
-                              pi_lr=config.pi_lr,
-                              q_lr=config.q_lr,
-                              phi_lr=config.phi_lr,
-                              adam_eps=config.adam_eps,
-                              q_decay=config.q_decay,
-                              phi_decay=config.phi_decay,
-                              gamma_e=config.gamma_e,
-                              gamma_i=config.gamma_i,
-                              pol_hidden_dim=config.pol_hidden_dim,
-                              critic_hidden_dim=config.critic_hidden_dim,
-                              nonlin=nonlin,
-                              reward_scale=config.reward_scale,
-                              head_reward_scale=config.head_reward_scale,
-                              beta=config.beta,
-                              n_intr_rew_types=n_intr_rew_types,
-                              sep_extr_head=sep_extr_head)
+    if load_file is None:
+        model = SAC.init_from_env(env,
+                                  nagents=config.num_agents,
+                                  tau=config.tau,
+                                  hard_update_interval=config.hard_update,
+                                  pi_lr=config.pi_lr,
+                                  q_lr=config.q_lr,
+                                  phi_lr=config.phi_lr,
+                                  adam_eps=config.adam_eps,
+                                  q_decay=config.q_decay,
+                                  phi_decay=config.phi_decay,
+                                  gamma_e=config.gamma_e,
+                                  gamma_i=config.gamma_i,
+                                  pol_hidden_dim=config.pol_hidden_dim,
+                                  critic_hidden_dim=config.critic_hidden_dim,
+                                  nonlin=nonlin,
+                                  reward_scale=config.reward_scale,
+                                  head_reward_scale=config.head_reward_scale,
+                                  beta=config.beta,
+                                  n_intr_rew_types=n_intr_rew_types,
+                                  sep_extr_head=sep_extr_head)
+    else:
+        logging.warning("加载之前保存的模型文件来训练...")
+        model = SAC.init_from_save(load_file,
+                                   load_critic=True,
+                                   load_ir=True)
     replay_buffer = ReplayBuffer(config.buffer_length, model.nagents,
                                  env.state_space,
                                  env.observation_space,
@@ -362,14 +370,14 @@ from third_party.multi_explore.params.gridworld import params1 as p
 from third_party.multi_explore.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
-    params = ped_p.Params("map_09", 6, 5)
-    # params.args.model_name = "one_icm_test"
-    #params.args = ped_p.debug_mode(params.args)
-    #run(params.args)
+    config = ped_p.Params("map_09", 6, 4)
+    # config.args.model_name = "one_icm_test"
+    config.args = ped_p.debug_mode(config.args)
+    run(config.args)
 
-    for i in range(2):
-        config = ped_p.icm_compare_test(params.args)
-        run(config)
+    # for i in range(2):
+    #     config = ped_p.icm_compare_test(params.args)
+    #     run(config)
 
     # for i in range(6):
     #     config = p.change_explore_type_exp(params.args)

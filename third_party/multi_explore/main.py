@@ -221,7 +221,24 @@ def run(config, load_file=None):
         # rearrange actions to be per environment
         actions = [[ac[i] for ac in agent_actions] for i in range(int(active_envs.sum()))]
 
-        next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
+        try:
+            with timeout(seconds=1):
+                next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
+        except (TimeoutError):
+            # 为了防止环境崩溃引起训练的无故终止!
+            logging.warning("Environment are broken...")
+            env = make_parallel_env(config, run_num)
+            state, obs = env.reset()
+            idx = active_envs.astype(bool)
+            env_ep_extr_rews[idx] = 0.0
+            env_extr_rets[idx] = 0.0
+            for i in range(n_intr_rew_types):
+                for j in range(config.num_agents):
+                    env_ep_intr_rews[i][j][idx] = 0.0
+            env_times = np.zeros(config.n_rollout_threads, dtype=int)
+            state = apply_to_all_elements(state, lambda x: x[idx])
+            obs = apply_to_all_elements(obs, lambda x: x[idx])
+            continue
 
         steps_since_update += int(active_envs.sum())
         if config.intrinsic_reward == 1:

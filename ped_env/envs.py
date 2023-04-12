@@ -547,8 +547,8 @@ class PedsMoveEnv(gym.Env):
         #         pass
 
         def is_done_operation():
-            is_done = {agent: True for agent in self.agents}
-            truncated = {agentid: False for agentid in self.agents}
+            is_done = {agent: True for agent in self.possible_agents}
+            truncated = {agentid: False for agentid in self.possible_agents}
             self.agents.clear()  # 为了tianshou框架的方便，这里将到达出口的人的is_done置为False，本来应该是True的！
             return is_done, truncated
 
@@ -562,8 +562,8 @@ class PedsMoveEnv(gym.Env):
 
         self.step_in_env += self.frame_skipping
         if self.step_in_env > self.maxStep:  # 如果maxStep步都没有完全撤离，is_done直接为True
-            is_done = {agent: True for agent in self.agents}
-            truncated = {agentid: True for agentid in self.agents}
+            is_done = {agent: True for agent in self.possible_agents}
+            truncated = {agentid: True for agentid in self.possible_agents}
             # 清空agents里面的所有元素
             self.agents = []
             logging.warning(u"在{}步时强行重置环境!".format(self.maxStep))

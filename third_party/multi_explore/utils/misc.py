@@ -197,3 +197,14 @@ class RunningMeanStd(object):
         self.mean = new_mean
         self.var = new_var
         self.count = new_count
+
+
+def save_params(obj, dir_path):
+    save_file = open(os.path.join(dir_path, "params.txt"), "w+")
+    # 获取实例的所有属性和属性值
+    for attr_name in dir(obj):
+        if not attr_name.startswith('__'):
+            attr_value = getattr(obj, attr_name)
+            #print(f'{attr_name}: {attr_value}')
+            save_file.write(f'{attr_name}: {attr_value}\n')
+    save_file.close()

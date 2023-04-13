@@ -109,15 +109,17 @@ class VecEnv(ABC):
         return self.step_wait()
 
     def render(self, mode='human'):
-        imgs = self.get_images()
-        bigimg = tile_images(imgs)
-        if mode == 'human':
-            self.get_viewer().imshow(bigimg)
-            return self.get_viewer().isopen
-        elif mode == 'rgb_array':
-            return bigimg
-        else:
-            raise NotImplementedError
+        pass
+        #self.render(mode)
+        # imgs = self.get_images()
+        # bigimg = tile_images(imgs)
+        # if mode == 'human':
+        #     self.get_viewer().imshow(bigimg)
+        #     return self.get_viewer().isopen
+        # elif mode == 'rgb_array':
+        #     return bigimg
+        # else:
+        #     raise NotImplementedError
 
     def get_images(self):
         """
@@ -221,6 +223,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 remote.send(env.unwrapped.visit_counts)
             else:
                 raise NotImplementedError
+        elif cmd == 'render':
+            env.render()
         else:
             raise NotImplementedError
 
@@ -331,3 +335,7 @@ class SubprocVecEnv(VecEnv):
         for p in self.ps:
             p.join()
         self.closed = True
+
+    def render(self, mode='human'):
+        for remote in self.remotes:
+            remote.send(('render', mode))

@@ -93,7 +93,7 @@ class SAC(object):
     def target_policies(self):
         return [a.target_policy for a in self.agents]
 
-    def update_heads_onpol(self, mc_rets, ret_rms, soft=True, logger=None):
+    def update_heads_onpol(self, mc_rets, ret_rms, soft=True, logger=None, data_dict=None):
         """
         Update policy head selector(s) using monte carlo rollouts
         """
@@ -120,11 +120,14 @@ class SAC(object):
         loss.backward()
         self.head_selector_optimizer.step()
         if logger is not None:
+            data_dict["timestep"].append(self.niter)
             logger.add_scalar('head_entropy', entropy[0], self.niter)
+            data_dict['head_entropy'].append(entropy[0].detach().cpu().numpy())
 
             for i in range(self.n_pol_heads):
                 logger.add_scalar('bandits/head%i' % i,
                                   all_probs[i], self.niter)
+                data_dict['bandits/head%i' % i].append(all_probs[i].detach().cpu().numpy())
 
     def sample_pol_heads(self, uniform=False):
         """
@@ -154,7 +157,7 @@ class SAC(object):
         return [a.step(obs, explore=explore, head=h)
                 for a, obs, h in zip(self.agents, observations, self.curr_pol_heads)]
 
-    def update_critic(self, sample, soft=True, logger=None, intr_rews=None,
+    def update_critic(self, sample, soft=True, logger=None, intr_rews=None, data_dict=None,
                       **kwargs):
         """
         Update central critic for all agents
@@ -212,9 +215,12 @@ class SAC(object):
         if logger is not None:
             logger.add_scalar('grad_norms/critic', grad_norm, self.niter)
             logger.add_scalar('losses/q_loss', q_loss, self.niter)
+            data_dict['timestep'].append(self.niter)
+            data_dict['grad_norms/critic'].append(grad_norm.detach().cpu().numpy())
+            data_dict['losses/q_loss'].append(q_loss.detach().cpu().numpy())
         self.niter += 1
 
-    def update_policies(self, sample, soft=True, logger=None,
+    def update_policies(self, sample, soft=True, logger=None, data_dict=None,
                         **kwargs):
         state, obs, acs, rews, next_state, next_obs, dones = sample
         samp_acs = []
@@ -229,7 +235,7 @@ class SAC(object):
                 regularize=True, return_entropy=True, head=None)
             curr_ac, probs, log_probs, log_pi, pol_regs, ent = list(zip(*pi_outs))
             for j in range(n_pol_heads):
-                logger.add_scalar('agent%i/pol%i_entropy' % (a_i, j), ent[j],
+                logger.add_scalar('agent%i/pol%i_entropy' % (a_i, j), ent[j].detach().cpu().numpy(),
                                   self.niter)
             samp_acs.append(curr_ac)
             all_probs.append(probs)
@@ -286,6 +292,9 @@ class SAC(object):
                                   grad_norm, self.niter)
                 logger.add_scalar('agent%i/losses/pol_loss' % a_i,
                                   pol_loss, self.niter)
+                data_dict['grad_norms/agent%i_policy' % a_i].append(grad_norm.detach().cpu().numpy())
+                data_dict['agent%i/losses/pol_loss' % a_i].append(pol_loss.detach().cpu().numpy())
+
 
     def update_all_targets(self):
         """

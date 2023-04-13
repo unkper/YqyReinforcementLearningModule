@@ -1,4 +1,8 @@
-import argparse
+import pickle
+from typing import List
+
+import dill
+import pandas as pd
 import logging
 
 import torch
@@ -6,16 +10,15 @@ import os
 import multiprocessing
 import numpy as np
 import tqdm
-from vizdoom import ViZDoomErrorException, ViZDoomIsNotRunningException, ViZDoomUnexpectedExitException
-from gym.spaces import Box, Discrete
+
 from pathlib import Path
-from collections import deque
+from collections import deque, defaultdict
 from tensorboardX import SummaryWriter
 from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv
-from utils.misc import apply_to_all_elements, timeout, RunningMeanStd
+from utils.misc import apply_to_all_elements, timeout, RunningMeanStd, save_params
 from algorithms.sac import SAC
-from envs.ma_vizdoom.ma_vizdoom import VizdoomMultiAgentEnv
+
 from envs.magw.multiagent_env import GridWorld, VectObsEnv
 from ped_env.utils.maicm_interface import create_ped_env
 
@@ -119,9 +122,9 @@ def make_parallel_env(config, seed):
 
 
 def run(config, load_file=None):
-    #torch.set_num_threads(1)
+    # torch.set_num_threads(1)
     env_descr = '{}_{}agents_task{}'.format(config.map_ind, config.num_agents,
-                                               config.task_config)
+                                            config.task_config)
     model_dir = Path('./models') / config.env_type / env_descr / config.model_name
     if not model_dir.exists():
         run_num = 1
@@ -136,8 +139,15 @@ def run(config, load_file=None):
     curr_run = 'run%i' % run_num
     run_dir = model_dir / curr_run
     log_dir = run_dir / 'logs'
+    data_dir = run_dir / 'data'
     os.makedirs(log_dir)
+    os.makedirs(data_dir)
     logger = SummaryWriter(str(log_dir))
+    save_params(config, run_dir)
+    data_dict = defaultdict(list)
+    critic_policy_data_dict = defaultdict(list)
+    head_data_dict = defaultdict(list)
+    agent_pos_dict = defaultdict(lambda: defaultdict(list))
 
     torch.manual_seed(run_num)
     np.random.seed(run_num)
@@ -221,24 +231,31 @@ def run(config, load_file=None):
         # rearrange actions to be per environment
         actions = [[ac[i] for ac in agent_actions] for i in range(int(active_envs.sum()))]
 
-        try:
-            with timeout(seconds=1):
-                next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
-        except (TimeoutError):
-            # 为了防止环境崩溃引起训练的无故终止!
-            logging.warning("Environment are broken...")
-            env = make_parallel_env(config, run_num)
-            state, obs = env.reset()
-            idx = active_envs.astype(bool)
-            env_ep_extr_rews[idx] = 0.0
-            env_extr_rets[idx] = 0.0
-            for i in range(n_intr_rew_types):
-                for j in range(config.num_agents):
-                    env_ep_intr_rews[i][j][idx] = 0.0
-            env_times = np.zeros(config.n_rollout_threads, dtype=int)
-            state = apply_to_all_elements(state, lambda x: x[idx])
-            obs = apply_to_all_elements(obs, lambda x: x[idx])
-            continue
+        next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
+
+        # try:
+        #     with timeout(seconds=1):
+        #         next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
+        # except (TimeoutError):
+        #     # 为了防止环境崩溃引起训练的无故终止!
+        #     logging.warning("Environment are broken...")
+        #     env = make_parallel_env(config, run_num)
+        #     state, obs = env.reset()
+        #     idx = active_envs.astype(bool)
+        #     env_ep_extr_rews[idx] = 0.0
+        #     env_extr_rets[idx] = 0.0
+        #     for i in range(n_intr_rew_types):
+        #         for j in range(config.num_agents):
+        #             env_ep_intr_rews[i][j][idx] = 0.0
+        #     env_times = np.zeros(config.n_rollout_threads, dtype=int)
+        #     state = apply_to_all_elements(state, lambda x: x[idx])
+        #     obs = apply_to_all_elements(obs, lambda x: x[idx])
+        #     continue
+
+        for env_idx in range(len(infos)):
+            pos_list = infos[env_idx]['visit_count_lookup']
+            for j in range(len(pos_list)):
+                agent_pos_dict[j][env_idx].append(pos_list[j])
 
         steps_since_update += int(active_envs.sum())
         if config.intrinsic_reward == 1:
@@ -314,7 +331,7 @@ def run(config, load_file=None):
                         errms.mean = meta_turn_rets.mean()
                 extr_ret_rms[model.curr_pol_heads[0]].update(meta_turn_rets)
                 for i in range(config.metapol_updates):
-                    model.update_heads_onpol(meta_turn_rets, extr_ret_rms, logger=logger)
+                    model.update_heads_onpol(meta_turn_rets, extr_ret_rms, logger=logger, data_dict=head_data_dict)
             pol_heads = model.sample_pol_heads(uniform=config.uniform_heads)
             model.set_pol_heads(pol_heads)
             eps_this_turn = 0
@@ -349,23 +366,32 @@ def run(config, load_file=None):
                                                       update_irrms=False,
                                                       device='cuda' if config.use_gpu else 'cpu')
 
-                model.update_critic(sample, logger=logger, intr_rews=intr_rews)
-                model.update_policies(sample, logger=logger)
+                model.update_critic(sample, logger=logger, intr_rews=intr_rews, data_dict=critic_policy_data_dict)
+                model.update_policies(sample, logger=logger, data_dict=critic_policy_data_dict)
                 model.update_all_targets()
             if len(recent_ep_extr_rews) > 10:
                 logger.add_scalar('episode_rewards/extrinsic/mean',
                                   np.mean(recent_ep_extr_rews), t)
                 logger.add_scalar('episode_lengths/mean',
                                   np.mean(recent_ep_lens), t)
+                data_dict["timestep"].append(t)
+                data_dict["episode_rewards/extrinsic/mean"].append(np.mean(recent_ep_extr_rews))
+                data_dict["episode_lengths/mean"].append(np.mean(recent_ep_lens))
                 if config.intrinsic_reward == 1:
                     for i in range(n_intr_rew_types):
                         for j in range(config.num_agents):
                             logger.add_scalar('episode_rewards/intrinsic%i_agent%i/mean' % (i, j),
                                               np.mean(recent_ep_intr_rews[i][j]), t)
+                            data_dict['episode_rewards/intrinsic%i_agent%i/mean' % (i, j)].append(
+                                np.mean(recent_ep_intr_rews[i][j]))
                 for i in range(config.num_agents):
-                    logger.add_scalar('agent%i/n_found_treasures' % i, np.mean(recent_found_treasures[i]), t)
-                logger.add_scalar('total_n_found_treasures',
+                    logger.add_scalar('agent%i/n_found_exit' % i, np.mean(recent_found_treasures[i]), t)
+                    data_dict['agent%i/n_found_exit' % i].append(np.mean(recent_found_treasures[i]))
+
+                logger.add_scalar('total_n_found_exit',
                                   sum(np.array(recent_found_treasures[i]) for i in range(config.num_agents)).mean(), t)
+                data_dict['total_n_found_exit'].append(
+                    sum(np.array(recent_found_treasures[i]) for i in range(config.num_agents)).mean())
                 if config.env_type == 'gridworld':
                     logger.add_scalar('tiers_completed', np.mean(recent_tiers_completed), t)
 
@@ -375,11 +401,26 @@ def run(config, load_file=None):
             model.save(run_dir / 'incremental' / ('model_%isteps.pt' % (t + 1)))
             model.save(run_dir / 'model.pt')
 
+            pd.DataFrame(data_dict).to_excel(data_dir / "main.xlsx", index=False)
+            pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "cp_data.xlsx", index=False)
+            pd.DataFrame(head_data_dict).to_excel(data_dir / "head.xlsx", index=False)
+
+            with open(data_dir / "agent_pos.pkl", "wb") as f:
+                dill.dump(agent_pos_dict, f)
+
+
         t += active_envs.sum()
         pbar.update(active_envs.sum())
     model.prep_training(device='cpu')
     model.save(run_dir / 'model.pt')
     logger.close()
+    pd.DataFrame(data_dict).to_excel(data_dir / "main.xlsx", index=False)
+    pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "cp_data.xlsx", index=False)
+    pd.DataFrame(head_data_dict).to_excel(data_dir / "head.xlsx", index=False)
+
+    with open(data_dir / "agent_pos.pkl", "wb") as f:
+        dill.dump(agent_pos_dict, f)
+
     env.close(force=(config.env_type == 'vizdoom'))
 
 
@@ -390,6 +431,7 @@ if __name__ == '__main__':
     config = ped_p.Params("map_09", 6, 4)
     # config.args.model_name = "one_icm_test"
     config.args = ped_p.debug_mode(config.args)
+    config.train_time = 200
     run(config.args)
 
     # for i in range(2):

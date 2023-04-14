@@ -25,6 +25,15 @@ def angle_between(v1, v2):
     return radian if not clockwise else 2 * np.pi - radian
 
 
+def strf_now_time():
+    import datetime
+
+    # 获取当前时间
+    current_time = datetime.datetime.now()
+
+    # 将时间转换为字符串
+    return current_time.strftime("%Y_%m_%d_%H_%M_%S")
+
 
 class ObjectType(enum.Enum):
     Agent = 1

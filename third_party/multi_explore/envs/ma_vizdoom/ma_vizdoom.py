@@ -20,7 +20,7 @@ from .wrappers import StackFramesWrapper, ResizeAndGrayscaleWrapper, ResizeWrapp
 
 log = logging.getLogger(__name__)
 
-CONFIGS = [ # config_filename, num_actions, (x_min, y_min, x_max, y_max)
+CONFIGS = [  # config_filename, num_actions, (x_min, y_min, x_max, y_max)
     ['my_way_home_multi_easy.cfg', 3, (160, -704, 1120, 128)],  # 0
     ['my_way_home_multi_task1.cfg', 3, (160, -704, 1120, 128)],  # 1
     ['my_way_home_multi_task2.cfg', 3, (160, -704, 1120, 128)],  # 2
@@ -30,7 +30,9 @@ CONFIGS = [ # config_filename, num_actions, (x_min, y_min, x_max, y_max)
 RESIZE_W = RESIZE_H = 48  # instead of 42, so that 4 conv layers w/ stride 2 fits more nicely
 MAX_VEL = 7.5  # approximately...
 
-def make_component_env(level=0, player_id=-1, port=5029, num_players=2, skip_frames=4, stack_frames=False, grayscale=False):
+
+def make_component_env(level=0, player_id=-1, port=5029, num_players=2, skip_frames=4, stack_frames=False,
+                       grayscale=False):
     """
     Build the env for one agent
     """
@@ -89,7 +91,7 @@ class VizdoomEnv(gym.Env):
         self.game.set_screen_resolution(self.screen_resolution)
         # Setting an invalid level map will cause the game to freeze silently
         self.game.set_doom_map(self.level_map)
-        self.game.set_seed(self.rng.random_integers(0, 2**32-1))
+        self.game.set_seed(self.rng.random_integers(0, 2 ** 32 - 1))
 
         if mode == 'algo':
             self.game.set_window_visible(False)
@@ -300,7 +302,8 @@ class VizdoomEnvMultiplayer(VizdoomEnv):
         scenarios_dir = os.path.join(os.path.dirname(__file__), 'scenarios')
         self.game.load_config(os.path.join(scenarios_dir, CONFIGS[self.level][0]))
         live_rew = self.game.get_living_reward()
-        self.game.set_living_reward(live_rew / self.skip_frames)  # make living reward consistent regardless of skip_frames
+        self.game.set_living_reward(
+            live_rew / self.skip_frames)  # make living reward consistent regardless of skip_frames
         if mode == 'algo':
             self.screen_w, self.screen_h, self.channels = 160, 120, 3
             self.screen_resolution = ScreenResolution.RES_160X120
@@ -311,7 +314,7 @@ class VizdoomEnvMultiplayer(VizdoomEnv):
         self.game.set_screen_resolution(self.screen_resolution)
         # Setting an invalid level map will cause the game to freeze silently
         # self.game.set_doom_map(self.level_map)
-        self.game.set_seed(self.rng.random_integers(0, 2**32-1))
+        self.game.set_seed(self.rng.random_integers(0, 2 ** 32 - 1))
 
         self.game.set_window_visible(False)
 
@@ -356,8 +359,10 @@ class VizdoomEnvMultiplayer(VizdoomEnv):
         return np.transpose(img, (1, 2, 0))
 
     def _get_info(self, eps=1e-8):
-        x_pos = (self.game.get_game_variable(GameVariable.POSITION_X) - self.coord_limits[0]) / (self.coord_limits[2] - self.coord_limits[0])
-        y_pos = (self.game.get_game_variable(GameVariable.POSITION_Y) - self.coord_limits[1]) / (self.coord_limits[3] - self.coord_limits[1])
+        x_pos = (self.game.get_game_variable(GameVariable.POSITION_X) - self.coord_limits[0]) / (
+                    self.coord_limits[2] - self.coord_limits[0])
+        y_pos = (self.game.get_game_variable(GameVariable.POSITION_Y) - self.coord_limits[1]) / (
+                    self.coord_limits[3] - self.coord_limits[1])
         x_vel = self.game.get_game_variable(GameVariable.VELOCITY_X) / 7.5
         y_vel = self.game.get_game_variable(GameVariable.VELOCITY_Y) / 7.5
         orient = (self.game.get_game_variable(GameVariable.CAMERA_ANGLE) / 360) * 2 * np.pi
@@ -453,6 +458,7 @@ class VizdoomEnvMultiplayer(VizdoomEnv):
             observation = self.last_obs
         return observation
 
+
 def safe_get(q, timeout=1e6, msg='Queue timeout'):
     """Using queue.get() with timeout is necessary, otherwise KeyboardInterrupt is not handled."""
     while True:
@@ -528,7 +534,7 @@ class MultiAgentEnvWorker:
                 env.unwrapped.full_step = task_type == TaskType.STEP
                 results = env.step(arg)  # arg = action
             elif task_type == TaskType.RENDER:
-                img = env.unwrapped.game.get_state().screen_buffer.transpose(1,2,0)
+                img = env.unwrapped.game.get_state().screen_buffer.transpose(1, 2, 0)
 
                 results = img
             elif task_type == TaskType.GET_OBS:
@@ -563,7 +569,8 @@ class VizdoomMultiAgentEnv:
         self.observation_space = spaces.Tuple((env.observation_space,
                                                spaces.Box(0, 1, (self.num_players * 2,),
                                                           dtype=np.float32)))
-        self.state_space = spaces.Box(0, 1, (self.num_players * (10 + env.unwrapped.x_bins + env.unwrapped.y_bins),), dtype=np.float32)
+        self.state_space = spaces.Box(0, 1, (self.num_players * (10 + env.unwrapped.x_bins + env.unwrapped.y_bins),),
+                                      dtype=np.float32)
         env.close()
 
         self.workers = [MultiAgentEnvWorker(task_id, i, num_players, make_env_func, seed, skip_frames,
@@ -580,7 +587,6 @@ class VizdoomMultiAgentEnv:
                 sleep(0.1)  # just in case
             for worker in self.workers:
                 worker.task_queue.join()
-
 
         log.info('%d agent workers initialized!', len(self.workers))
 
@@ -665,7 +671,7 @@ class VizdoomMultiAgentEnv:
         return state, obs, rew, done, info
 
     def render(self, mode='human'):
-        imgs = self.await_tasks(None, TaskType.RENDER)[0] # each agent's view
+        imgs = self.await_tasks(None, TaskType.RENDER)[0]  # each agent's view
         img = np.concatenate(imgs, axis=1)
 
         h, w = img.shape[:2]
@@ -694,4 +700,3 @@ class VizdoomMultiAgentEnv:
 
         if self.viewer is not None:
             self.viewer.close()
-

@@ -14,6 +14,8 @@ import tqdm
 from pathlib import Path
 from collections import deque, defaultdict
 from tensorboardX import SummaryWriter
+
+from ped_env.utils.misc import strf_now_time
 from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv
 from utils.misc import apply_to_all_elements, timeout, RunningMeanStd, save_params
@@ -428,16 +430,18 @@ from third_party.multi_explore.params.gridworld import params1 as p
 from third_party.multi_explore.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
-    config = ped_p.Params("map_09", 6, 4)
+    config = ped_p.Params("map_09", 10, 4)
     # config.args.model_name = "one_icm_test"
-    config.args = ped_p.debug_mode(config.args)
-    config.train_time = 200
-    run(config.args)
+    #config.args = ped_p.debug_mode(config.args)
+    #config.args.train_time = 200
+    #run(config.args)
 
     # for i in range(2):
     #     config = ped_p.icm_compare_test(params.args)
     #     run(config)
 
-    # for i in range(6):
-    #     config = p.change_explore_type_exp(params.args)
-    #     run(config)
+
+    config.args.model_name = strf_now_time() + "exp_test"
+    for i in range(5):
+        config.args = p.change_explore_type_exp(config.args)
+        run(config.args)

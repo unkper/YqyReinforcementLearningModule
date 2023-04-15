@@ -20,6 +20,7 @@ from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv
 from utils.misc import apply_to_all_elements, timeout, RunningMeanStd, save_params
 from algorithms.sac import SAC
+from numba import njit
 
 from envs.magw.multiagent_env import GridWorld, VectObsEnv
 from ped_env.utils.maicm_interface import create_ped_env

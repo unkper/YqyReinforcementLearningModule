@@ -39,6 +39,6 @@ logging.warning(u"在使用渲染前一定要调用init_settings初始化")
 
 def init_settings(map_width, map_height):
     global VIEWPORT_H, VIEWPORT_W, RENDER_SCALE, RENDER_RATIO_CHANGED
-    assert map_width == map_height, u"当前地图必须保证输入的是正方形!"
+#    assert map_width == map_height, u"当前地图必须保证输入的是正方形!"
     RENDER_SCALE = 500 // map_width
     RENDER_RATIO_CHANGED = True

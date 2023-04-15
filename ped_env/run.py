@@ -19,8 +19,8 @@ def test2():
 
     debug = False
 
-    person_num = 4
-    env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
+    person_num = 20
+    env = Env("map_10", person_num, group_size=(4, 4), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True, person_handler=PedsVisionRLHandler)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
@@ -41,8 +41,8 @@ def test2():
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            #env.render(ratio=1)
-            pprint.pprint(env.not_arrived_peds)
+            env.render(ratio=1)
+            #pprint.pprint(env.not_arrived_peds)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collide_agents_count, env.collide_wall_count))

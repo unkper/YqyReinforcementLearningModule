@@ -1,3 +1,4 @@
+import logging
 import random
 import time
 
@@ -8,7 +9,6 @@ from typing import List, Tuple
 from collections import defaultdict
 
 from tqdm import tqdm
-
 
 from ped_env.utils.maps import *
 
@@ -47,16 +47,31 @@ class AStar:
     def __init__(self, map: Map):
         self.map = map
         self.barrier_list = []
+        self.can_explore_grid_dict = {}
         self.init_barrier_list()
         self.dir_vector_matrix_dic = dict()  # 值是出口坐标(x,y)，键是ndarray
         self.path_matrix_dic = defaultdict(dict)  # 键是出口坐标(x,y),值是一个字典(键是起始坐标(sx,sy),值是路径Path)
 
     def init_barrier_list(self):
         terrain = self.map.map
+        explore_type_dict = {
+            "lw": [(1, 0)],
+            "rw": [(-1, 0)],
+            "uw": [(0, -1)],
+            "dw": [(0, 1)],
+            "cruw": [(-1, 0)],
+            "crdw": [(-1, 0)],
+            "cluw": [(1, 0)],
+            "cldw": [(1, 0)]
+        }
+
         for j in range(terrain.shape[1]):
             for i in range(terrain.shape[0]):
-                if terrain[i, j] in (1, 2):
+                e = str(terrain[i, j])
+                if e in ('1', '2'):
                     self.barrier_list.append((i, j))
+                elif e in explore_type_dict.keys():
+                    self.can_explore_grid_dict[(i, j)] = explore_type_dict[e]
 
     def next_loc(self, x, y, dest_x, dest_y) -> Tuple[Tuple, Path]:
         # 初始化各种状态
@@ -73,9 +88,10 @@ class AStar:
                 node_matrix[i][j] = Node()
 
         find_way = False
+        clock = 0
         open_list.append(start_loc)  # 起始点添加至打开列表
         # 开始算法的循环
-        while True:
+        while True and clock < 100000:
             if len(open_list) == 0:
                 break
             now_loc = open_list[0]
@@ -88,7 +104,10 @@ class AStar:
             open_list.remove(now_loc)
             close_list.append(now_loc)
             #  （3）对相邻格中的每一个
-            list_offset = [(-1, 0), (0, -1), (0, 1), (1, 0), (-1, 1), (1, -1), (1, 1), (-1, -1)]
+            if now_loc in self.can_explore_grid_dict.keys():
+                list_offset = self.can_explore_grid_dict[now_loc]
+            else:
+                list_offset = [(-1, 0), (0, -1), (0, 1), (1, 0)]
             for temp in list_offset:
                 temp_loc = (now_loc[0] + temp[0], now_loc[1] + temp[1])
                 if temp_loc[0] < 0 or temp_loc[0] >= terrain.shape[0] or temp_loc[1] < 0 or temp_loc[1] >= \
@@ -120,6 +139,8 @@ class AStar:
                     node_matrix[temp_loc[0]][temp_loc[1]].f = (node_matrix[temp_loc[0]][temp_loc[1]].g +
                                                                node_matrix[temp_loc[0]][temp_loc[1]].h)
 
+            clock += 1
+
             #  判断是否停止
             if aim_loc[0] in close_list:
                 find_way = True
@@ -129,10 +150,12 @@ class AStar:
             #  依次遍历父节点，找到下一个位置
             temp = aim_loc[0]
             path_arr = []
-            while node_matrix[temp[0]][temp[1]].father != start_loc:
+            clock = 0
+            while node_matrix[temp[0]][temp[1]].father != start_loc and clock < 2000:
                 temp = node_matrix[temp[0]][temp[1]].father
                 _temp = (temp[0] + 0.5, temp[1] + 0.5)  # 这里加0.5是为了消除int带来的向下取整效果
                 path_arr.insert(0, _temp)
+                clock += 1
             start_loc_tmp = (start_loc[0] + 0.5, start_loc[1] + 0.5)
             path_arr.insert(0, start_loc_tmp)
             #  返回下一个位置的方向向量，例如：（-1,0），（-1,1）......
@@ -145,6 +168,7 @@ class AStar:
             return (0, 0), None
 
     def calculate_dir_vector(self):
+        logging.warning("使用耗费大量时间的A*寻路算法！")
         terrain = self.map.map
         for exit in self.map.exits:
             vector_matrix = [[0 for i in range(terrain.shape[1])] for i in range(terrain.shape[0])]
@@ -188,6 +212,7 @@ class AStar:
 
 
 ACTION_DIM = 9
+
 
 class AStarController(gym.Env):
     vec_to_discrete_action_dic = {

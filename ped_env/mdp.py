@@ -174,7 +174,7 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
             force = (ped.person_state != PersonState.route_to_exit)
             ped.person_state = PersonState.route_to_exit  # 更新当前状态
             int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
-            mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
+            mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j]) if ped.a_star_path is not None else (1, 0)  # 保护语句
         ped.self_driven_force(mix_dir)  # 跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
         # logging.error("该奖励模型中不应该出现follower!")
         # ped.ij_group_force(group)
@@ -192,8 +192,9 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
         if ped.a_star_path is None or force or (ped.a_star_path.vec_dir.get(int_pos_j) is None):  # 使用A*计算得到一条去出口的路
             re, path = self.env.path_finder.next_loc(int_pos_j[0], int_pos_j[1],
                                                      int_pos_i[0], int_pos_i[1])
-            path.calculate_vec_dir_in_path()
-            ped.a_star_path = path
+            if path is not None:
+                path.calculate_vec_dir_in_path()
+                ped.a_star_path = path
         return int_pos_j
 
     def get_reward(self, ped: Person, ped_index: int, time):

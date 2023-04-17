@@ -244,7 +244,6 @@ class PedsMoveEnv(gym.Env):
                  use_planner=False,
                  test_reward_mode=False,
                  random_init_mode: bool = True,
-                 train_mode: bool = True,
                  debug_mode: bool = False):
         """
         一个基于Box2D和pyglet的多行人强化学习仿真环境
@@ -630,17 +629,19 @@ class PedsMoveEnv(gym.Env):
                     star_points.append((x, y))
 
                 # 绘制五角星
-                pygame.draw.polygon(screen, color, star_points)
-            size = 50
+                pygame.draw.polygon(screen, color=color, points=star_points)
+            size = 10
             start_color = (128, 0, 128)
             exit_color = (0, 255, 0)
             key_point_color = (255, 255, 0)
 
             for start in self.terrain.start_points:
-                draw_star(self.surf, start, size, start_color)
+                new_start = (start[0] * SCALE, start[1] * SCALE)
+                draw_star(self.surf, new_start, size, start_color)
 
             for exit in self.terrain.exits:
-                draw_star(self.surf, exit, size, exit_color)
+                new_exit = (exit[0] * SCALE, exit[1] * SCALE)
+                draw_star(self.surf, new_exit, size, exit_color)
 
 
         if mode == "human":

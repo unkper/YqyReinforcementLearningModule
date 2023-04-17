@@ -120,7 +120,7 @@ class Spawner:
                                      self.l1, ObjectType.Wall, color))
         return walls
 
-    def create_people(self, start_nodes, exit_type, test_mode=False):
+    def create_people(self, start_nodes, exit_type):
         '''
         根据start_nodes创建同等数量的行人
         :param start_nodes:
@@ -130,28 +130,25 @@ class Spawner:
         return [Person(self.world, start_nodes[i][0],
                        start_nodes[i][1], exit_type, self.l1, self.l2) for i in range(len(start_nodes))]
 
-    def inner_create_persons_in_radius(self, start_node, radius, person_num, exit_type, test_mode=False):
+    def inner_create_persons_in_radius(self, start_node, radius, person_num, exit_type):
         start_pos = []
         for i in range(person_num):
             new_x, new_y = start_node[0] + radius * random.random(), start_node[1] + radius * random.random()
             start_pos.append((new_x, new_y))
-        return self.create_people(start_pos, exit_type, test_mode)
+        return self.create_people(start_pos, exit_type)
 
-    def create_group_persons_in_radius(self, terrain: Map, idx, person_num, groups, group_dic: Dict, group_size,
-                                       test_mode=False):
+    def create_group_persons_in_radius(self, terrain: Map, idx, person_num, groups, group_dic: Dict, group_size):
         each_group_num = calculate_each_group_num(group_size, person_num)
         persons = []
         for num in each_group_num:
             group_center_node = (terrain.start_points[idx][0] + terrain.create_radius * random.random(),
                                  terrain.start_points[idx][1] + terrain.create_radius * random.random())
             group = self.inner_create_persons_in_radius(group_center_node, GROUP_SIZE, num,
-                                                        terrain.get_random_exit(idx), test_mode)
+                                                        terrain.get_random_exit(idx))
             Group.set_group_process(group, groups, group_dic, persons)
         return persons
 
-    def random_create_persons(self, terrain: Map, idx, person_num, groups, group_dic, group_size, start_point_dic,
-                              test_mode=False):
-        # h, w = terrain.map.shape[0], terrain.map.shape[1]
+    def random_create_persons(self, terrain: Map, idx, person_num, groups, group_dic, group_size, start_point_dic):
         each_group_num = calculate_each_group_num(group_size, person_num)
         persons = []
         for num in each_group_num:
@@ -163,7 +160,7 @@ class Spawner:
             #         break
             exit_type = terrain.get_random_exit(idx)
             new_x, new_y = random.sample(start_point_dic[exit_type], 1)[0]
-            group = self.inner_create_persons_in_radius((new_x, new_y), GROUP_SIZE, num, exit_type, test_mode)
+            group = self.inner_create_persons_in_radius((new_x, new_y), GROUP_SIZE, num, exit_type)
             Group.set_group_process(group, groups, group_dic, persons)
         return persons
 
@@ -212,8 +209,16 @@ class Parser:
         self.start_point_dic = defaultdict(list)
         for j in range(spawn_map.shape[1]):
             for i in range(spawn_map.shape[0]):
-                if 9 >= spawn_map[i, j] >= 3:
-                    self.start_point_dic[spawn_map[i, j]].append((i + 0.5, j + 0.5))
+                e = spawn_map[i, j]
+                if isinstance(e, str):
+                    if e.isdigit():
+                        e = int(e)
+                    else:
+                        e = 1
+                else:
+                    pass
+                if 9 >= e >= 3:
+                    self.start_point_dic[e].append((i + 0.5, j + 0.5))
 
 
 class PedsMoveEnv(gym.Env):
@@ -293,7 +298,6 @@ class PedsMoveEnv(gym.Env):
         self.collide_wall_count = 0
 
         # for raycast and aabb_query debug
-        self.train_mode = train_mode
         self.debug_mode = debug_mode
         self.vec = [0.0 for _ in range(self.agent_count)]
 
@@ -362,22 +366,15 @@ class PedsMoveEnv(gym.Env):
         self.groups = []
         person_num = calculate_groups_person_num(self, person_num_sum)
         for i, num in enumerate(person_num):
-            if not self.debug_mode and not self.random_init_mode:
+            if not self.random_init_mode:
                 # 如果非debug_mode且非random_init_mode时，在固定点位创建行人
                 self.peds.extend(self.factory.create_group_persons_in_radius(self.terrain, i, num, self.groups,
-                                                                             self.ped_to_group_dic,
-                                                                             self.group_size, self.debug_mode))
-            elif not self.debug_mode and self.random_init_mode:
+                                                                             self.ped_to_group_dic, self.group_size))
+            else:
                 # 如果非debug_mode且为random_init_mode时，在规定好的spawn_map创建行人
                 self.peds.extend(
                     self.factory.random_create_persons(self.terrain, i, num, self.groups, self.ped_to_group_dic,
-                                                       self.group_size, self.parser.start_point_dic, self.debug_mode))
-            else:
-                # 如果debug_mode，则按照
-                exit_type = self.terrain.get_random_exit(i)
-                group = self.factory.create_people(self.terrain.start_points, exit_type, self.debug_mode)
-                Group.set_group_process(group, self.groups, self.ped_to_group_dic, self.peds)
-                self.peds.extend(group)
+                                                       self.group_size, self.parser.start_point_dic))
         self.left_person_num = sum(person_num)
         self.left_leader_num = self.agent_count
         self.not_arrived_peds = copy.copy(self.peds)
@@ -422,13 +419,12 @@ class PedsMoveEnv(gym.Env):
         #logging.error(u"移除一个不存在的行人!")
 
     def get_peds_distance_to_exit(self):
+        # 废弃多目标点的设置，替换为最近的出口距离
         for ped in self.peds:
-            # min_dis = self.get_nearest_exit_dis((ped.getX, ped.getY))
-            dis = self.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
-            self.distance_to_exit.append(dis)
+            min_dis = self.get_ped_nearest_exit_dis((ped.getX, ped.getY))
+            self.distance_to_exit.append(min_dis)
             self.points_in_last_step.append((ped.getX, ped.getY))
 
-    @njit
     def get_ped_nearest_exit_dis(self, person_pos):
         x, y = person_pos
         min = math.inf
@@ -439,6 +435,7 @@ class PedsMoveEnv(gym.Env):
         return min
 
     def get_ped_to_exit_dis(self, person_pos, exit_type):
+        DeprecationWarning("废弃单出口的设定!")
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
 
         @njit
@@ -556,7 +553,7 @@ class PedsMoveEnv(gym.Env):
             # 在planning_mode下，一旦有leader到达出口就终止
             is_done, truncated = is_done_operation()
 
-        if (not self.train_mode and self.left_person_num == 0) or (self.train_mode and self.left_leader_num == 0):
+        if self.left_leader_num == 0:
             is_done, truncated = is_done_operation()
             logging.warning(u"所有智能体到达出口!")
 
@@ -622,6 +619,29 @@ class PedsMoveEnv(gym.Env):
                                  rect=rect)
             else:
                 raise Exception("不支持的渲染类型")
+        if self.debug_mode:
+            def draw_star(screen, star_center, star_size, color=(0, 255, 0)):
+                # 计算五角星顶点坐标
+                star_points = []
+                for i in range(5):
+                    angle = i * 4 * math.pi / 5 - math.pi / 2
+                    x = star_center[0] + star_size * math.cos(angle)
+                    y = star_center[1] + star_size * math.sin(angle)
+                    star_points.append((x, y))
+
+                # 绘制五角星
+                pygame.draw.polygon(screen, color, star_points)
+            size = 50
+            start_color = (128, 0, 128)
+            exit_color = (0, 255, 0)
+            key_point_color = (255, 255, 0)
+
+            for start in self.terrain.start_points:
+                draw_star(self.surf, start, size, start_color)
+
+            for exit in self.terrain.exits:
+                draw_star(self.surf, exit, size, exit_color)
+
 
         if mode == "human":
             assert self.screen is not None

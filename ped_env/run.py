@@ -5,7 +5,7 @@ import random
 import Box2D as b2d
 
 from ped_env.envs import PedsMoveEnv as Env
-from ped_env.pathfinder import AStarController, AStarPolicy
+from ped_env.pathfinder import AStarPolicy
 from ped_env.utils.maps import *
 from departed_rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
 from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner, PedsVisionRLHandler, PedsRLHandlerWithForce
@@ -20,7 +20,7 @@ def test2():
     debug = False
 
     person_num = 20
-    env = Env("map_10", person_num, group_size=(4, 4), frame_skipping=8, maxStep=10000, debug_mode=debug,
+    env = Env("map_12", person_num, group_size=(4, 4), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True, person_handler=PedsVisionRLHandler)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
@@ -126,7 +126,7 @@ def test5():
     debug = False
 
     person_num = 32
-    env = Env(map_12, person_num, group_size=(4, 4), frame_skipping=8, maxStep=300, debug_mode=debug,
+    env = Env("map_12", person_num, group_size=(4, 4), frame_skipping=8, maxStep=300, debug_mode=debug,
               random_init_mode=True)
     leader_num = env.agent_count
     policy = AStarPolicy(env.terrain)

@@ -324,18 +324,14 @@ class PedsRLHandler(PedsHandlerInterface):
         fij_x, fij_y = ped.fij_force_last_eps
         observation.append(fij_x)
         observation.append(fij_y)
-        # for follower in group.followers:
-        #     observation.append(follower.getX)
-        #     observation.append(follower.getY)
-        # fill_num = 5 - len(group.followers)
-        # observation.extend([0.0 for _ in range(fill_num * 2)])
+
         self.last_observation[ped.id] = observation
         return observation
 
     def set_action(self, ped: Person, action):
         ped.self_driven_force(parse_discrete_action_one_hot(action) if self.env.discrete else action)
         ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
-        ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
+        ped.fiw_force(self.env.walls + self.env.obstacles)   # 出口不再作为障碍物
 
     def set_follower_action(self, ped: Person, action, group: Group, exit_pos):
         diff = group.get_distance_to_leader(ped)
@@ -361,7 +357,7 @@ class PedsRLHandler(PedsHandlerInterface):
             mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
         ped.self_driven_force(mix_dir)  # 跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
         ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
-        ped.fiw_force(self.env.walls + self.env.obstacles + self.env.exits)
+        ped.fiw_force(self.env.walls + self.env.obstacles)
         # ped.ij_group_force(group)
 
     def get_follower_a_star_path(self, ped, pos_i, pos_j, force=False):
@@ -394,7 +390,7 @@ class PedsRLHandler(PedsHandlerInterface):
                 last_pos = self.env.points_in_last_step[ped_index]
                 now_pos = (ped.getX, ped.getY)
                 last_dis = self.env.distance_to_exit[ped_index]
-                now_dis = self.env.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
+                now_dis = self.env.get_ped_nearest_exit_dis((ped.getX, ped.getY))
                 if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and last_pos[1] - 0.001 <= now_pos[
                     1] <= last_pos[1] + 0.001):
                     lr += self.r_move  # 给予-0.1以每步
@@ -440,7 +436,7 @@ class PedsRLHandlerWithPlanner(PedsRLHandler):
                 last_pos = self.env.points_in_last_step[ped_index]
                 now_pos = (ped.getX, ped.getY)
                 last_dis = self.env.distance_to_exit[ped_index]
-                now_dis = self.env.get_ped_to_exit_dis((ped.getX, ped.getY), ped.exit_type)
+                now_dis = self.env.get_ped_nearest_exit_dis((ped.getX, ped.getY))
                 if not (last_pos[0] - 0.001 <= now_pos[0] <= last_pos[0] + 0.001 and
                         last_pos[1] - 0.001 <= now_pos[1] <= last_pos[1] + 0.001):
                     lr += self.r_move * now_dis  # 给予-1以每步以防止智能体因奖励而无法到达出口

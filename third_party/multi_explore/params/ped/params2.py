@@ -1,4 +1,3 @@
-import os
 import pprint
 import types
 
@@ -63,27 +62,22 @@ class Params:
     """
     gpu_rollout = True
 
-    def __init__(self, map="map_09", agent_num = 4, group_size = 1, pol_h_dim=32, cri_h_dim=128):
+    def __init__(self, map="map_09", agent_num = 4, group_size = 1):
         Params.map_ind = map
         Params.num_agents = agent_num
         Params.group_size = group_size
-        Params.pol_hidden_dim = pol_h_dim
-        Params.critic_hidden_dim = cri_h_dim
-
 
         filtered_dict = {k: v for k, v in vars(Params).items() if not k.startswith("__")}
         filtered_dict = {k: v for k, v in filtered_dict.items() if not isinstance(v, classmethod)}
         self.args = EasyDict(filtered_dict)
 
 
-
-def debug_mode(args) -> Params:
-    args.max_episode_length = 2000
-    args.train_time = 200
+def debug_mode(args):
+    args.train_time = 500
     args.buffer_length = 100
     args.n_rollout_threads = 2
     args.steps_before_update = 0
-    args.steps_per_update = 40
+    args.steps_per_update = 20
     args.save_interval = 20
     args.num_updates = 5
     args.batch_size = 16
@@ -94,7 +88,7 @@ exp_count = 0
 init = False
 
 
-def change_explore_type_exp(args) -> Params:
+def change_explore_type_exp(args):
     global exp_count, init
     ways = [[0], [1], [2], [3], [4], [0, 1, 2, 3, 4]]
     if not init:
@@ -121,12 +115,11 @@ def icm_compare_test(args: Params):
 
 if __name__ == '__main__':
     p = Params()
-    args = debug_mode(p.args)
-    pprint.pprint(args)
-    for i in range(6):
-        args = change_explore_type_exp(args)
-        pprint.pprint(args.train_time)
-        pprint.pprint(args.explr_types)
-    # for i in range(2):
-    #     args = icm_compare_test(p.args)
-    #     pprint.pprint(args.intrinsic_reward)
+    # args = debug_mode(p.args)
+    # pprint.pprint(args)
+    # for i in range(6):
+    #     args = change_explore_type_exp(p.args)
+    #     pprint.pprint(args.train_time)
+    for i in range(2):
+        args = icm_compare_test(p.args)
+        pprint.pprint(args.intrinsic_reward)

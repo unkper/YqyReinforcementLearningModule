@@ -6,7 +6,7 @@ from random import sample
 
 from ped_env.objects import Person
 from ped_env.settings import identity
-from ped_env.utils.misc import angle_between
+from ped_env.functions import angle_between
 
 
 class Map:

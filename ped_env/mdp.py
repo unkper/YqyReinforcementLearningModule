@@ -9,8 +9,8 @@ from typing import List, Dict, cast
 import numpy as np
 from gym.spaces import Box, Discrete
 
-from ped_env.functions import parse_discrete_action_one_hot, calculate_nij, normalized, angle_of_vector, \
-    calculate_groups_person_num, parse_discrete_action
+from ped_env.functions import parse_discrete_action_one_hot, calculate_nij, angle_of_vector, \
+    calculate_groups_person_num, parse_discrete_action, normalize_vector
 from ped_env.objects import Person, PersonState, Group
 from ped_env.pathfinder import AStar
 from ped_env.settings import ACTION_DIM
@@ -168,13 +168,13 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
                 force = (ped.person_state == PersonState.follow_leader)  # 如果之前的状态是跟随，那么就要重新计算路径
                 ped.person_state = PersonState.route_to_leader  # 更新当前状态
                 int_pos_j = self.get_follower_a_star_path(ped, group.leader.pos, ped.pos, force)
-                mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
+                mix_dir = normalize_vector(ped.a_star_path.vec_dir[int_pos_j])
         else:
             # 当leader到达出口后
             force = (ped.person_state != PersonState.route_to_exit)
             ped.person_state = PersonState.route_to_exit  # 更新当前状态
             int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
-            mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j]) if ped.a_star_path is not None else (1, 0)  # 保护语句
+            mix_dir = normalize_vector(ped.a_star_path.vec_dir[int_pos_j]) if ped.a_star_path is not None else (1, 0)  # 保护语句
         ped.self_driven_force(mix_dir)  # 跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
         # logging.error("该奖励模型中不应该出现follower!")
         # ped.ij_group_force(group)
@@ -349,13 +349,13 @@ class PedsRLHandler(PedsHandlerInterface):
                 force = (ped.person_state == PersonState.follow_leader)  # 如果之前的状态是跟随，那么就要重新计算路径
                 ped.person_state = PersonState.route_to_leader  # 更新当前状态
                 int_pos_j = self.get_follower_a_star_path(ped, group.leader.pos, ped.pos, force)
-                mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
+                mix_dir = normalize_vector(ped.a_star_path.vec_dir[int_pos_j])
         else:
             # 当leader到达出口后
             force = (ped.person_state != PersonState.route_to_exit)
             ped.person_state = PersonState.route_to_exit  # 更新当前状态
             int_pos_j = self.get_follower_a_star_path(ped, exit_pos, ped.pos, force)
-            mix_dir = normalized(ped.a_star_path.vec_dir[int_pos_j])
+            mix_dir = normalize_vector(ped.a_star_path.vec_dir[int_pos_j])
         ped.self_driven_force(mix_dir)  # 跟随者的方向为alpha*control_dir + (1-alpha)*leader_dir
         ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
         ped.fiw_force(self.env.walls + self.env.obstacles)

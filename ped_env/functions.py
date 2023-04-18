@@ -39,7 +39,7 @@ def transfer_to_render(x, y, X, Y, scale=30):
 def calculate_nij(i, j):
     pos_i = i.pos
     pos_j = j.pos
-    return normalized(pos_i - pos_j)
+    return normalize_vector(pos_i - pos_j)
 
 
 from math import sqrt, acos
@@ -64,11 +64,19 @@ def parse_discrete_action(type: np.ndarray):
     return actions[type]
 
 
-#@njit
-def normalized(a, axis=-1, order=2):
-    l2 = np.atleast_1d(np.linalg.norm(a, order, axis))
-    l2[l2 == 0] = 1
-    return np.squeeze(a / np.expand_dims(l2, axis))
+@njit
+def inner(v):
+    v = v.astype(np.float64)
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
+
+
+def normalize_vector(v: np.ndarray):
+    if not isinstance(v, np.ndarray):
+        v = np.array(v)
+    return inner(v)
 
 
 def calculate_each_group_num(group_size, person_num):
@@ -102,6 +110,7 @@ def random_pick(some_list, probabilities):
             break
     return item
 
+
 @njit
 def ij_power(r, A=0.01610612736, B=3.93216):
     ij_group_f = (A / (pow(r, 12)) - B / (pow(r, 6)))
@@ -132,6 +141,7 @@ def calc_triangle_points(pos, length, angle):
 
     return [(x1, y1), (x2, y2), (x3, y3)]
 
+
 def gray_scale_image(frame: np.ndarray) -> np.ndarray:
     # 将输入数组的最后一个维度（即A通道）丢弃，得到一个形状为（3, height, width）的RGB图像数组。
     frame = frame[:, :, :]
@@ -148,7 +158,49 @@ def gray_scale_image(frame: np.ndarray) -> np.ndarray:
     return gray_frame
 
 
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+            >>> angle_between((1, 0, 0), (0, 1, 0))
+            1.5707963267948966
+            >>> angle_between((1, 0, 0), (1, 0, 0))
+            0.0
+            >>> angle_between((1, 0, 0), (-1, 0, 0))
+            3.141592653589793
+    """
+    v1_u = normalize_vector(v1)
+    v2_u = normalize_vector(v2)
+    radian = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+    clockwise = np.cross(v1_u, v2_u) <= 0
+    return radian if not clockwise else 2 * np.pi - radian
+
+
 if __name__ == '__main__':
+    print(normalize_vector(np.array([1, 2, 3])))
+
+    import time
+
+
+    def normalize_vector_raw(v: np.ndarray):
+        v = v.astype(np.float64)
+        norm = np.linalg.norm(v)
+        if norm == 0:
+            return v
+        return v / norm
+
+
+    N = 100000
+    raw = np.array([1, 2, 3])
+
+    t1 = time.time()
+    for i in range(N):
+        normalize_vector_raw(raw)
+
+    t2 = time.time()
+    for i in range(N):
+        normalize_vector(raw)
+    t3 = time.time()
+    print("{},{}".format(t2 - t1, t3 - t2))
     # for i in range(10):
     #     group_size = (5, 5)
     #     person_num = 10

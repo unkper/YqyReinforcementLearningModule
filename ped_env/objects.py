@@ -14,10 +14,9 @@ from math import sin, cos
 
 from numpy import ndarray
 
-from ped_env.utils.misc import angle_between
 from ped_env.settings import DIRECTIONS, identity
 from ped_env.utils.colors import ColorRed, exit_type_to_color, ColorYellow
-from ped_env.functions import transfer_to_render, normalized, ij_power
+from ped_env.functions import transfer_to_render, ij_power, normalize_vector, angle_between
 from ped_env.utils.misc import FixtureInfo, ObjectType
 
 
@@ -540,7 +539,7 @@ class Group:
         return (center_x, center_y)
 
     def __get_nij(self, target, now):
-        return normalized(target - now.pos)
+        return normalize_vector(target - now.pos)
 
     def get_distance_to_leader(self, ped: Person):
         lx, ly = self.leader.getX, self.leader.getY

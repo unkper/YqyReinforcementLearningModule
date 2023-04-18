@@ -671,7 +671,7 @@ class PedsMoveInfoDataHandler:
         self.agent_count = agent_count
         self.save_l_pos = save_l_pos
         self.map_shape = terrain.map.shape
-        self.leader_pos_arr = np.zeros([agent_count, self.map_shape[0], self.map_shape[1]], dtype=np.int)
+        self.leader_pos_arr = np.zeros([agent_count, self.map_shape[0], self.map_shape[1]], dtype=int)
 
     def step(self, info):
         if not self.save_l_pos:

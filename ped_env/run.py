@@ -19,13 +19,13 @@ def test2():
 
     debug = False
 
-    person_num = 20
-    env = Env("map_12", person_num, group_size=(4, 4), frame_skipping=8, maxStep=10000, debug_mode=debug,
+    person_num = 80
+    env = Env("map_10", person_num, group_size=(4, 4), frame_skipping=8, maxStep=4000, debug_mode=debug,
               random_init_mode=True, person_handler=PedsRLHandlerWithForce)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
 
-    for epoch in range(5):
+    for epoch in range(1):
         start_time = time.time()
         step = 0
         env.reset()

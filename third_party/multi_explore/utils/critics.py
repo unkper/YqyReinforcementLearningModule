@@ -71,6 +71,8 @@ class CentralCritic(nn.Module):
             agents (int): indices of agents to return Q for
             return_q (bool): return Q-value
             return_all_q (bool): return Q-value for all actions
+
+            这个sac版本的critic只是将global_state和action简单链接起来作为critic的输入，所以global_state比较关键
         """
         if agents is None:
             agents = range(self.nagents)

@@ -17,10 +17,10 @@ def test2():
     import time
     import numpy as np
 
-    debug = False
+    debug = True
 
     person_num = 80
-    env = Env("map_10", person_num, group_size=(4, 4), frame_skipping=8, maxStep=4000, debug_mode=debug,
+    env = Env("map_11", person_num, group_size=(1, 1), frame_skipping=8, maxStep=4000, debug_mode=debug,
               random_init_mode=True, person_handler=PedsRLHandlerWithForce)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
@@ -41,7 +41,7 @@ def test2():
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            #env.render(ratio=1)
+            env.render(ratio=1)
             #pprint.pprint(env.not_arrived_peds)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"

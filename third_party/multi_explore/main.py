@@ -431,7 +431,7 @@ from third_party.multi_explore.params.gridworld import params1 as p
 from third_party.multi_explore.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
-    config = ped_p.Params("map_09", 10, 4)
+    config = ped_p.Params("map_10", 4, 1)
     # config.args.model_name = "one_icm_test"
     #config.args = ped_p.debug_mode(config.args)
     #config.args.train_time = 200

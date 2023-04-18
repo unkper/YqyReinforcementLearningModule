@@ -52,9 +52,9 @@ class PedEnvWrapper:
         wall_symbol = {'1', '2', 'dw', 'lw', 'rw', 'uw', 'cluw', 'cruw', 'cldw', 'crdw'}
         exit_symbol = {str(i) for i in range(3, 9)}
         h, w = self.env.terrain.height, self.env.terrain.width
-        g_obs = np.zeros([h, w])
-        for i in range(h):
-            for j in range(w):
+        g_obs = np.zeros([w, h])
+        for i in range(w):
+            for j in range(h):
                 if self.env.terrain.map[i][j] in wall_symbol:
                     g_obs[i, j] = 1  # 障碍物统一设置为1
                 elif self.env.terrain.map[i][j] in exit_symbol:

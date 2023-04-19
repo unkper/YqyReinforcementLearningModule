@@ -22,7 +22,7 @@ class Params:
          "3: Burrowing exploration\n" + \
          "4: Leader-Follower exploration\n" 
     """
-    explr_types = [0, 1, 2, 3, 4]
+    explr_types = [0]
     uniform_heads = True  # Meta-policy samples all heads uniformly
     beta = 0.1  # Weighting for intrinsic reward
     decay = 0.7  # Decay rate for state-visit counts in intrinsic reward, f(n) = 1 / N ^ decay
@@ -62,6 +62,7 @@ class Params:
      parallel envs or image-based observations
     """
     gpu_rollout = True
+    use_adv_encoder = False
 
     def __init__(self, map="map_09", agent_num = 4, group_size = 1, pol_h_dim=32, cri_h_dim=128):
         Params.map_ind = map

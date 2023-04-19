@@ -113,7 +113,8 @@ def make_parallel_env(config, seed):
                                      group_size=config.group_size,
                                      maxStep=config.max_episode_length,
                                      frame_skip=config.frame_skip,
-                                     seed=(seed * 1000))
+                                     seed=(seed * 1000),
+                                     use_adv_net=config.use_adv_encoder)
             else:  # vizdoom
                 raise Exception("该修改代码不支持Vizdoom环境!")
             return env
@@ -187,7 +188,8 @@ def run(config, load_file=None):
                                   head_reward_scale=config.head_reward_scale,
                                   beta=config.beta,
                                   n_intr_rew_types=n_intr_rew_types,
-                                  sep_extr_head=sep_extr_head)
+                                  sep_extr_head=sep_extr_head,
+                                  use_adv_net=config.use_adv_encoder)
     else:
         logging.warning("加载之前保存的模型文件来训练...")
         model = SAC.init_from_save(load_file,
@@ -433,16 +435,17 @@ from third_party.multi_explore.params.ped import params1 as ped_p
 if __name__ == '__main__':
     config = ped_p.Params("map_10", 4, 1)
     # config.args.model_name = "one_icm_test"
-    #config.args = ped_p.debug_mode(config.args)
-    #config.args.train_time = 200
-    #run(config.args)
+    config.args = ped_p.debug_mode(config.args)
+    config.args.use_adv_encoder = True
+    config.args.train_time = 200
+    run(config.args)
                                                                                                                     
     # for i in range(2):
     #     config = ped_p.icm_compare_test(params.args)
     #     run(config)
 
 
-    config.args.model_name = strf_now_time() + "exp_test"
-    for i in range(5):
-        config.args = p.change_explore_type_exp(config.args)
-        run(config.args)
+    # config.args.model_name = strf_now_time() + "exp_test"
+    # for i in range(5):
+    #     config.args = p.change_explore_type_exp(config.args)
+    #     run(config.args)

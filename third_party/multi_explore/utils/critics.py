@@ -3,38 +3,49 @@ import torch.nn as nn
 import torch.nn.functional as F
 from itertools import chain
 
+from third_party.multi_explore.algorithms.net import Encoder
+
+
 class CentralCritic(nn.Module):
     def __init__(self, vect_state_size, action_size,
                  nagents, hidden_dim=64, nonlin=F.relu, n_intr_rew_heads=0,
-                 sep_extr_head=True):
+                 sep_extr_head=True, use_adv_network=False, state_size=None,
+                 use_num_type_action=True):
+        """
+        use_num_type_action代表使用数字格式的action的动作
+        """
         super(CentralCritic, self).__init__()
         assert (sep_extr_head or n_intr_rew_heads > 0)
         self.vect_state_size = vect_state_size
-        self.action_size = action_size
+        self.action_size = action_size if not use_num_type_action else 1
         self.nagents = nagents
         self.nonlin = nonlin
         self.n_intr_rew_heads = n_intr_rew_heads
         self.sep_extr_head = sep_extr_head
         self.n_pol_heads = self.n_intr_rew_heads + int(self.sep_extr_head)
+        self.use_num_type_action = use_num_type_action
 
-        self.state_vect_encoder = nn.Sequential()
-        self.state_vect_encoder.add_module('vect_enc_fc',
-                                           nn.Linear(vect_state_size,
-                                                     hidden_dim))
-        self.state_vect_encoder.add_module('vect_enc_nl', nn.ReLU())
+        if not use_adv_network:
+            self.state_vect_encoder = nn.Sequential()
+            self.state_vect_encoder.add_module('vect_enc_fc',
+                                               nn.Linear(vect_state_size,
+                                                         hidden_dim))
+            self.state_vect_encoder.add_module('vect_enc_nl', nn.ReLU())
+        else:
+            self.state_vect_encoder = Encoder(state_shape=state_size, out_dim=hidden_dim)
 
         self.fully_shared_modules = [self.state_vect_encoder]
         self.agent_pol_shared_modules = []
 
         self.extr_critics = nn.ModuleList(
-            [nn.ModuleList([nn.Sequential(nn.Linear(action_size * (nagents - 1) + hidden_dim, hidden_dim),
+            [nn.ModuleList([nn.Sequential(nn.Linear(self.action_size * (nagents - 1) + hidden_dim, hidden_dim),
                                           nn.ReLU(),
                                           nn.Linear(hidden_dim, action_size))
                             for _ in range(self.nagents)])
              for _ in range(self.n_intr_rew_heads + int(self.sep_extr_head))])
 
         self.intr_critics = nn.ModuleList(
-            [nn.ModuleList([nn.Sequential(nn.Linear(action_size * (nagents - 1) + hidden_dim, hidden_dim),
+            [nn.ModuleList([nn.Sequential(nn.Linear(self.action_size * (nagents - 1) + hidden_dim, hidden_dim),
                                           nn.ReLU(),
                                           nn.Linear(hidden_dim, action_size))
                             for _ in range(self.nagents)])
@@ -93,8 +104,11 @@ class CentralCritic(nn.Module):
             agent_rets = []
             for j in range(self.n_pol_heads):
                 intr_rel_acs = [a[j] for k, a in enumerate(acs) if k != a_i]
-
-                extr_critic_ins = torch.cat(intr_rel_acs + [state_encoding], dim=1)
+                if self.use_num_type_action:
+                    intr_rel_acs = [torch.unsqueeze(torch.argmax(a, 1), 1) for a in intr_rel_acs]
+                    extr_critic_ins = torch.cat(intr_rel_acs + [state_encoding], dim=1)
+                else:
+                    extr_critic_ins = torch.cat(intr_rel_acs + [state_encoding], dim=1)
                 intr_critic_ins = extr_critic_ins
 
                 int_acs = acs[a_i][j].max(dim=1, keepdim=True)[1]

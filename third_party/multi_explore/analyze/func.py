@@ -30,18 +30,22 @@ def draw_arrive_plot(path_dir, label_type=0):
         except FileNotFoundError:
             continue
 
-    fig, ax = plt.subplots()
+    def _inner(y_label="total_n_found_exit"):
+        fig, ax = plt.subplots()
 
-    for fr, label in zip(dataframes, labels[label_type]):
-        # 绘制图表
-        ax.plot(fr['total_n_found_exit'], label=label)
-    ax.set_xlabel('time_step')
-    ax.set_ylabel('total_n_found_exit')
-    ax.legend(loc="best")
+        for fr, label in zip(dataframes, labels[label_type]):
+            # 绘制图表
+            ax.plot(fr['timestep'], fr[y_label], label=label)
+        ax.set_xlabel('time_step')
+        ax.set_ylabel('total_n_found_exit')
+        ax.legend(loc="best")
 
-    plt.savefig("./plot.png")
+        plt.savefig(os.path.join(path_dir, "plot_{}.png".format(y_label.replace("/", "_"))))
+    _inner("total_n_found_exit")
+    _inner("episode_rewards/extrinsic/mean")
+    _inner("episode_lengths/mean")
 
 
 if __name__ == '__main__':
-    pth = r"/home/lab/projects/YqyReinforcementLearningModule/third_party/multi_explore/models/pedsmove/map_09_5agents_taskleave/one_icm_test"
+    pth = r"D:\projects\python\PedestrainSimulationModule\third_party\multi_explore\models\pedsmove\map_09_6agents_taskleave\test"
     draw_arrive_plot(pth)

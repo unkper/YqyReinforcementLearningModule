@@ -30,7 +30,7 @@ class SAC(object):
                  head_reward_scale=25.,
                  pol_hidden_dim=64, critic_hidden_dim=64, nonlin=F.relu,
                  n_intr_rew_types=0,
-                 sep_extr_head=False, beta=0.5, **kwargs):
+                 sep_extr_head=False, beta=0.5, use_adv_network=False, **kwargs):
         """
         Inputs:
             obs_shape (int): Dimensions of vector observations
@@ -56,12 +56,16 @@ class SAC(object):
         self.critic = CentralCritic(state_shape[0], action_size,
                                     nagents, hidden_dim=critic_hidden_dim,
                                     n_intr_rew_heads=n_intr_rew_types,
-                                    sep_extr_head=sep_extr_head)
+                                    sep_extr_head=sep_extr_head,
+                                    use_adv_network=use_adv_network,
+                                    state_size=state_shape)
         self.target_critic = CentralCritic(state_shape[0], action_size,
                                            nagents,
                                            hidden_dim=critic_hidden_dim,
                                            n_intr_rew_heads=n_intr_rew_types,
-                                           sep_extr_head=sep_extr_head)
+                                           sep_extr_head=sep_extr_head,
+                                           use_adv_network=use_adv_network,
+                                           state_size=state_shape)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = Adam(self.critic.parameters(), lr=q_lr,
                                      eps=adam_eps, weight_decay=q_decay)
@@ -353,7 +357,7 @@ class SAC(object):
                       head_reward_scale=25.,
                       pol_hidden_dim=128, critic_hidden_dim=128,
                       nonlin=F.relu, n_intr_rew_types=0, beta=0.5,
-                      sep_extr_head=False, **kwargs):
+                      sep_extr_head=False, use_adv_net=False, **kwargs):
         """
         Instantiate instance of this class from multi-agent environment
 
@@ -387,7 +391,8 @@ class SAC(object):
                      'beta': beta,
                      'obs_shape': obs_shape,
                      'state_shape': state_shape,
-                     'action_size': action_size}
+                     'action_size': action_size,
+                     'use_adv_network': use_adv_net}
         instance = cls(**init_dict)
         instance.init_dict = init_dict
         return instance

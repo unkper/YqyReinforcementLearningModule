@@ -15,7 +15,8 @@ def draw_arrive_plot(path_dir, label_type=0):
              "Covering exploration",
              "Burrowing exploration",
              "Leader-Follower exploration",
-             "multihead"]
+             "multihead"],
+        2: range(100)
     }
     # 获取所有子文件夹名称
     subfolders = next(os.walk(path_dir))[1]

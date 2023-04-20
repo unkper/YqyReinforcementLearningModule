@@ -232,11 +232,12 @@ class Person(Agent):
         c_speed_dict = [0, -0.125, -0.25, 0.125, 0.25, 0.5, 1]
         c_angle_dict = [(i * math.pi / 4) for i in c_speed_dictm]
 
-        assert 0 <= action_type < 63
-        delta_velocity = c_speed_dict[action_type // 9] * Person.MAX_SPEED / 2
+        assert 0 <= action_type < 81
+        old_velocity_norm = np.linalg.norm(vec)
+        delta_velocity = c_speed_dictm[action_type // 9] * Person.MAX_SPEED / 2
+        #delta_velocity = c_speed_dictm[action_type // 9] * old_velocity_norm
         delta_angle = c_angle_dict[action_type % 9]
 
-        old_velocity_norm = np.linalg.norm(vec)
         if old_velocity_norm == 0.0:
             old_angle_radian = self.body.angle  # 这里必须设置成当前朝向，不能为0.0否则出错！！！
         else:

@@ -239,10 +239,10 @@ class PedsMoveEnv(gym.Env):
                  discrete=True,
                  frame_skipping=8,
                  maxStep=10000,
-                 person_handler=PedsRLHandlerWithForce,
+                 person_handler=None,
                  disable_reward=False,
                  use_planner=False,
-                 test_reward_mode=False,
+                 with_force=True,
                  random_init_mode: bool = True,
                  debug_mode: bool = False):
         """
@@ -285,7 +285,8 @@ class PedsMoveEnv(gym.Env):
 
         self.frame_skipping = frame_skipping
         self.group_size = group_size
-        self.person_handler = person_handler(self, use_planner=use_planner, test_mode=test_reward_mode)
+        if person_handler is None:
+            self.person_handler = PedsRLHandlerWithForce(self, use_planner=use_planner, with_force=with_force)
         # 由PersonHandler类提供的属性代替，从而使用策略模式来加强灵活性
         # self.observation_space = self.person_handler.observation_space[0]
         # self.action_space = self.person_handler.action_space[0]

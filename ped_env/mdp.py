@@ -73,7 +73,7 @@ class PedsHandlerInterface(abc.ABC):
 
 class PedsRLHandlerWithForce(PedsHandlerInterface):
     """
-    该奖励机制不再考虑行人间的社会力，并且将动作改为修改行人的行走速度和行走方向
+    该奖励机制不再考虑leader间的社会力，并且将动作改为修改行人的行走速度和行走方向
     """
     ACTION_NUM = 9
 
@@ -81,7 +81,7 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
     DETECT_OBSTACLE_COUNT = 3
 
     def __init__(self, env, r_move=-0.1, r_wait=-0.1, r_collision_person=-0.1, r_collision_wall=-2.0, r_reach=100,
-                 use_planner=False, test_mode=None):
+                 use_planner=False, with_force=True):
         super().__init__(env)
         self.last_observation = {}
         self.env = env
@@ -97,7 +97,10 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
                                   for _ in range(self.agent_count)]
         if self.env.discrete:
             # 定义动作空间为修改智能体速度和角度，具体参见论文的动作空间设计
-            self.action_space = [Discrete(PedsRLHandlerWithForce.ACTION_NUM) for _ in range(self.agent_count)]
+            if not with_force:
+                self.action_space = [Discrete(81) for _ in range(self.agent_count)]
+            else:
+                self.action_space = [Discrete(PedsRLHandlerWithForce.ACTION_NUM) for _ in range(self.agent_count)]
         else:
             # 定义连续动作空间为[分量x，分量y]施加相应方向的力
             self.action_space = [Box(-1, 1, (2,)) for _ in range(self.agent_count)]
@@ -109,6 +112,7 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
         self.r_reach = r_reach
 
         self.use_planner = use_planner
+        self.with_force = with_force
 
     def get_observation(self, ped: Person, group: Group, time):
         from ped_env.utils.misc import ObjectType
@@ -151,7 +155,10 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
         return observation
 
     def set_action(self, ped: Person, action):
-        ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
+        if self.with_force:
+            ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
+        else:
+            ped.set_velocity(action)
 
     def set_follower_action(self, ped: Person, action, group: Group, exit_pos):
         diff = group.get_distance_to_leader(ped)

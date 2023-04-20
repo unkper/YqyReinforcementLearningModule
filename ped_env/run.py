@@ -21,7 +21,7 @@ def test2():
 
     person_num = 4
     env = Env("map_10", person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
-              random_init_mode=True, person_handler=PedsRLHandlerWithForce)
+              random_init_mode=True, person_handler=None, with_force=False)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
 

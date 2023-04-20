@@ -37,7 +37,7 @@ def draw_arrive_plot(path_dir, label_type=0):
             # 绘制图表
             ax.plot(fr['timestep'], fr[y_label], label=label)
         ax.set_xlabel('time_step')
-        ax.set_ylabel('total_n_found_exit')
+        ax.set_ylabel(y_label.replace('/', '_'))
         ax.legend(loc="best")
 
         plt.savefig(os.path.join(path_dir, "plot_{}.png".format(y_label.replace("/", "_"))))
@@ -47,5 +47,5 @@ def draw_arrive_plot(path_dir, label_type=0):
 
 
 if __name__ == '__main__':
-    pth = r"D:\projects\python\PedestrainSimulationModule\third_party\multi_explore\models\pedsmove\map_09_6agents_taskleave\test"
+    pth = r"/home/lab/projects/YqyReinforcementLearningModule/third_party/multi_explore/models/pedsmove/map_10_5agents_taskleave/one_icm_test"
     draw_arrive_plot(pth)

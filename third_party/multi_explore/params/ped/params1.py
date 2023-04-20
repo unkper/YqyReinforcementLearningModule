@@ -22,14 +22,14 @@ class Params:
          "3: Burrowing exploration\n" + \
          "4: Leader-Follower exploration\n" 
     """
-    explr_types = [0]
+    explr_types = [0]   # after test, Independent is the best explore way!
     uniform_heads = True  # Meta-policy samples all heads uniformly
     beta = 0.1  # Weighting for intrinsic reward
     decay = 0.7  # Decay rate for state-visit counts in intrinsic reward, f(n) = 1 / N ^ decay
-    n_rollout_threads = 24  # 启用的总线程数，用于环境经验的收集工作
+    n_rollout_threads = 12  # 启用的总线程数，用于环境经验的收集工作
     buffer_length = int(1e6)  # "Set to 5e5 for ViZDoom (if memory limited)"
-    train_time = int(1e6 / 2)
-    max_episode_length = 2000  # 一集的最大长度
+    train_time = int(1e6 * 3/4)
+    max_episode_length = 10000  # 一集的最大长度
     steps_per_update = 100
     """
     "Number of episodes to rollout before updating the meta-policy " +
@@ -62,7 +62,6 @@ class Params:
      parallel envs or image-based observations
     """
     gpu_rollout = True
-    use_adv_encoder = False
 
     def __init__(self, map="map_09", agent_num = 4, group_size = 1, pol_h_dim=32, cri_h_dim=128):
         Params.map_ind = map
@@ -118,6 +117,12 @@ def icm_compare_test(args: Params):
         args.intrinsic_reward = 0
     exp_count += 1
     return args
+
+def sac_train_time_test(args: Params):
+    global exp_count
+    update_nums = [10, 20, 40, 50]
+    args.num_updates = update_nums[exp_count]
+    exp_count += 1
 
 
 if __name__ == '__main__':

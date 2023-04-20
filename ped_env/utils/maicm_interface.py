@@ -12,7 +12,10 @@ class PedEnvWrapper:
         self.env: PedsMoveEnv = env
         self.row, self.col = self.env.terrain.width, self.env.terrain.height
         self.num_agents = self.env.num_agents
-        self.state_space = gym.spaces.Box(0, 9, [self.env.terrain.width, self.env.terrain.height])
+        if use_adv_network:
+            self.state_space = gym.spaces.Box(0, 9, [self.env.terrain.width, self.env.terrain.height])
+        else:
+            self.state_space = gym.spaces.Box(0, 9, [self.env.terrain.width*self.env.terrain.height])
         self.observation_space = self.env.observation_space("0")
         self.action_space = self.env.action_space("0")
         self.joint_count = joint_count

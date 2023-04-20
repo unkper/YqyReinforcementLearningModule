@@ -99,7 +99,8 @@ class PedEnvWrapper:
                 self.visit_counts[idx, int(agent.x), int(agent.y)] += 1
         self._prv_state = global_obs
         self._prv_obs = _obs
-        return global_obs, _obs, sum(_rew), all(_done), _info
+        # 注意该接口返回的rew的是所有agent奖励的加和值，all代表所有智能体都为done后
+        return global_obs, _obs, np.mean(_rew).tolist(), all(_done), _info
 
     def render(self, mode="human", ratio=1.0):
         self.env.render(mode=mode, ratio=ratio)

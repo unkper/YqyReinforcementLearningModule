@@ -374,7 +374,8 @@ def run(config, load_file=None):
                 model.update_critic(sample, logger=logger, intr_rews=intr_rews, data_dict=critic_policy_data_dict)
                 model.update_policies(sample, logger=logger, data_dict=critic_policy_data_dict)
                 model.update_all_targets()
-            if len(recent_ep_extr_rews) > 10:
+
+            if len(recent_ep_extr_rews) > 3:
                 logger.add_scalar('episode_rewards/extrinsic/mean',
                                   np.mean(recent_ep_extr_rews), t)
                 logger.add_scalar('episode_lengths/mean',

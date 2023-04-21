@@ -24,3 +24,4 @@ venv_vizdoom
 /third_party/multi_explore/test/
 /rl_platform/tianshou_case/vizdoom/checkpoints/
 /rl_platform/tianshou_case/ped_env/saved_checkpoints/
+*.mp4

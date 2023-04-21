@@ -1,3 +1,5 @@
+import pprint
+
 import numpy as np
 import gym
 
@@ -8,18 +10,22 @@ from ped_env.run import save_video
 
 
 class PedEnvWrapper:
-    def __init__(self, env, joint_count=False, use_adv_network=False):
+    def __init__(self, env, joint_count=False, use_adv_network=False, use_concat_obs=False):
+        assert not(use_concat_obs and use_adv_network), "不允許的設置"
         self.env: PedsMoveEnv = env
         self.row, self.col = self.env.terrain.width, self.env.terrain.height
         self.num_agents = self.env.num_agents
         if use_adv_network:
             self.state_space = gym.spaces.Box(0, 9, [self.env.terrain.width, self.env.terrain.height])
+        elif use_concat_obs:
+            self.state_space = gym.spaces.Box(-10000, 10000, (4 * self.num_agents, ), dtype=np.float32)
         else:
             self.state_space = gym.spaces.Box(0, 9, [self.env.terrain.width*self.env.terrain.height])
         self.observation_space = self.env.observation_space("0")
         self.action_space = self.env.action_space("0")
         self.joint_count = joint_count
         self.use_adv_net = use_adv_network
+        self.use_concat_obs = use_concat_obs
 
         if self.joint_count:
             self.visit_counts = np.zeros(self.num_agents * [self.row * 2, self.col * 2])
@@ -51,6 +57,13 @@ class PedEnvWrapper:
 
     def get_st_obs(self):
         return self._prv_state, self._prv_obs
+
+    def get_concat_obs(self, _obs):
+        g_obs = []
+        for obs in _obs:
+            g_obs.append(obs[0:4])
+        # 返回的全局状态为[每个智能体的状态,每个智能体的x,y坐标的one_hot编码]
+        return np.concatenate(g_obs)
 
     def get_global_obs(self):
         wall_symbol = {'1', '2', 'dw', 'lw', 'rw', 'uw', 'cluw', 'cruw', 'cldw', 'crdw'}
@@ -90,7 +103,10 @@ class PedEnvWrapper:
             agent = self.env.agents_dict[a]
             _info['visit_count_lookup'].append([int(agent.x), int(agent.y)])
             _info['n_found_treasures'].append(1 if agent.is_done else 0)
-        global_obs = self.get_global_obs()
+        if self.use_concat_obs:
+            global_obs = self.get_concat_obs(_obs)
+        else:
+            global_obs = self.get_global_obs()
 
         if self.joint_count:
             visit_inds = tuple(sum([[int(a.x), int(a.y)] for a in self.env.possible_agents], []))
@@ -116,11 +132,11 @@ class PedEnvWrapper:
 
 
 def create_ped_env(map="map_09", leader_num=4, group_size=1, maxStep=10000, disable_reward=False, frame_skip=8,
-                   seed=None, use_adv_net=False, with_force=False):
+                   seed=None, use_adv_net=False, use_concat_obs=False, with_force=False):
     env = PedEnvWrapper(
         PedsMoveEnv(terrain=map, person_num=leader_num * group_size, group_size=(group_size, group_size),
                     maxStep=maxStep, disable_reward=disable_reward, discrete=True, frame_skipping=frame_skip, with_force=with_force),
-                    use_adv_network=use_adv_net)
+                    use_adv_network=use_adv_net, use_concat_obs=use_concat_obs)
     env.seed(seed)
     return env
 
@@ -129,7 +145,7 @@ def test_wrapper_api(debug=False):
     import time
 
     person_num = 20
-    env = create_ped_env("map_10", 4, 5, maxStep=2000)
+    env = create_ped_env("map_10", 4, 5, maxStep=2000, use_concat_obs=True)
     # env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
     #           random_init_mode=True, person_handler=PedsRLHandlerWithForce)
 
@@ -149,7 +165,7 @@ def test_wrapper_api(debug=False):
             state, obs, reward, is_done, info = env.step(action)
             env.render()
             # print("is_done:")
-            # pprint.pprint(info)
+            #pprint.pprint(state)
             step += env.env.frame_skipping
             # time.sleep(0.01)
             obs_arr.append(state)

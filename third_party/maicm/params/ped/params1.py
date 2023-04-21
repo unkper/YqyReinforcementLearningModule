@@ -11,6 +11,8 @@ class Params:
     map_ind = "map_09"  # Index of map to use (only for pedsmove)
     num_agents = 15  # for 1-4 gridworld, for 1-2 vizdoom, for 1-n pedsmove
     group_size = 1  # for pedsmove groupsize
+    use_adv_encoder = False
+    use_concat_obs = True
     task_config = "leave"
     frame_skip = 8
     intrinsic_reward = 1  # 0 for no intrinsic reward, 1 using visit counts
@@ -22,13 +24,13 @@ class Params:
          "3: Burrowing exploration\n" + \
          "4: Leader-Follower exploration\n" 
     """
-    explr_types = [0]   # after test, Independent is the best explore way!
+    explr_types = [0]  # after test, Independent is the best explore way!
     uniform_heads = True  # Meta-policy samples all heads uniformly
     beta = 0.1  # Weighting for intrinsic reward
     decay = 0.7  # Decay rate for state-visit counts in intrinsic reward, f(n) = 1 / N ^ decay
     n_rollout_threads = 12  # 启用的总线程数，用于环境经验的收集工作
     buffer_length = int(1e6)  # "Set to 5e5 for ViZDoom (if memory limited)"
-    train_time = int(1e6 * 3/4)
+    train_time = int(1e6 * 3 / 4)
     max_episode_length = 10000  # 一集的最大长度
     steps_per_update = 100
     """
@@ -63,18 +65,16 @@ class Params:
     """
     gpu_rollout = True
 
-    def __init__(self, map="map_09", agent_num = 4, group_size = 1, pol_h_dim=32, cri_h_dim=128):
+    def __init__(self, map="map_09", agent_num=4, group_size=1, pol_h_dim=32, cri_h_dim=128):
         Params.map_ind = map
         Params.num_agents = agent_num
         Params.group_size = group_size
         Params.pol_hidden_dim = pol_h_dim
         Params.critic_hidden_dim = cri_h_dim
 
-
         filtered_dict = {k: v for k, v in vars(Params).items() if not k.startswith("__")}
         filtered_dict = {k: v for k, v in filtered_dict.items() if not isinstance(v, classmethod)}
         self.args = EasyDict(filtered_dict)
-
 
 
 def debug_mode(args) -> Params:
@@ -117,6 +117,7 @@ def icm_compare_test(args: Params):
         args.intrinsic_reward = 0
     exp_count += 1
     return args
+
 
 def sac_train_time_test(args: Params):
     global exp_count

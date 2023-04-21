@@ -114,7 +114,8 @@ def make_parallel_env(config, seed):
                                      maxStep=config.max_episode_length,
                                      frame_skip=config.frame_skip,
                                      seed=(seed * 1000),
-                                     use_adv_net=config.use_adv_encoder)
+                                     use_adv_net=config.use_adv_encoder,
+                                     use_concat_obs=config.use_concat_obs)
             else:  # vizdoom
                 raise Exception("该修改代码不支持Vizdoom环境!")
             return env
@@ -236,26 +237,26 @@ def run(config, load_file=None):
         # rearrange actions to be per environment
         actions = [[ac[i] for ac in agent_actions] for i in range(int(active_envs.sum()))]
 
-        # next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
+        next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
 
-        try:
-            with timeout(seconds=1):
-                next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
-        except (TimeoutError):
-            # 为了防止环境崩溃引起训练的无故终止!
-            logging.warning("Environment are broken...")
-            env = make_parallel_env(config, run_num)
-            state, obs = env.reset()
-            idx = active_envs.astype(bool)
-            env_ep_extr_rews[idx] = 0.0
-            env_extr_rets[idx] = 0.0
-            for i in range(n_intr_rew_types):
-                for j in range(config.num_agents):
-                    env_ep_intr_rews[i][j][idx] = 0.0
-            env_times = np.zeros(config.n_rollout_threads, dtype=int)
-            state = apply_to_all_elements(state, lambda x: x[idx])
-            obs = apply_to_all_elements(obs, lambda x: x[idx])
-            continue
+        # try:
+        #     with timeout(seconds=1):
+        #         next_state, next_obs, rewards, dones, infos = env.step(actions, env_mask=active_envs)
+        # except (TimeoutError):
+        #     # 为了防止环境崩溃引起训练的无故终止!
+        #     logging.warning("Environment are broken...")
+        #     env = make_parallel_env(config, run_num)
+        #     state, obs = env.reset()
+        #     idx = active_envs.astype(bool)
+        #     env_ep_extr_rews[idx] = 0.0
+        #     env_extr_rets[idx] = 0.0
+        #     for i in range(n_intr_rew_types):
+        #         for j in range(config.num_agents):
+        #             env_ep_intr_rews[i][j][idx] = 0.0
+        #     env_times = np.zeros(config.n_rollout_threads, dtype=int)
+        #     state = apply_to_all_elements(state, lambda x: x[idx])
+        #     obs = apply_to_all_elements(obs, lambda x: x[idx])
+        #     continue
 
         for env_idx in range(len(infos)):
             pos_list = infos[env_idx]['visit_count_lookup']
@@ -429,25 +430,25 @@ def run(config, load_file=None):
     env.close(force=(config.env_type == 'vizdoom'))
 
 
-from third_party.maicm.params.gridworld import params1 as p
 from third_party.maicm.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
     config = ped_p.Params("map_10", 6, 1)
+    config.args.model_name = strf_now_time() + "exp_test"
     # config.args.model_name = "one_icm_test"
-    #config.args = ped_p.debug_mode(config.args)
-    config.args.use_adv_encoder = True
+    config.args = ped_p.debug_mode(config.args)
+    #config.args.use_adv_encoder = True
     #config.args.train_time = 200
-    #run(config.args)
+    run(config.args)
 
-    maps = ['map_10', "map_11"]
-
-    for ma in maps:
-        config.args.map_ind = ma
-        ped_p.exp_count = 0
-        for i in range(2):
-            config.args = ped_p.icm_compare_test(config.args)
-            run(config.args)
+    # maps = ['map_10']
+    #
+    # for ma in maps:
+    #     config.args.map_ind = ma
+    #     ped_p.exp_count = 0
+    #     for i in range(2):
+    #         config.args = ped_p.icm_compare_test(config.args)
+    #         run(config.args)
 
     # config.args.model_name = strf_now_time() + "exp_test"
     # for i in range(5):

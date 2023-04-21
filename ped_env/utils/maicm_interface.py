@@ -41,7 +41,10 @@ class PedEnvWrapper:
         for agent in self.env.possible_agents:
             _obs.append(np.array(obs_dict[agent]))
 
-        global_obs = self.get_global_obs()
+        if self.use_concat_obs:
+            global_obs = self.get_concat_obs(_obs)
+        else:
+            global_obs = self.get_global_obs()
 
         if self.joint_count:
             visit_inds = tuple(sum([[int(a.x), int(a.y)] for a in self.env.possible_agents], []))
@@ -153,7 +156,8 @@ def test_wrapper_api(debug=False):
         start_time = time.time()
         step = 0
         is_done = False
-        env.reset()
+        gobs, obs = env.reset()
+        pprint.pprint(gobs)
 
         def get_single_action(agent):
             return env.env.action_space(agent).sample()

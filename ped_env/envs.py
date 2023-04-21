@@ -582,20 +582,16 @@ class PedsMoveEnv(gym.Env):
         assert mode in self.metadata["render_modes"]
         import ped_env.settings as set
 
+        S = 40
         if self.screen is None and mode == "human":
             pygame.init()
             pygame.display.init()
-            self.screen = pygame.display.set_mode((set.VIEWPORT_W, set.VIEWPORT_H))
-            set.init_settings(self.terrain.width, self.terrain.height)
+            S = set.init_settings(self.terrain.width, self.terrain.height)
+            self.screen = pygame.display.set_mode((self.terrain.width * S, self.terrain.height * S))
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
-        if set.RENDER_RATIO_CHANGED:
-            # 调整了渲染比例，需要重新创建screen
-            self.screen = pygame.display.set_mode((set.VIEWPORT_W, set.VIEWPORT_H))
-            set.RENDER_RATIO_CHANGED = False
-
-        self.surf = pygame.Surface((set.VIEWPORT_W, set.VIEWPORT_H))
+        self.surf = pygame.Surface((self.terrain.width * S, self.terrain.height * S))
         SCALE = self.render_scale = set.RENDER_SCALE
 
         self.surf.fill((255, 255, 255))

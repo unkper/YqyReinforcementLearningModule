@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from itertools import chain
 
-from third_party.multi_explore.algorithms.net import Encoder
+from third_party.maicm.algorithms.net import Encoder
 
 
 class CentralCritic(nn.Module):

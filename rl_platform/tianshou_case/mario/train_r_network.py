@@ -2,17 +2,13 @@ import os.path
 import pprint
 from datetime import datetime
 
-import gym
-import torch
-from tensorboardX import SummaryWriter
-from tianshou.data import ReplayBuffer, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv, SubprocVectorEnv
-from tianshou.policy import RandomPolicy
+from tianshou.data import VectorReplayBuffer
+from tianshou.env import SubprocVectorEnv
 from vizdoom import gym_wrapper  # noqa
 from tianshou.data.collector import Collector
 
 from rl_platform.tianshou_case.standard_gym.wrapper import RewardType
-from rl_platform.tianshou_case.third_party.r_network_training import train_r_network_with_collector
+from third_party.ec import train_r_network_with_collector
 from rl_platform.tianshou_case.utils.dummy_policy import DummyPolicy
 from wrapper import create_mario_env
 

@@ -429,8 +429,8 @@ def run(config, load_file=None):
     env.close(force=(config.env_type == 'vizdoom'))
 
 
-from third_party.multi_explore.params.gridworld import params1 as p
-from third_party.multi_explore.params.ped import params1 as ped_p
+from third_party.maicm.params.gridworld import params1 as p
+from third_party.maicm.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
     config = ped_p.Params("map_10", 6, 1)

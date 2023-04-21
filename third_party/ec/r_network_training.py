@@ -32,7 +32,7 @@ from tianshou.env import SubprocVectorEnv
 from torch.optim import RAdam
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.third_party.constants import Const
+from third_party.ec.constants import Const
 import numpy as np
 
 from rl_platform.tianshou_case.utils.dummy_policy import DummyPolicy

@@ -11,7 +11,7 @@ from pathlib import Path
 from collections import deque
 from tensorboardX import SummaryWriter
 
-from third_party.multi_explore.main import make_parallel_env
+from third_party.maicm.main import make_parallel_env
 from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv
 from utils.misc import apply_to_all_elements, timeout, RunningMeanStd
@@ -54,11 +54,11 @@ def test(config, load_file, episode=2):
     env.close(force=(config.env_type == 'vizdoom'))
 
 if __name__ == "__main__":
-    from third_party.multi_explore.params.ped import params1 as ped_p
+    from third_party.maicm.params.ped import params1 as ped_p
     config = ped_p.Params("map_09", 6, 4)
     config.args = ped_p.debug_mode(config.args)
     config.args.n_rollout_threads = 2
 
-    path = r"D:\projects\python\PedestrainSimulationModule\third_party\multi_explore\models\pedsmove\map_09_6agents_taskleave\test\run27\model.pt"
+    path = r"/ec/maicm\models\pedsmove\map_09_6agents_taskleave\test\run27\model.pt"
 
     test(config.args, path)

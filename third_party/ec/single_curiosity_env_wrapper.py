@@ -1,14 +1,13 @@
 import torch
 
-from rl_platform.tianshou_case.third_party import episodic_memory
-from rl_platform.tianshou_case.third_party import oracle
+from third_party.ec import episodic_memory
+from third_party.ec import oracle
 
-import gym
 import numpy as np
 import cv2
 
-from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
-from rl_platform.tianshou_case.third_party.r_network_training import RNetworkTrainer
+from third_party.ec.episodic_memory import EpisodicMemory
+from third_party.ec.r_network_training import RNetworkTrainer
 
 
 def resize_observation(frame, image_shape, reward=None):

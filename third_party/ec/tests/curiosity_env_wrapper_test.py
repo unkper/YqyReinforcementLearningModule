@@ -25,14 +25,14 @@ from collections import OrderedDict
 from gym.vector.utils import spaces
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.third_party import episodic_memory, r_network_training, \
-    single_curiosity_env_wrapper as curiosity_env_wrapper
+from third_party.ec import episodic_memory, single_curiosity_env_wrapper as curiosity_env_wrapper
+from third_party.ec import r_network_training
 
 import gym
 import numpy as np
 
-from rl_platform.tianshou_case.third_party.vec_env import VecEnv
-from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
+from third_party.ec.vec_env import VecEnv
+from third_party.ec.single_curiosity_env_wrapper import CuriosityEnvWrapper
 
 
 class DummyVecEnv(VecEnv):
@@ -128,7 +128,7 @@ class DummyImageEnv(gym.Env):
         raise NotImplementedError('Rendering not implemented')
 
 
-# TODO(damienv): To be removed once the code in third_party
+# TODO(damienv): To be removed once the code in ec
 # is compatible with python 2.
 class HackDummyVecEnv(DummyVecEnv):
 

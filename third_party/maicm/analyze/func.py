@@ -48,5 +48,5 @@ def draw_arrive_plot(path_dir, label_type=0):
 
 
 if __name__ == '__main__':
-    pth = r"/home/lab/projects/YqyReinforcementLearningModule/third_party/multi_explore/models/pedsmove/map_10_5agents_taskleave/one_icm_test"
+    pth = r"/home/lab/projects/YqyReinforcementLearningModule/ec/maicm/models/pedsmove/map_10_5agents_taskleave/one_icm_test"
     draw_arrive_plot(pth)

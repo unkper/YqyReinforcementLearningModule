@@ -4,11 +4,11 @@ import numpy as np
 from torch.optim import Adam, SGD
 from gym import spaces
 from itertools import chain
-from third_party.multi_explore.utils.misc import soft_update, hard_update, enable_gradients, disable_gradients, pol_kl, \
+from third_party.maicm.utils.misc import soft_update, hard_update, enable_gradients, disable_gradients, pol_kl, \
     RunningMeanStd, apply_to_all_elements
-from third_party.multi_explore.utils.agents import Agent
-from third_party.multi_explore.utils.policies import HeadSelector
-from third_party.multi_explore.utils.critics import CentralCritic
+from third_party.maicm.utils.agents import Agent
+from third_party.maicm.utils.policies import HeadSelector
+from third_party.maicm.utils.critics import CentralCritic
 
 MSELoss = torch.nn.MSELoss()
 SmoothL1Loss = torch.nn.SmoothL1Loss()

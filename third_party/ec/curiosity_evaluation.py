@@ -21,7 +21,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
-from rl_platform.tianshou_case.third_party.constants import Const
+from third_party.ec.constants import Const
 import numpy as np
 
 

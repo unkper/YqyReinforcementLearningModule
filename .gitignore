@@ -21,7 +21,7 @@ rl_platform/tianshou_case/standard_gym/r_network
 venv
 venv_vizdoom
 /rl_platform/tianshou_case/mario/r_network/
-/third_party/multi_explore/test/
+/third_party/maicm/test/
 /rl_platform/tianshou_case/vizdoom/checkpoints/
 /rl_platform/tianshou_case/ped_env/saved_checkpoints/
 *.mp4

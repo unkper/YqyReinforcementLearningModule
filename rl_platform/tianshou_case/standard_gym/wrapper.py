@@ -1,12 +1,12 @@
 from enum import Enum
-from typing import Tuple, Any
+from typing import Tuple
 
 import gym
 import numpy as np
 from gym.core import ObsType, ActType
 from gym.wrappers import TimeLimit, FrameStack
 
-from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import resize_observation
+from third_party.ec.single_curiosity_env_wrapper import resize_observation
 
 target_image_shape = [80, 120, 3]
 CAR_IMAGE_STACK = 4

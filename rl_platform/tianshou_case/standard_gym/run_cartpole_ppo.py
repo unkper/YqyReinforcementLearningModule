@@ -2,9 +2,7 @@ import datetime
 import logging
 import os
 import pprint
-from typing import Optional, Tuple, Union
-
-import gym
+from typing import Optional, Union
 
 import numpy as np
 import torch
@@ -25,8 +23,8 @@ from torch.optim import Adam, Optimizer
 from rl_platform.tianshou_case.net.r_network import RNetwork
 from rl_platform.tianshou_case.net.standard_net import CarRacingPolicyHead, CarRacingICMHead
 from rl_platform.tianshou_case.standard_gym.wrapper import create_car_racing_env, RewardType
-from rl_platform.tianshou_case.third_party import r_network_training
-from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
+from third_party.ec import r_network_training
+from third_party.ec.episodic_memory import EpisodicMemory
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
 
@@ -202,7 +200,7 @@ def _get_env():
             env = create_car_racing_env(zero_reward=RewardType.RAW_REWARD)
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
-            from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
+            from third_party.ec.single_curiosity_env_wrapper import CuriosityEnvWrapper
 
             env = CuriosityEnvWrapper(
                 env,

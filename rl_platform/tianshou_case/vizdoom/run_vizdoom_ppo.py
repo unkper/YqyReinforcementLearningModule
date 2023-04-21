@@ -23,8 +23,7 @@ from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
 
 from rl_platform.tianshou_case.net.network import StandardICMFeatureHead, VizdoomPolicyHead
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.third_party import r_network_training
-from rl_platform.tianshou_case.third_party.episodic_memory import EpisodicMemory
+from third_party.ec.episodic_memory import EpisodicMemory
 from rl_platform.tianshou_case.vizdoom.vizdoom_env_wrapper import VizdoomEnvWrapper
 
 sys.path.append(r"D:\projects\python\PedestrainSimulationModule")
@@ -192,7 +191,7 @@ def _get_env():
         env.observation_space = env.observation_space['screen']
         if use_episodic_memory:
             logging.warning(u"使用了EC机制!")
-            from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import CuriosityEnvWrapper
+            from third_party.ec.single_curiosity_env_wrapper import CuriosityEnvWrapper
 
             # r_trainer = r_network_training.RNetworkTrainer(
             #     net,

@@ -23,10 +23,10 @@ import random
 
 from absl.testing import absltest
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.third_party import r_network_training
-from rl_platform.tianshou_case.third_party.constants import Const
-from rl_platform.tianshou_case.third_party.r_network_training import create_training_data_from_episode_buffer_v123
-from rl_platform.tianshou_case.third_party.r_network_training import generate_negative_example
+from third_party.ec import r_network_training
+from third_party.ec.constants import Const
+from third_party.ec.r_network_training import create_training_data_from_episode_buffer_v123
+from third_party.ec.r_network_training import generate_negative_example
 import numpy as np
 
 _OBSERVATION_SHAPE = (120, 160, 3)

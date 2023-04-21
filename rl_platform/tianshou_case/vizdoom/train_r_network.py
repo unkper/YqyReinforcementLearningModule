@@ -3,13 +3,12 @@ from datetime import datetime
 
 import gym
 import torch
-import tqdm
 from tensorboardX import SummaryWriter
 from vizdoom import gym_wrapper  # noqa
 
 from rl_platform.tianshou_case.net.r_network import RNetwork
-from rl_platform.tianshou_case.third_party import r_network_training
-from rl_platform.tianshou_case.third_party.single_curiosity_env_wrapper import resize_observation
+from third_party.ec import r_network_training
+from third_party.ec.single_curiosity_env_wrapper import resize_observation
 from rl_platform.tianshou_case.vizdoom.vizdoom_env_wrapper import VizdoomEnvWrapper
 
 env_name = "VizdoomMyWayHome-v0"

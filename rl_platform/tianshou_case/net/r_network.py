@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torchvision.models as models
 
 EMBEDDING_DIM = 512
 TOP_HIDDEN = 4
@@ -66,7 +65,7 @@ class Siamese_Resnet(nn.Module):
         return self.similarity_network(y1, y2)
 
 
-from rl_platform.tianshou_case.third_party.pytorch_fitmodule.fit_module import FitModule
+from third_party.ec.pytorch_fitmodule.fit_module import FitModule
 
 
 class RNetwork(FitModule):

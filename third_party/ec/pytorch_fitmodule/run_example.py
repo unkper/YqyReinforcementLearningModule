@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from rl_platform.tianshou_case.third_party.pytorch_fitmodule import FitModule
+from third_party.ec.pytorch_fitmodule import FitModule
 from sklearn.datasets import make_multilabel_classification
 
 

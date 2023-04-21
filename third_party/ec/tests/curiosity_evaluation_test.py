@@ -23,8 +23,8 @@ import unittest
 
 import torch
 
-from rl_platform.tianshou_case.third_party import curiosity_evaluation
-from rl_platform.tianshou_case.third_party import fake_gym_env
+from third_party.ec import curiosity_evaluation
+from third_party.ec import fake_gym_env
 import numpy as np
 
 

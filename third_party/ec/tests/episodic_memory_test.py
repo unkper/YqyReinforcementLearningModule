@@ -24,14 +24,13 @@ import unittest
 
 import torch
 
-from rl_platform.tianshou_case.third_party import episodic_memory
-from rl_platform.tianshou_case.net.r_network import RNetwork
+from third_party.ec import episodic_memory
 import numpy as np
 
-from rl_platform.tianshou_case.third_party.episodic_memory import similarity_to_memory
+from third_party.ec.episodic_memory import similarity_to_memory
 
 net = torch.load(
-    r"D:\projects\python\PedestrainSimulationModule\rl_platform\tianshou_case\mario\r_network\Mario_v3_PPO_2023_03_18_16_59_14\r_network_weight_1000.pt")
+    r"/rl_platform/tianshou_case/mario/r_network/Mario_v3_PPO_2023_03_18_16_59_14/r_network_weight_1000.pt")
 net = net.cuda()
 net = net.eval()
 

@@ -433,7 +433,7 @@ def run(config, load_file=None):
 from third_party.maicm.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
-    config = ped_p.Params("map_10", 6, 1)
+    config = ped_p.Params("map_09", 10, 1)
     config.args.model_name = strf_now_time() + "exp_test"
     # config.args.model_name = "one_icm_test"
     config.args = ped_p.debug_mode(config.args)

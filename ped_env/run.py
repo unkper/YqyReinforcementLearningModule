@@ -15,12 +15,11 @@ from rl_platform.tianshou_case.utils.wrappers import FrameStackWrapper
 # 使用随机策略来前往目的地
 def test2():
     import time
-    import numpy as np
 
     debug = True
 
     person_num = 20
-    env = Env("map_12", person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
+    env = Env("map_09", person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True, person_handler=None, with_force=True)
     leader_num = env.agent_count
     handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)

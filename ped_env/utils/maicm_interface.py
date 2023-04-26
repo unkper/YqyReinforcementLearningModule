@@ -135,7 +135,7 @@ class PedEnvWrapper:
 
 
 def create_ped_env(map="map_09", leader_num=4, group_size=1, maxStep=10000, disable_reward=False, frame_skip=8,
-                   seed=None, use_adv_net=False, use_concat_obs=False, with_force=False):
+                   seed=None, use_adv_net=False, use_concat_obs=False, with_force=True):
     env = PedEnvWrapper(
         PedsMoveEnv(terrain=map, person_num=leader_num * group_size, group_size=(group_size, group_size),
                     maxStep=maxStep, disable_reward=disable_reward, discrete=True, frame_skipping=frame_skip, with_force=with_force),

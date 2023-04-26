@@ -410,10 +410,12 @@ class SAC(object):
 
         head_selector_params = save_dict['head_selector_params']
         instance.head_selector.load_state_dict(head_selector_params['head_selector'])
-        instance.head_selector_optimizer.load_state_dict(head_selector_params['head_selector_optimizer'])
+        if load_ir:
+            instance.head_selector_optimizer.load_state_dict(head_selector_params['head_selector_optimizer'])
         if load_critic:
             critic_params = save_dict['critic_params']
             instance.critic.load_state_dict(critic_params['critic'])
             instance.target_critic.load_state_dict(critic_params['target_critic'])
-            instance.critic_optimizer.load_state_dict(critic_params['critic_optimizer'])
+            if load_ir:
+                instance.critic_optimizer.load_state_dict(critic_params['critic_optimizer'])
         return instance

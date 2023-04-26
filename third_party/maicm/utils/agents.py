@@ -48,4 +48,5 @@ class Agent(object):
     def load_params(self, params, load_ir=False):
         self.policy.load_state_dict(params['policy'])
         self.target_policy.load_state_dict(params['target_policy'])
-        self.policy_optimizer.load_state_dict(params['policy_optimizer'])
+        if load_ir:
+            self.policy_optimizer.load_state_dict(params['policy_optimizer'])

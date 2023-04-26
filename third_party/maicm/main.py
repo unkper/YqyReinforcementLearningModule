@@ -195,7 +195,7 @@ def run(config, load_file=None):
         logging.warning("加载之前保存的模型文件来训练...")
         model = SAC.init_from_save(load_file,
                                    load_critic=True,
-                                   load_ir=True)
+                                   load_ir=False)
     replay_buffer = ReplayBuffer(config.buffer_length, model.nagents,
                                  env.state_space,
                                  env.observation_space,
@@ -210,12 +210,13 @@ def run(config, load_file=None):
     env_extr_rets = np.zeros(config.n_rollout_threads)
     env_ep_intr_rews = [[np.zeros(config.n_rollout_threads) for i in range(config.num_agents)]
                         for j in range(n_intr_rew_types)]
-    recent_ep_extr_rews = deque(maxlen=100)
-    recent_ep_intr_rews = [[deque(maxlen=100) for i in range(config.num_agents)]
+    average_eps_num = 2
+    recent_ep_extr_rews = deque(maxlen=average_eps_num)
+    recent_ep_intr_rews = [[deque(maxlen=average_eps_num) for i in range(config.num_agents)]
                            for j in range(n_intr_rew_types)]
-    recent_ep_lens = deque(maxlen=100)
-    recent_found_treasures = [deque(maxlen=100) for i in range(config.num_agents)]
-    recent_tiers_completed = deque(maxlen=100)
+    recent_ep_lens = deque(maxlen=average_eps_num)
+    recent_found_treasures = [deque(maxlen=average_eps_num) for i in range(config.num_agents)]
+    recent_tiers_completed = deque(maxlen=average_eps_num)
     meta_turn_rets = []
     extr_ret_rms = [RunningMeanStd() for i in range(n_rew_heads)]
     t = 0
@@ -376,31 +377,31 @@ def run(config, load_file=None):
                 model.update_policies(sample, logger=logger, data_dict=critic_policy_data_dict)
                 model.update_all_targets()
 
-            if len(recent_ep_extr_rews) > 3:
-                logger.add_scalar('episode_rewards/extrinsic/mean',
-                                  np.mean(recent_ep_extr_rews), t)
-                logger.add_scalar('episode_lengths/mean',
-                                  np.mean(recent_ep_lens), t)
-                data_dict["timestep"].append(t)
-                data_dict["episode_rewards/extrinsic/mean"].append(np.mean(recent_ep_extr_rews))
-                data_dict["episode_lengths/mean"].append(np.mean(recent_ep_lens))
-                if config.intrinsic_reward == 1:
-                    for i in range(n_intr_rew_types):
-                        for j in range(config.num_agents):
-                            logger.add_scalar('episode_rewards/intrinsic%i_agent%i/mean' % (i, j),
-                                              np.mean(recent_ep_intr_rews[i][j]), t)
-                            data_dict['episode_rewards/intrinsic%i_agent%i/mean' % (i, j)].append(
-                                np.mean(recent_ep_intr_rews[i][j]))
-                for i in range(config.num_agents):
-                    logger.add_scalar('agent%i/n_found_exit' % i, np.mean(recent_found_treasures[i]), t)
-                    data_dict['agent%i/n_found_exit' % i].append(np.mean(recent_found_treasures[i]))
+        if len(recent_ep_extr_rews) > 3:
+            logger.add_scalar('episode_rewards/extrinsic/mean',
+                              np.mean(recent_ep_extr_rews), t)
+            logger.add_scalar('episode_lengths/mean',
+                              np.mean(recent_ep_lens), t)
+            data_dict["timestep"].append(t)
+            data_dict["episode_rewards/extrinsic/mean"].append(np.mean(recent_ep_extr_rews))
+            data_dict["episode_lengths/mean"].append(np.mean(recent_ep_lens))
+            if config.intrinsic_reward == 1:
+                for i in range(n_intr_rew_types):
+                    for j in range(config.num_agents):
+                        logger.add_scalar('episode_rewards/intrinsic%i_agent%i/mean' % (i, j),
+                                          np.mean(recent_ep_intr_rews[i][j]), t)
+                        data_dict['episode_rewards/intrinsic%i_agent%i/mean' % (i, j)].append(
+                            np.mean(recent_ep_intr_rews[i][j]))
+            for i in range(config.num_agents):
+                logger.add_scalar('agent%i/n_found_exit' % i, np.mean(recent_found_treasures[i]), t)
+                data_dict['agent%i/n_found_exit' % i].append(np.mean(recent_found_treasures[i]))
 
-                logger.add_scalar('total_n_found_exit',
-                                  sum(np.array(recent_found_treasures[i]) for i in range(config.num_agents)).mean(), t)
-                data_dict['total_n_found_exit'].append(
-                    sum(np.array(recent_found_treasures[i]) for i in range(config.num_agents)).mean())
-                if config.env_type == 'gridworld':
-                    logger.add_scalar('tiers_completed', np.mean(recent_tiers_completed), t)
+            logger.add_scalar('total_n_found_exit',
+                              sum(np.array(recent_found_treasures[i]) for i in range(config.num_agents)).mean(), t)
+            data_dict['total_n_found_exit'].append(
+                sum(np.array(recent_found_treasures[i]) for i in range(config.num_agents)).mean())
+            if config.env_type == 'gridworld':
+                logger.add_scalar('tiers_completed', np.mean(recent_tiers_completed), t)
 
         if t % config.save_interval == 0:
             model.prep_training(device='cpu')
@@ -433,13 +434,14 @@ def run(config, load_file=None):
 from third_party.maicm.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
+    load_file = r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_10agents_taskleave\2023_04_26_21_26_08exp_test\run1\incremental\model_181steps.pt"
     config = ped_p.Params("map_09", 10, 1)
     config.args.model_name = strf_now_time() + "exp_test"
     # config.args.model_name = "one_icm_test"
     config.args = ped_p.debug_mode(config.args)
     #config.args.use_adv_encoder = True
     #config.args.train_time = 200
-    run(config.args)
+    run(config.args, load_file=load_file)
 
     # maps = ['map_10']
     #

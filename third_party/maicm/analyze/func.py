@@ -31,6 +31,7 @@ def draw_arrive_plot(path_dir, label_type=0, window=30):
              "Covering exploration",
              "Burrowing exploration",
              "Leader-Follower exploration",
+             "A* Prior-Knowledge exploration"
              "multihead"],
         2: range(100)
     }
@@ -64,5 +65,5 @@ def draw_arrive_plot(path_dir, label_type=0, window=30):
 
 
 if __name__ == '__main__':
-    pth = r"/home/lab/projects/YqyReinforcementLearningModule/ec/maicm/models/pedsmove/map_10_5agents_taskleave/one_icm_test"
-    draw_arrive_plot(pth)
+    pth = r"/homed/projects/YqyReinforcementLearningModule/third_party/data/compare_explore_types/map_09_4agents_taskleave/2023_04_26_21_07_51exp_test"
+    draw_arrive_plot(pth, 1)

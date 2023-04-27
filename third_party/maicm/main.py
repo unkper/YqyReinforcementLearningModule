@@ -434,25 +434,36 @@ def run(config, load_file=None):
 from third_party.maicm.params.ped import params1 as ped_p
 
 if __name__ == '__main__':
-    load_file = r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_10agents_taskleave\2023_04_26_21_26_08exp_test\run1\incremental\model_181steps.pt"
-    config = ped_p.Params("map_09", 10, 1)
+    load_file = None
+    # load_file = r"/home/lab/projects/YqyReinforcementLearningModule/third_party/maicm/models/pedsmove/map_10_6agents_taskleave/2023_04_21_22_52_06exp_test/run0/incremental/model_240001steps.pt"
+    config = ped_p.Params("map_09", 4, 1)
     config.args.model_name = strf_now_time() + "exp_test"
-    # config.args.model_name = "one_icm_test"
-    config.args = ped_p.debug_mode(config.args)
-    #config.args.use_adv_encoder = True
-    #config.args.train_time = 200
-    run(config.args, load_file=load_file)
+    # config.args = ped_p.debug_mode(config.args)
+    config.args.use_adv_encoder = False
+    config.args.use_concat_obs = True  # 通过比较发现global_state为concat的时候反而效果很好
+    # config.args.train_time = 200
+    # run(config.args, load_file=load_file)
 
-    # maps = ['map_10']
-    #
+    #maps = ['map_10', 'map_11']
+    #config.args.model_name = strf_now_time() + "exp_test"
+
+    # 以下是针对有无icm进行的对比试验
     # for ma in maps:
-    #     config.args.map_ind = ma
-    #     ped_p.exp_count = 0
-    #     for i in range(2):
-    #         config.args = ped_p.icm_compare_test(config.args)
-    #         run(config.args)
-
-    # config.args.model_name = strf_now_time() + "exp_test"
-    # for i in range(5):
-    #     config.args = p.change_explore_type_exp(config.args)
+    #     if ma == 'map_11':
+    #         config.args.num_agents = 12
+    # config.args.map_ind = ma
+    # ped_p.exp_count = 0
+    # for i in range(2):
+    #     config.args = ped_p.icm_compare_test(config.args)
     #     run(config.args)
+
+    # explore type compare
+    config.args.train_time = 250000
+    # config.args.max_episode_length = 500
+    # for i in range(4):
+    #     config.args = ped_p.change_explore_type_exp(config.args, way=[[0], [1], [2], [0, 1, 2]])
+    #     run(config.args)
+
+    for i in range(2):
+        config.args = ped_p.change_explore_type_exp(config.args, way=[[1], [2], [0, 1, 2]])
+        run(config.args)

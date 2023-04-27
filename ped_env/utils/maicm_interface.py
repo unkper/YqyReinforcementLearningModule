@@ -28,9 +28,9 @@ class PedEnvWrapper:
         self.use_concat_obs = use_concat_obs
 
         if self.joint_count:
-            self.visit_counts = np.zeros(self.num_agents * [self.row * 2, self.col * 2])
+            self.visit_counts = np.zeros(self.num_agents * [self.row * 2, self.col * 2], dtype=np.int)
         else:
-            self.visit_counts = np.zeros((self.num_agents, self.row * 2, self.col * 2))
+            self.visit_counts = np.zeros((self.num_agents, self.row * 2, self.col * 2), dtype=np.int)
 
         self._prv_state = None
         self._prv_obs = None

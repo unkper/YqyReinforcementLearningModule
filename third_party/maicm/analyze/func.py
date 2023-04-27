@@ -6,7 +6,23 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
 
-def draw_arrive_plot(path_dir, label_type=0):
+def smoothed_moving_average(data, window=10):
+    """
+    使用滑动平均函数对数据进行平滑处理
+    :param data: 待平滑的数据
+    :param window: 平滑窗口大小
+    :return: 平滑后的数据
+    """
+    smoothed_data = []
+    for i in range(len(data)):
+        if i < window:
+            smoothed_data.append(data[i])
+        else:
+            smoothed_data.append(sum(data[i-window:i]) / window)
+    return smoothed_data
+
+
+def draw_arrive_plot(path_dir, label_type=0, window=30):
     labels = {
         0 : ["with_intrinsic_reward",
              "without_intrinsic_reward"],
@@ -18,8 +34,8 @@ def draw_arrive_plot(path_dir, label_type=0):
              "multihead"],
         2: range(100)
     }
-    # 获取所有子文件夹名称
-    subfolders = next(os.walk(path_dir))[1]
+    # 获取所有子文件夹名称,按照run1,run2的方式排序,无法处理runXX两位数的情况!
+    subfolders = sorted(next(os.walk(path_dir))[1])
     dataframes = []
 
     # 打印子文件夹名称
@@ -36,7 +52,7 @@ def draw_arrive_plot(path_dir, label_type=0):
 
         for fr, label in zip(dataframes, labels[label_type]):
             # 绘制图表
-            ax.plot(fr['timestep'], fr[y_label], label=label)
+            ax.plot(fr['timestep'], fr[y_label].rolling(window).mean(), label=label)
         ax.set_xlabel('time_step')
         ax.set_ylabel(y_label.replace('/', '_'))
         ax.legend(loc="best")

@@ -657,6 +657,16 @@ class PedsMoveEnv(gym.Env):
         self.render_data = self._render(mode)
 
     def close(self):
+        self.peds = []
+        self.elements = []
+        self.ped_to_group_dic = {}
+        self.groups = []
+        self.leaders = []
+        self.agents = None
+        self.agents_rev_dict = {}
+        self.agents_dict = {}
+        self.terrain = None
+
         pygame.quit()
         if self.viewer is not None:
             self.viewer.close()

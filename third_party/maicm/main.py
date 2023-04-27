@@ -210,7 +210,7 @@ def run(config, load_file=None):
     env_extr_rets = np.zeros(config.n_rollout_threads)
     env_ep_intr_rews = [[np.zeros(config.n_rollout_threads) for i in range(config.num_agents)]
                         for j in range(n_intr_rew_types)]
-    average_eps_num = 2
+    average_eps_num = 10
     recent_ep_extr_rews = deque(maxlen=average_eps_num)
     recent_ep_intr_rews = [[deque(maxlen=average_eps_num) for i in range(config.num_agents)]
                            for j in range(n_intr_rew_types)]
@@ -409,9 +409,9 @@ def run(config, load_file=None):
             model.save(run_dir / 'incremental' / ('model_%isteps.pt' % (t + 1)))
             model.save(run_dir / 'model.pt')
 
-            pd.DataFrame(data_dict).to_excel(data_dir / "main.xlsx", index=False)
-            pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "cp_data.xlsx", index=False)
-            pd.DataFrame(head_data_dict).to_excel(data_dir / "head.xlsx", index=False)
+            pd.DataFrame(data_dict).to_csv(data_dir / "main.csv", index=False, mode='w')
+            pd.DataFrame(critic_policy_data_dict).to_csv(data_dir / "cp_data.csv", index=False, mode='w')
+            pd.DataFrame(head_data_dict).to_csv(data_dir / "head.csv", index=False, mode='w')
 
             with open(data_dir / "agent_pos.pkl", "wb") as f:
                 dill.dump(agent_pos_dict, f)
@@ -421,14 +421,14 @@ def run(config, load_file=None):
     model.prep_training(device='cpu')
     model.save(run_dir / 'model.pt')
     logger.close()
-    pd.DataFrame(data_dict).to_excel(data_dir / "main.xlsx", index=False)
-    pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "cp_data.xlsx", index=False)
-    pd.DataFrame(head_data_dict).to_excel(data_dir / "head.xlsx", index=False)
+    pd.DataFrame(data_dict).to_excel(data_dir / "f_main.xlsx", index=False)
+    pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "f_cp_data.xlsx", index=False)
+    pd.DataFrame(head_data_dict).to_excel(data_dir / "f_head.xlsx", index=False)
 
     with open(data_dir / "agent_pos.pkl", "wb") as f:
         dill.dump(agent_pos_dict, f)
 
-    env.close(force=(config.env_type == 'vizdoom'))
+    env.close(force=False)
 
 
 from third_party.maicm.params.ped import params1 as ped_p

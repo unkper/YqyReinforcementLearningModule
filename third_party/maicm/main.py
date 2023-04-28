@@ -46,7 +46,7 @@ def get_count_based_novelties(env, state_inds, device='cpu', key_points=None, us
              for j in range(config.num_agents)], axis=1)
              for k in range(config.num_agents)], axis=2)
 
-    x = np.maximum(samp_visit_counts, 1) / config.novel_base
+    x = np.maximum(samp_visit_counts, 1)
     # how novel each agent considers all agents observations at every step
     novelties = np.power(x, -config.decay)
     if key_points is not None and use_a_star_explore:

@@ -30,8 +30,8 @@ class Params:
     beta = 0.1  # Weighting for intrinsic reward
     novel_base = 1
     decay = 0.7  # Decay rate for state-visit counts in intrinsic reward, f(n) = 1 / N ^ decay
-    phi = 1.5
-    novel_offset = 7.5
+    phi = 0.01
+    novel_offset = 700
     n_rollout_threads = 20  # 启用的总线程数，用于环境经验的收集工作
     buffer_length = int(1e6)  # "Set to 5e5 for ViZDoom (if memory limited)"
     train_time = int(1e6 * 3 / 4)

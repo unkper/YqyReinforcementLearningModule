@@ -23,11 +23,15 @@ class Params:
          "2: Covering exploration\n" + \
          "3: Burrowing exploration\n" + \
          "4: Leader-Follower exploration\n" 
+         '5: A* Priority exploration
     """
     explr_types = [0]  # after test, Independent is the best explore way!
     uniform_heads = True  # Meta-policy samples all heads uniformly
     beta = 0.1  # Weighting for intrinsic reward
+    novel_base = 1
     decay = 0.7  # Decay rate for state-visit counts in intrinsic reward, f(n) = 1 / N ^ decay
+    phi = 1.5
+    novel_offset = 7.5
     n_rollout_threads = 20  # 启用的总线程数，用于环境经验的收集工作
     buffer_length = int(1e6)  # "Set to 5e5 for ViZDoom (if memory limited)"
     train_time = int(1e6 * 3 / 4)
@@ -79,9 +83,9 @@ class Params:
 
 def debug_mode(args) -> Params:
     args.max_episode_length = 2000
-    args.train_time = 200
+    args.train_time = 2000
     args.buffer_length = 100
-    args.n_rollout_threads = 2
+    args.n_rollout_threads = 3
     args.steps_before_update = 0
     args.steps_per_update = 40
     args.save_interval = 20

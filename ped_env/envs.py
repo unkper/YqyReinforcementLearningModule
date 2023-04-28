@@ -233,7 +233,7 @@ class PedsMoveEnv(gym.Env):
     }
 
     def __init__(self,
-                 terrain: Map,
+                 terrain: str,
                  person_num=10,
                  group_size: Tuple = (1, 1),
                  discrete=True,
@@ -269,7 +269,7 @@ class PedsMoveEnv(gym.Env):
         self.left_person_num = 0
         self.step_in_env = 0
         self.elements = []
-        self.terrain = terrain if isinstance(terrain, Map) else parse_map(terrain)
+        self.terrain: Map = parse_map(terrain)
         self.screen: Optional[pygame.Surface] = None
         self.clock = None
         self.render_data = None
@@ -405,7 +405,6 @@ class PedsMoveEnv(gym.Env):
             self.left_leader_num -= 1
         ready_to_remove.append(per)
 
-
     def _pop_from_render_list(self, person_id):
         """
         将行人从渲染队列中移除
@@ -416,7 +415,7 @@ class PedsMoveEnv(gym.Env):
             if per.type == ObjectType.Agent and per.id == person_id:
                 self.elements.pop(idx)
                 return
-        #logging.error(u"移除一个不存在的行人!")
+        # logging.error(u"移除一个不存在的行人!")
 
     def get_peds_distance_to_exit(self):
         # 废弃多目标点的设置，替换为最近的出口距离
@@ -627,6 +626,7 @@ class PedsMoveEnv(gym.Env):
 
                 # 绘制五角星
                 pygame.draw.polygon(screen, color=color, points=star_points)
+
             size = 10
             start_color = (128, 0, 128)
             exit_color = (0, 255, 0)
@@ -639,7 +639,6 @@ class PedsMoveEnv(gym.Env):
             for exit in self.terrain.exits:
                 new_exit = (exit[0] * SCALE, exit[1] * SCALE)
                 draw_star(self.surf, new_exit, size, exit_color)
-
 
         if mode == "human":
             assert self.screen is not None

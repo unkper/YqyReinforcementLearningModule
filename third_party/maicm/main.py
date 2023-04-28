@@ -20,26 +20,64 @@ from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv
 from utils.misc import apply_to_all_elements, timeout, RunningMeanStd, save_params
 from algorithms.sac import SAC
-from numba import njit
 
 from envs.magw.multiagent_env import GridWorld, VectObsEnv
 from ped_env.utils.maicm_interface import create_ped_env
 
 AGENT_CMAPS = ['Reds', 'Blues', 'Greens', 'Wistia']
+key_points_set = None
+has_key_points = False
 
-
-def get_count_based_novelties(env, state_inds, device='cpu'):
+def get_count_based_novelties(env, state_inds, device='cpu', key_points=None, use_a_star_explore=False):
+    # state_inds是当前agent的所在位置，形状是[agent_id, env_id, agent_x, agent_y]
+    # 在训练的时候也会被调用，此时是一个list，形状是[agent_id, ndarray(batch_size, x, y)]
     env_visit_counts = env.get_visit_counts()
 
     # samp_visit_counts[i,j,k] is # of times agent j has visited the state that agent k occupies at time i
+    """
+            [env_visit_counts[j][tuple(zip(*state_inds[0]))] for j in range(config.num_agents)] 
+            这段代码计算的是对于agent_id==0的智能体在当前地块相对于其他智能体（包括自身）的访问次数
+            它返回了[env_id, agent_j]这样的一个矩阵
+            再经过reshape和连接操作后，返回一个[env_id, agent_i, agent_j]这样的一个矩阵
+    """
     samp_visit_counts = np.concatenate(
         [np.concatenate(
             [env_visit_counts[j][tuple(zip(*state_inds[k]))].reshape(-1, 1, 1)
              for j in range(config.num_agents)], axis=1)
-            for k in range(config.num_agents)], axis=2)
+             for k in range(config.num_agents)], axis=2)
 
+    x = np.maximum(samp_visit_counts, 1) / config.novel_base
     # how novel each agent considers all agents observations at every step
-    novelties = np.power(np.maximum(samp_visit_counts, 1), -config.decay)
+    novelties = np.power(x, -config.decay)
+    if key_points is not None and use_a_star_explore:
+        if type(state_inds) is list:
+            A = np.array(state_inds)
+        else:
+            A = state_inds
+        # print(A.shape)
+        # print("%%%%%%%%%%%%%%%%%%%%%")
+        agent_dim, env_dim, _ = A.shape
+        B = key_points
+        point_dim = len(key_points)
+
+        bool_arr = np.zeros([agent_dim, env_dim], dtype=bool)
+        # 检查A中的每个二维点位是否在共同存在的元素中
+        for i in range(agent_dim):
+            for j in range(env_dim):
+                if tuple(A[i, j]) in B:
+                    bool_arr[i, j] = True
+
+        result = np.transpose(bool_arr, (1, 0))
+        # result[0, 0] = True
+
+        k_novelties = 1 - 1 / (1 + np.exp(-config.phi*(x - config.novel_offset)))
+        # print(novelties[0, 0])
+        # print(k_novelties[0, 0])
+        novelties[result] = k_novelties[result]
+        # print("****************")
+        # print(novelties[0, 0])
+        # print("****************")
+
     return torch.tensor(novelties, device=device, dtype=torch.float32)
 
 
@@ -127,6 +165,7 @@ def make_parallel_env(config, seed):
 
 
 def run(config, load_file=None):
+    global has_key_points, key_points_set
     # torch.set_num_threads(1)
     env_descr = '{}_{}agents_task{}'.format(config.map_ind, config.num_agents,
                                             config.task_config)
@@ -157,6 +196,20 @@ def run(config, load_file=None):
     torch.manual_seed(run_num)
     np.random.seed(run_num)
     env = make_parallel_env(config, run_num)
+
+    config_env = create_ped_env(map=config.map_ind,
+                                leader_num=config.num_agents,
+                                group_size=config.group_size,
+                                maxStep=config.max_episode_length,
+                                frame_skip=config.frame_skip,
+                                seed=0,
+                                use_adv_net=config.use_adv_encoder,
+                                use_concat_obs=config.use_concat_obs)
+    if config.env_type == 'pedsmove' and config_env.env.terrain.has_key_roads:
+        key_points_set = set()
+        for ele in config_env.env.terrain.key_points_list:
+            key_points_set.add(tuple(ele))
+        has_key_points = config_env.env.terrain.has_key_roads
     if config.nonlinearity == 'relu':
         nonlin = torch.nn.functional.relu
     elif config.nonlinearity == 'leaky_relu':
@@ -210,7 +263,7 @@ def run(config, load_file=None):
     env_extr_rets = np.zeros(config.n_rollout_threads)
     env_ep_intr_rews = [[np.zeros(config.n_rollout_threads) for i in range(config.num_agents)]
                         for j in range(n_intr_rew_types)]
-    average_eps_num = 10
+    average_eps_num = 5
     recent_ep_extr_rews = deque(maxlen=average_eps_num)
     recent_ep_intr_rews = [[deque(maxlen=average_eps_num) for i in range(config.num_agents)]
                            for j in range(n_intr_rew_types)]
@@ -268,10 +321,12 @@ def run(config, load_file=None):
         if config.intrinsic_reward == 1:
             # if using state-visit counts, store state indices
             # shape = (n_envs, n_agents, n_inds)
-            state_inds = np.array([i['visit_count_lookup'] for i in infos],
+            state_inds = np.array([i['visit_count_lookup'] for i in infos],  # visit_count_lookup是指当前智能体所在位置，用来查找当前位置的新颖度，形状为[agent_id, agent_x, agent_y]
                                   dtype=int)
             state_inds_t = state_inds.transpose(1, 0, 2)
-            novelties = get_count_based_novelties(env, state_inds_t, device='cpu')
+            novelties = get_count_based_novelties(env, state_inds_t,
+                                                  device='cpu', key_points=None if not has_key_points else key_points_set,
+                                                  use_a_star_explore=True if 5 in config.explr_types else False)
             intr_rews = get_intrinsic_rewards(novelties, config, intr_rew_rms,
                                               update_irrms=True, active_envs=active_envs,
                                               device='cpu')
@@ -368,7 +423,9 @@ def run(config, load_file=None):
                     sample, state_inds = sample
                     novelties = get_count_based_novelties(
                         env, state_inds,
-                        device='cuda' if config.use_gpu else 'cpu')
+                        device='cuda' if config.use_gpu else 'cpu',
+                        key_points=None if not has_key_points else key_points_set,
+                        use_a_star_explore=True if 5 in config.explr_types else False)
                     intr_rews = get_intrinsic_rewards(novelties, config, intr_rew_rms,
                                                       update_irrms=False,
                                                       device='cuda' if config.use_gpu else 'cpu')
@@ -377,7 +434,7 @@ def run(config, load_file=None):
                 model.update_policies(sample, logger=logger, data_dict=critic_policy_data_dict)
                 model.update_all_targets()
 
-        if len(recent_ep_extr_rews) > 3:
+        if len(recent_ep_extr_rews) > average_eps_num - 1:
             logger.add_scalar('episode_rewards/extrinsic/mean',
                               np.mean(recent_ep_extr_rews), t)
             logger.add_scalar('episode_lengths/mean',
@@ -438,11 +495,12 @@ if __name__ == '__main__':
     # load_file = r"/home/lab/projects/YqyReinforcementLearningModule/third_party/maicm/models/pedsmove/map_10_6agents_taskleave/2023_04_21_22_52_06exp_test/run0/incremental/model_240001steps.pt"
     config = ped_p.Params("map_09", 4, 1)
     config.args.model_name = strf_now_time() + "exp_test"
-    # config.args = ped_p.debug_mode(config.args)
+    config.args = ped_p.debug_mode(config.args)
     config.args.use_adv_encoder = False
     config.args.use_concat_obs = True  # 通过比较发现global_state为concat的时候反而效果很好
+    config.explr_types = [5]
     # config.args.train_time = 200
-    # run(config.args, load_file=load_file)
+    run(config.args, load_file=load_file)
 
     #maps = ['map_10', 'map_11']
     #config.args.model_name = strf_now_time() + "exp_test"
@@ -458,12 +516,12 @@ if __name__ == '__main__':
     #     run(config.args)
 
     # explore type compare
-    config.args.train_time = 250000
+    # config.args.train_time = 250000
     # config.args.max_episode_length = 500
     # for i in range(4):
     #     config.args = ped_p.change_explore_type_exp(config.args, way=[[0], [1], [2], [0, 1, 2]])
     #     run(config.args)
 
-    for i in range(2):
-        config.args = ped_p.change_explore_type_exp(config.args, way=[[1], [2], [0, 1, 2]])
-        run(config.args)
+    # for i in range(2):
+    #     config.args = ped_p.change_explore_type_exp(config.args, way=[[1], [2], [0, 1, 2]])
+    #     run(config.args)

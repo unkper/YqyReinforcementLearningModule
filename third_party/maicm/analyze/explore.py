@@ -5,9 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-
 def draw_func(func):
-
     # 创建数据点
     x = np.linspace(1, 1000, 100)
     y = func(x)
@@ -23,15 +21,17 @@ def draw_func(func):
     # 显示图像
     plt.show()
 
+
 import dill
 
 phi = 0.7
 N = 10
-# draw_func(lambda x :N / (np.power(x, phi)+N))
+draw_func(lambda x: N / (np.power(x, phi) + N))
 
-phi = 0.01
-func2 = lambda x: 1 - 1 / (1 + np.exp(-phi*(x - 700)))
-draw_func(func2)
+
+# phi = 0.01
+# func2 = lambda x: 1 - 1 / (1 + np.exp(-phi*(x - 700)))
+# draw_func(func2)
 
 def analyse(model_path):
     # 字典结构是先agent_id,然后
@@ -49,4 +49,4 @@ def analyse(model_path):
         print(np.max(v))
         print(np.median(v))
 
-#analyse(r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_4agents_taskleave\2023_04_29_00_15_47exp_test\run1\data\agent_pos.pkl")
+# analyse(r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_4agents_taskleave\2023_04_29_00_15_47exp_test\run1\data\agent_pos.pkl")

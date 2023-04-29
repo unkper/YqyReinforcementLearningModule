@@ -23,9 +23,10 @@ class Params:
          "2: Covering exploration\n" + \
          "3: Burrowing exploration\n" + \
          "4: Leader-Follower exploration\n" 
-         '5: A* Priority exploration
     """
+    raw_novel_offset = 10
     explr_types = [0]  # after test, Independent is the best explore way!
+    use_key_point_index = False
     uniform_heads = True  # Meta-policy samples all heads uniformly
     beta = 0.1  # Weighting for intrinsic reward
     novel_base = 1

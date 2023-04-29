@@ -28,6 +28,7 @@ AGENT_CMAPS = ['Reds', 'Blues', 'Greens', 'Wistia']
 key_points_set = None
 has_key_points = False
 
+
 def get_count_based_novelties(env, state_inds, device='cpu', key_points=None, use_a_star_explore=False):
     # state_inds是当前agent的所在位置，形状是[agent_id, env_id, agent_x, agent_y]
     # 在训练的时候也会被调用，此时是一个list，形状是[agent_id, ndarray(batch_size, x, y)]
@@ -44,11 +45,14 @@ def get_count_based_novelties(env, state_inds, device='cpu', key_points=None, us
         [np.concatenate(
             [env_visit_counts[j][tuple(zip(*state_inds[k]))].reshape(-1, 1, 1)
              for j in range(config.num_agents)], axis=1)
-             for k in range(config.num_agents)], axis=2)
+            for k in range(config.num_agents)], axis=2)
 
     x = np.maximum(samp_visit_counts, 1)
     # how novel each agent considers all agents observations at every step
-    novelties = np.power(x, -config.decay)
+    if config.raw_novel_offset == 1:
+        novelties = 1 / np.power(x, config.decay)
+    else:
+        novelties = config.raw_novel_offset / (np.power(x, config.decay) + config.raw_novel_offset)
     if key_points is not None and use_a_star_explore:
         if type(state_inds) is list:
             A = np.array(state_inds)
@@ -68,15 +72,10 @@ def get_count_based_novelties(env, state_inds, device='cpu', key_points=None, us
                     bool_arr[i, j] = True
 
         result = np.transpose(bool_arr, (1, 0))
-        # result[0, 0] = True
 
-        k_novelties = 1 - 1 / (1 + np.exp(-config.phi*(x - config.novel_offset)))
-        # print(novelties[0, 0])
-        # print(k_novelties[0, 0])
+        k_novelties = 1 - 1 / (1 + np.exp(-config.phi * (x - config.novel_offset)))
+
         novelties[result] = k_novelties[result]
-        # print("****************")
-        # print(novelties[0, 0])
-        # print("****************")
 
     return torch.tensor(novelties, device=device, dtype=torch.float32)
 
@@ -120,6 +119,8 @@ def get_intrinsic_rewards(novelties, config, intr_rew_rms,
                     rew[rew < 0.0] = 0.0
                 type_rews.append(rew)
             intr_rews.append(type_rews)
+        else:
+            raise Exception("不支持的奖励模式!")
 
     for i in range(len(config.explr_types)):
         for j in range(config.num_agents):
@@ -321,12 +322,14 @@ def run(config, load_file=None):
         if config.intrinsic_reward == 1:
             # if using state-visit counts, store state indices
             # shape = (n_envs, n_agents, n_inds)
-            state_inds = np.array([i['visit_count_lookup'] for i in infos],  # visit_count_lookup是指当前智能体所在位置，用来查找当前位置的新颖度，形状为[agent_id, agent_x, agent_y]
+            state_inds = np.array([i['visit_count_lookup'] for i in infos],
+                                  # visit_count_lookup是指当前智能体所在位置，用来查找当前位置的新颖度，形状为[agent_id, agent_x, agent_y]
                                   dtype=int)
             state_inds_t = state_inds.transpose(1, 0, 2)
             novelties = get_count_based_novelties(env, state_inds_t,
-                                                  device='cpu', key_points=None if not has_key_points else key_points_set,
-                                                  use_a_star_explore=True if 5 in config.explr_types else False)
+                                                  device='cpu',
+                                                  key_points=None if not has_key_points else key_points_set,
+                                                  use_a_star_explore=config.use_key_point_index)
             intr_rews = get_intrinsic_rewards(novelties, config, intr_rew_rms,
                                               update_irrms=True, active_envs=active_envs,
                                               device='cpu')
@@ -425,10 +428,11 @@ def run(config, load_file=None):
                         env, state_inds,
                         device='cuda' if config.use_gpu else 'cpu',
                         key_points=None if not has_key_points else key_points_set,
-                        use_a_star_explore=True if 5 in config.explr_types else False)
+                        use_a_star_explore=config.use_key_point_index)
                     intr_rews = get_intrinsic_rewards(novelties, config, intr_rew_rms,
                                                       update_irrms=False,
-                                                      device='cuda' if config.use_gpu else 'cpu')
+                                                      device='cuda' if config.use_gpu else 'cpu',
+                                                      )
 
                 model.update_critic(sample, logger=logger, intr_rews=intr_rews, data_dict=critic_policy_data_dict)
                 model.update_policies(sample, logger=logger, data_dict=critic_policy_data_dict)
@@ -502,8 +506,8 @@ if __name__ == '__main__':
     # config.args.train_time = 200
     run(config.args, load_file=load_file)
 
-    #maps = ['map_10', 'map_11']
-    #config.args.model_name = strf_now_time() + "exp_test"
+    # maps = ['map_10', 'map_11']
+    # config.args.model_name = strf_now_time() + "exp_test"
 
     # 以下是针对有无icm进行的对比试验
     # for ma in maps:

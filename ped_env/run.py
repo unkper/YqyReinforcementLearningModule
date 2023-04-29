@@ -18,13 +18,13 @@ def test2():
 
     debug = True
 
-    person_num = 20
-    env = Env("map_11", person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
+    person_num = 4
+    env = Env("map_09", person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True, person_handler=None, with_force=True)
     leader_num = env.agent_count
-    handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
+    #handler = PedsMoveInfoDataHandler(env.terrain, env.agent_count)
 
-    for epoch in range(1):
+    for epoch in range(5):
         start_time = time.time()
         step = 0
         env.reset()
@@ -40,14 +40,14 @@ def test2():
             if debug:
                 env.debug_step()
             step += env.frame_skipping
-            env.render(ratio=1)
+            #env.render(ratio=1)
             #pprint.pprint(env.not_arrived_peds)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collide_agents_count, env.collide_wall_count))
         print("所有智能体在{}步后离开环境,离开用时为{},两者比值为{}!".format(step, endtime - start_time,
                                                                              step / (endtime - start_time)))
-    handler.save("./")
+    #handler.save("./")
 
 
 def test3():

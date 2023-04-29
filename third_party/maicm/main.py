@@ -473,8 +473,8 @@ def run(config, load_file=None):
             with open(data_dir / "agent_pos.pkl", "wb") as f:
                 dill.dump(agent_pos_dict, f)
 
-        t += active_envs.sum()
-        pbar.update(active_envs.sum())
+        t += config.n_rollout_threads
+        pbar.update(config.n_rollout_threads)
     model.prep_training(device='cpu')
     model.save(run_dir / 'model.pt')
     logger.close()

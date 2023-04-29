@@ -80,7 +80,7 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
     DETECT_PED_COUNT = 3
     DETECT_OBSTACLE_COUNT = 3
 
-    def __init__(self, env, r_move=-0.1, r_wait=-0.1, r_collision_person=-0.1, r_collision_wall=-2.0, r_reach=100,
+    def __init__(self, env, r_move=-0.1, r_wait=-0.1, r_collision_person=-0.1, r_collision_wall=-1.0, r_reach=20,
                  use_planner=False, with_force=True):
         super().__init__(env)
         self.last_observation = {}

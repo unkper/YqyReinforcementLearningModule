@@ -1,4 +1,6 @@
 import pickle
+import random
+import time
 from typing import List
 
 import dill
@@ -194,8 +196,11 @@ def run(config, load_file=None):
     head_data_dict = defaultdict(list)
     agent_pos_dict = defaultdict(lambda: defaultdict(list))
 
-    torch.manual_seed(run_num)
-    np.random.seed(run_num)
+    current_time = int(time.strftime('%S'))
+    random.seed(current_time)
+
+    torch.manual_seed(current_time)
+    np.random.seed(current_time)
     env = make_parallel_env(config, run_num)
 
     config_env = create_ped_env(map=config.map_ind,

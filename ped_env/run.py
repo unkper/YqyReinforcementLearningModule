@@ -9,7 +9,7 @@ from ped_env.pathfinder import AStarPolicy
 from ped_env.utils.maps import *
 from departed_rl.utils.classes import make_parallel_env, PedsMoveInfoDataHandler
 from ped_env.mdp import PedsRLHandler, PedsRLHandlerWithPlanner, PedsVisionRLHandler, PedsRLHandlerWithForce
-from rl_platform.tianshou_case.utils.wrappers import FrameStackWrapper
+#from rl_platform.tianshou_case.utils.wrappers import FrameStackWrapper
 
 
 # 使用随机策略来前往目的地
@@ -18,7 +18,7 @@ def test2():
 
     debug = True
 
-    person_num = 4
+    person_num = 10
     env = Env("map_11", person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True, person_handler=None, with_force=True)
     leader_num = env.agent_count
@@ -59,7 +59,7 @@ def test3():
     person_num = 8
     n_rol_counts = 4
     total_epochs = 4
-    _env = Env(map_05, person_num, group_size=(1, 1), maxStep=500)
+    _env = Env("map_10", person_num, group_size=(1, 1), maxStep=500)
     parallel_envs = make_parallel_env(_env, n_rol_counts)
     leader_num = parallel_envs.agent_count
     for epoch in range(total_epochs):
@@ -90,7 +90,7 @@ def test4():
     debug = False
     # test1()
     person_num = 40
-    env = Env(map_11, person_num, group_size=(1, 1), maxStep=10000, discrete=False)
+    env = Env("map_11", person_num, group_size=(1, 1), maxStep=10000, discrete=False)
     leader_num = env.agent_count
     for epoch in range(1):
         starttime = time.time()

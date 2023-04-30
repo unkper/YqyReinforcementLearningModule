@@ -470,9 +470,9 @@ def run(config, load_file=None):
             model.save(run_dir / 'incremental' / ('model_%isteps.pt' % (t + 1)))
             model.save(run_dir / 'model.pt')
 
-            pd.DataFrame(data_dict).to_excel(data_dir / "main.xlsx", index=False, mode='w')
-            pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "cp_data.xlsx", index=False, mode='w')
-            pd.DataFrame(head_data_dict).to_excel(data_dir / "head.xlsx", index=False, mode='w')
+            pd.DataFrame(data_dict).to_excel(data_dir / "main.xlsx", index=False)
+            pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "cp_data.xlsx", index=False)
+            pd.DataFrame(head_data_dict).to_excel(data_dir / "head.xlsx", index=False)
 
             with open(data_dir / "agent_pos.pkl", "wb") as f:
                 dill.dump(agent_pos_dict, f)

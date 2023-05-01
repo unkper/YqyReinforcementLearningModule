@@ -269,7 +269,7 @@ def run(config, load_file=None):
     env_extr_rets = np.zeros(config.n_rollout_threads)
     env_ep_intr_rews = [[np.zeros(config.n_rollout_threads) for i in range(config.num_agents)]
                         for j in range(n_intr_rew_types)]
-    average_eps_num = 5
+    average_eps_num = 2
     recent_ep_extr_rews = deque(maxlen=average_eps_num)
     recent_ep_intr_rews = [[deque(maxlen=average_eps_num) for i in range(config.num_agents)]
                            for j in range(n_intr_rew_types)]

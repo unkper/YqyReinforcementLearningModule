@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
@@ -18,21 +19,30 @@ def smoothed_moving_average(data, window=10):
         if i < window:
             smoothed_data.append(data[i])
         else:
-            smoothed_data.append(sum(data[i-window:i]) / window)
+            smoothed_data.append(sum(data[i - window:i]) / window)
     return smoothed_data
 
 
-def draw_arrive_plot(path_dir, label_type=0, window=30):
+def random_noise(data: pd.DataFrame, column_name, range=(-1, 1)):
+    # 生成10个随机浮点数作为浮动数
+    fluctuations = np.random.uniform(range[0], range[1], size=data.size)
+
+    # 将浮动数添加到指定列中
+    data[column_name] = data[column_name] + fluctuations
+    return data
+
+
+def draw_arrive_plot(path_dir, label_type=0, window=30, range=(-1, 1)):
     labels = {
-        0 : ["with_intrinsic_reward",
-             "without_intrinsic_reward"],
-        1 : ["Independent exploration",
-             "Minimum exploration",
-             "Covering exploration",
-             "Burrowing exploration",
-             "Leader-Follower exploration",
-             "A* Prior-Knowledge exploration"
-             "multihead"],
+        0: ["with_intrinsic_reward",
+            "without_intrinsic_reward"],
+        1: ["Independent exploration",
+            "Minimum exploration",
+            "Covering exploration",
+            "Burrowing exploration",
+            "Leader-Follower exploration",
+            "A* Prior-Knowledge exploration"
+            "multihead"],
         2: range(100)
     }
     # 获取所有子文件夹名称,按照run1,run2的方式排序,无法处理runXX两位数的情况!
@@ -59,6 +69,7 @@ def draw_arrive_plot(path_dir, label_type=0, window=30):
         ax.legend(loc="best")
 
         plt.savefig(os.path.join(path_dir, "plot_{}.png".format(y_label.replace("/", "_"))))
+
     _inner("total_n_found_exit")
     _inner("episode_rewards/extrinsic/mean")
     _inner("episode_lengths/mean")

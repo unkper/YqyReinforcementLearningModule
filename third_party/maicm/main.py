@@ -192,6 +192,7 @@ def run(config, load_file=None):
     logger = SummaryWriter(str(log_dir))
     save_params(config, run_dir)
     data_dict = defaultdict(list)
+    step_data_dict = [defaultdict(list) for i in range(3)]
     critic_policy_data_dict = defaultdict(list)
     head_data_dict = defaultdict(list)
     agent_pos_dict = defaultdict(lambda: defaultdict(list))
@@ -269,7 +270,9 @@ def run(config, load_file=None):
     env_extr_rets = np.zeros(config.n_rollout_threads)
     env_ep_intr_rews = [[np.zeros(config.n_rollout_threads) for i in range(config.num_agents)]
                         for j in range(n_intr_rew_types)]
-    average_eps_num = 2
+    average_eps_num = 5
+    recent_step_extr_rews = [deque(maxlen=st) for st in (500, 1000, 2000)]
+    recent_step_n_found_exit = [deque(maxlen=st) for st in (500, 1000, 2000)]
     recent_ep_extr_rews = deque(maxlen=average_eps_num)
     recent_ep_intr_rews = [[deque(maxlen=average_eps_num) for i in range(config.num_agents)]
                            for j in range(n_intr_rew_types)]
@@ -318,11 +321,16 @@ def run(config, load_file=None):
         #     obs = apply_to_all_elements(obs, lambda x: x[idx])
         #     continue
 
+        accum = np.zeros(config.num_agents)
         for env_idx in range(len(infos)):
+            accum += infos[env_idx]["n_found_treasures"]
             pos_list = infos[env_idx]['visit_count_lookup']
             for j in range(len(pos_list)):
                 agent_pos_dict[j][env_idx].append(pos_list[j])
-
+        for ele in recent_step_extr_rews:
+            ele.append(sum(rewards) / config.n_rollout_threads)
+        for ele in recent_step_n_found_exit:
+            ele.append(sum(accum) / config.n_rollout_threads)
         steps_since_update += int(active_envs.sum())
         if config.intrinsic_reward == 1:
             # if using state-visit counts, store state indices
@@ -442,6 +450,12 @@ def run(config, load_file=None):
                 model.update_critic(sample, logger=logger, intr_rews=intr_rews, data_dict=critic_policy_data_dict)
                 model.update_policies(sample, logger=logger, data_dict=critic_policy_data_dict)
                 model.update_all_targets()
+        if t != 0:
+            for i, st in zip(range(3), [500, 1000, 2000]):
+                if t % st == 0:
+                    step_data_dict[i]["timestep"].append(t)
+                    step_data_dict[i]["step_rewards/extrinsic/mean"].append(np.sum(recent_step_extr_rews[i]))
+                    step_data_dict[i]["n_found_exits/extrinsic/mean"].append(np.sum(recent_step_n_found_exit[i]))
 
         if len(recent_ep_extr_rews) > average_eps_num - 1:
             logger.add_scalar('episode_rewards/extrinsic/mean',
@@ -478,6 +492,8 @@ def run(config, load_file=None):
             pd.DataFrame(data_dict).to_excel(data_dir / "main.xlsx", index=False)
             pd.DataFrame(critic_policy_data_dict).to_excel(data_dir / "cp_data.xlsx", index=False)
             pd.DataFrame(head_data_dict).to_excel(data_dir / "head.xlsx", index=False)
+            for idx, st in zip(range(3), [500, 1000, 2000]):
+                pd.DataFrame(step_data_dict[idx]).to_excel(data_dir / "main_step{}.xlsx".format(st), index=False)
 
             with open(data_dir / "agent_pos.pkl", "wb") as f:
                 dill.dump(agent_pos_dict, f)

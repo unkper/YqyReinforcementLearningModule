@@ -84,12 +84,12 @@ class Params:
 
 def debug_mode(args) -> Params:
     args.max_episode_length = 2000
-    args.train_time = 2000
+    args.train_time = 3000
     args.buffer_length = 100
-    args.n_rollout_threads = 3
+    args.n_rollout_threads = 4
     args.steps_before_update = 0
     args.steps_per_update = 40
-    args.save_interval = 20
+    args.save_interval = 200
     args.num_updates = 5
     args.batch_size = 16
     return args

@@ -26,12 +26,13 @@ import dill
 
 phi = 0.7
 N = 10
-draw_func(lambda x: N / (np.power(x, phi) + N))
+#draw_func(lambda x: np.power(x, -phi))
 
+draw_func(lambda x: N / (N + np.power(x, phi)))
 
-# phi = 0.01
-# func2 = lambda x: 1 - 1 / (1 + np.exp(-phi*(x - 700)))
-# draw_func(func2)
+phi = 0.01
+func2 = lambda x: 1 - 1 / (1 + np.exp(-phi*(x - 700)))
+#draw_func(func2)
 
 def analyse(model_path):
     # 字典结构是先agent_id,然后

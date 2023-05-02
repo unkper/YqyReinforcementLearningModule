@@ -52,7 +52,7 @@ def get_count_based_novelties(env, state_inds, device='cpu', key_points=None, us
     x = np.maximum(samp_visit_counts, 1)
     # how novel each agent considers all agents observations at every step
     if config.raw_novel_offset == 1:
-        novelties = 1 / np.power(x, config.decay)
+        novelties = np.power(x, -config.decay)
     else:
         novelties = config.raw_novel_offset / (np.power(x, config.decay) + config.raw_novel_offset)
     if key_points is not None and use_a_star_explore:

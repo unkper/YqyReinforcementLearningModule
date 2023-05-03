@@ -34,6 +34,7 @@ class Params:
     phi = 0.01
     novel_offset = 700
     n_rollout_threads = 20  # 启用的总线程数，用于环境经验的收集工作
+    additional_novel = 0.1
     buffer_length = int(1e6)  # "Set to 5e5 for ViZDoom (if memory limited)"
     train_time = int(1e6 * 3 / 4)
     max_episode_length = 10000  # 一集的最大长度

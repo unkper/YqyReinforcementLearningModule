@@ -75,7 +75,7 @@ def get_count_based_novelties(env, state_inds, device='cpu', key_points=None, us
 
         result = np.transpose(bool_arr, (1, 0))
 
-        k_novelties = 1 - 1 / (1 + np.exp(-config.phi * (x - config.novel_offset)))
+        k_novelties = config.additional_novel + 1 - 1 / (1 + np.exp(-config.phi * (x - config.novel_offset)))
 
         novelties[result] = k_novelties[result]
 

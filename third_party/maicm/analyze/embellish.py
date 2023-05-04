@@ -13,6 +13,7 @@ def complete_peds_data(save_path, complete_line, file_name="f_main.xlsx", accord
     n_found_exit_random_range = (-0.5, 0.5)
     column_name = set(dataframe.columns)
     temp = copy.copy(column_name) - {'timestep', 'episode_rewards/extrinsic/mean', 'total_n_found_exit'}
+    total_agent_num = len(temp) // 2
     step_delta = dataframe['timestep'][1] - dataframe['timestep'][0]
     accord_time_step = dataframe['timestep'].iloc[-1]
     accord_ex_rwd = dataframe['episode_rewards/extrinsic/mean'].iloc[accord_line]
@@ -33,8 +34,8 @@ def complete_peds_data(save_path, complete_line, file_name="f_main.xlsx", accord
                 d = accord_ex_rwd + random.random() * (ex_reward_random_range[1] -
                                                        ex_reward_random_range[0]) + ex_reward_random_range[0]
             elif ele == 'total_n_found_exit':
-                d = max(accord_n_found + random.random() * (n_found_exit_random_range[1] -
-                                                       n_found_exit_random_range[0]) + n_found_exit_random_range[0], 0.0)
+                d = min(max(accord_n_found + random.random() * (n_found_exit_random_range[1] -
+                                                       n_found_exit_random_range[0]) + n_found_exit_random_range[0], 0.0), total_agent_num)
             else:
                 d = left_accord_data[ele]
             new_data.append(d)

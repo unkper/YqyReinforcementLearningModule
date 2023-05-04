@@ -65,7 +65,7 @@ class PedEnvWrapper:
         g_obs = []
         for obs in _obs:
             g_obs.append(obs[0:4])
-        # 返回的全局状态为[每个智能体的状态,每个智能体的x,y坐标的one_hot编码]
+        # 返回的全局状态为[每个智能体的速度，每个智能体的x,y坐标]
         return np.concatenate(g_obs)
 
     def get_global_obs(self):
@@ -149,7 +149,7 @@ def test_wrapper_api(debug=False):
     import time
 
     person_num = 20
-    env = create_ped_env("map_10", 4, 5, maxStep=2000, use_concat_obs=True)
+    env = create_ped_env("map_10", 4, 5, maxStep=2000, use_adv_net=True, use_concat_obs=False)
     # env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
     #           random_init_mode=True, person_handler=PedsRLHandlerWithForce)
 

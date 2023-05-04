@@ -32,7 +32,7 @@ def random_noise(data: pd.DataFrame, column_name, range=(-1, 1)):
     return data
 
 
-def draw_arrive_plot(path_dir, label_type=0, window=1, mrange=(-1, 1)):
+def draw_arrive_plot(path_dir, label_type=0, window=1, data_file_name="data/main.xlsx"):
     labels = {
         0: ["with_intrinsic_reward",
             "without_intrinsic_reward"],
@@ -48,10 +48,11 @@ def draw_arrive_plot(path_dir, label_type=0, window=1, mrange=(-1, 1)):
     # 获取所有子文件夹名称,按照run1,run2的方式排序,无法处理runXX两位数的情况!
     subfolders = sorted(next(os.walk(path_dir))[1])
     dataframes = []
+    plt.grid(linestyle="--")  # 设置背景网格线为虚线
 
     # 打印子文件夹名称
     for subfolder in subfolders:
-        p = os.path.join(path_dir, subfolder, r"data/main.xlsx")
+        p = os.path.join(path_dir, subfolder, data_file_name)
         try:
             frame = pd.read_excel(p)
             dataframes.append(frame)

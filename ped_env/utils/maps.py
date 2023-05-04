@@ -359,7 +359,7 @@ map9_spawn = np.array([
 ])
 
 start_points_map10 = [(4.5, 4.5)]
-exit_map10 = [(22.5, 12.5)]
+exit_map10 = [(22.5, 13.5)]
 radius_map10 = 1
 random_exits10 = [[3]]
 
@@ -440,7 +440,7 @@ map11_spawn = np.array([
 
 
 start_points_map12 = [(11, 17)]
-exit_map12 = [(6.5, 0.5), (6.5, 19.5)]
+exit_map12 = [(6.5, 0.5), (6.5, 20.5)]
 radius_map12 = 1
 random_exits12 = [[3]]
 

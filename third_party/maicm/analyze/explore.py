@@ -1,4 +1,6 @@
+import os
 import pprint
+import dill
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
@@ -22,18 +24,7 @@ def draw_func(func):
     plt.show()
 
 
-import dill
 
-phi = 0.7
-N = 10
-#draw_func(lambda x: np.power(x, -phi))
-
-# draw_func(lambda x: N / (N + np.power(x, phi)))
-
-phi = 0.01
-additional = 0.1
-func2 = lambda x: additional + 1 - 1 / (1 + np.exp(-phi*(x - 700)))
-draw_func(func2)
 
 def analyse(model_path):
     # 字典结构是先agent_id,然后
@@ -50,5 +41,30 @@ def analyse(model_path):
         print(np.mean(v))
         print(np.max(v))
         print(np.median(v))
+
+def delete_all_incr(pth):
+    for folder in next(os.walk(pth))[1]:
+        n_pth = os.path.join(pth, folder, "incremental")
+        
+
+
+
+if __name__ == '__main__':
+    pth = r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_4agents_taskleave\2023_04_29_00_15_47exp_test"
+    #delete_all_incr(pth)
+
+    # import dill
+
+    phi = 0.7
+    N = 10
+    # # draw_func(lambda x: np.power(x, -phi))
+    #
+    #draw_func(lambda x: N / (N + np.power(x, phi)))
+    #
+    phi = 0.1
+    additional = 0.1
+    delta = 100
+    func2 = lambda x: additional + 1 - 1 / (1 + np.exp(-phi * (x - delta)))
+    draw_func(func2)
 
 # analyse(r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_4agents_taskleave\2023_04_29_00_15_47exp_test\run1\data\agent_pos.pkl")

@@ -10,7 +10,7 @@ from ped_env.run import save_video
 
 
 class PedEnvWrapper:
-    def __init__(self, env, joint_count=False, use_adv_network=False, use_concat_obs=False):
+    def __init__(self, env, joint_count=False, use_adv_network=False, use_concat_obs=False, use_key_point=False):
         assert not(use_concat_obs and use_adv_network), "不允許的設置"
         self.env: PedsMoveEnv = env
         self.row, self.col = self.env.terrain.width, self.env.terrain.height
@@ -121,6 +121,7 @@ class PedEnvWrapper:
                 self.visit_counts[idx, int(agent.x), int(agent.y)] += 1
         self._prv_state = global_obs
         self._prv_obs = _obs
+        #time.sleep(0.05)
         # 注意该接口返回的rew的是所有agent奖励的加和值，all代表所有智能体都为done后
         return global_obs, _obs, np.mean(_rew).tolist(), all(_done), _info
 

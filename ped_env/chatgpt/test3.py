@@ -1,13 +1,17 @@
+import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
-# 生成10个随机浮点数作为浮动数
-fluctuations = np.random.uniform(-1, 1, size=10)
+# 生成数据
+x = np.linspace(0, 10, 100)
+y1 = np.sin(x)
+y2 = np.cos(x)
 
-# 创建示例DataFrame
-df = pd.DataFrame({'numbers': [1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 10.0]})
+# 绘制图形
+plt.plot(x, y1, label='sin')
+plt.plot(x, y2, label='cos')
 
-# 将浮动数添加到指定列中
-df['numbers'] = df['numbers'] + fluctuations
+# 设置图例位置，并将它们放在折线图正下方
+plt.legend(loc='lower center', ncol=2)
 
-print(df)
+# 显示图形
+plt.show()

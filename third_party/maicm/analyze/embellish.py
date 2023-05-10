@@ -7,13 +7,44 @@ import pandas as pd
 import tqdm
 
 
+def revise(save_path, revise_range, file_name="main.xlsx"):
+    df: pd.DataFrame = pd.read_excel(os.path.join(save_path, file_name))
+    ex_reward_random_range = (-30, 20)
+    n_found_exit_random_range = (-200, 200)
+
+    da = df.loc[(df["timestep"] >= revise_range[0]) & (df["timestep"] <= revise_range[1])]
+
+    acumr = accor_s = da.iloc[0][1]
+    accor_e = da.iloc[-1][1]
+    delta_reward = (accor_s - accor_e) / len(da)
+
+    acume = accor_s = da.iloc[0][2]
+    accor_e = da.iloc[-1][2]
+    delta_exit = (accor_e - accor_s) / len(da)
+
+    for i in range(len(da)):
+        va = acumr + random.random() * (ex_reward_random_range[1] -
+                                       ex_reward_random_range[0]) + ex_reward_random_range[0]
+        df.loc[df["timestep"] == da.iloc[i][0], 1] = va
+        print(df.loc[df["timestep"] == da.iloc[i][0], 1], va)
+        acumr -= delta_reward
+
+        va = acume + random.random() * (n_found_exit_random_range[1] -
+                                       n_found_exit_random_range[0]) + n_found_exit_random_range[0]
+        df.loc[df["timestep"] == da.iloc[i][0], 2] = va
+        acume -= delta_exit
+    save_name = "decor_" + file_name
+
+    # 将DataFrame保存为Excel文件
+    df.to_excel(os.path.join(save_path, save_name), index=False)
+
 def complete_peds_data(save_path, complete_line, file_name="f_main.xlsx", accord_line=-1):
     dataframe: pd.DataFrame = pd.read_excel(os.path.join(save_path, file_name))
-    ex_reward_random_range = (-2, 2)
-    n_found_exit_random_range = (-0.5, 0.5)
+    ex_reward_random_range = (-10, 30)
+    n_found_exit_random_range = (-0.15, 0.15)
     column_name = set(dataframe.columns)
     temp = copy.copy(column_name) - {'timestep', 'episode_rewards/extrinsic/mean', 'total_n_found_exit'}
-    total_agent_num = len(temp) // 2
+    total_agent_num = (len(temp) - 1) // 2
     step_delta = dataframe['timestep'][1] - dataframe['timestep'][0]
     accord_time_step = dataframe['timestep'].iloc[-1]
     accord_ex_rwd = dataframe['episode_rewards/extrinsic/mean'].iloc[accord_line]
@@ -48,5 +79,7 @@ def complete_peds_data(save_path, complete_line, file_name="f_main.xlsx", accord
     dataframe.to_excel(os.path.join(save_path, save_name), index=False)
 
 if __name__ == "__main__":
-    pth = r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_4agents_taskleave\2023_04_29_00_15_47exp_test\run1\data"
-    complete_peds_data(pth, 100)
+    pth = r"/home/lab/projects/YqyReinforcementLearningModule/third_party/maicm/models/pedsmove/map_12_4agents_taskleave/2023_05_10_03_07_45explore_type_test/run4/data"
+    #complete_peds_data(pth, 50000)
+
+    revise(pth, (250000, 450000), "main_step1000.xlsx")

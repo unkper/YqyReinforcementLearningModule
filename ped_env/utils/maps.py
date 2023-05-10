@@ -20,6 +20,7 @@ class Map:
         map_spawn = flipud(map_spawn)
         self.map_spawn = map_spawn.T
         self.key_points_list = []
+        self.key_points_set = set()
         self.exits = exits  # 1.用作计算距离出口的距离，比较关键
         self.start_points = start_points  # 代表所有可能的生成点，这个属性会用做生成点生成和每个生成点的行人数量划分！
         self.create_radius = radius
@@ -27,21 +28,26 @@ class Map:
         self.random_exits = random_exits  # 根据数组中数字随机一个出口
         self.exit_points_dic = defaultdict(list)
         self.has_key_roads = False
+        self.max_dis_to_exit = 1.0
         #self.init()
 
     def init(self):
         exit_symbol = set(str(i) for i in range(3, 10))
         exit_points = []
+        spawn_x, spawn_y = self.start_points[0][0], self.start_points[0][1]
+        max_dis = 0.0
         for i in range(self.map.shape[0]):
             for j in range(self.map.shape[1]):
                 if self.map[i, j] in exit_symbol:
                     self.exit_points_dic[self.map[i, j]].append((i + 0.5, j + 0.5))  # 将对应出口的节点添加到字典中
                     exit_points.append((i + 0.5, j + 0.5))
+                    #max_dis = max((i + 0.5 - spawn_x)**2+(j + 0.5 - spawn_y)**2)
         for i in range(self.map_spawn.shape[0]):
             for j in range(self.map_spawn.shape[1]):
                 if self.map_spawn[i, j] == "k":  # 关键点
                     self.has_key_roads = True
                     self.key_points_list.append([i, j])
+                    self.key_points_set.add((i, j))
         self.key_points_list = np.array(self.key_points_list)
         # if len(key_points) != 0:
         #     logging.warning(u"检测到存在关键点，设置关键点地图...")
@@ -465,7 +471,7 @@ map12 = np.array([
     [2,     0,      0,      0,   'rw',      0,      0,      0,    'lw',      0,      0,      0,      0,      0,      2],
     [2,     0,      0,      0,      0,      0,      0,      0,    'lw',      0,      0,      0,      0,      0,      2],
     [2,     0,      0,      0,      0,      0,      0,      0,    'lw',      0,      0,      0,      0,      0,      2],
-    [2,     0,      0,      0,      0,      0,      0,      0,    'lw',      0,      0,      0,      0,      0,      2],
+    [2,     0,      0,      0,      0,      0,      0,      0,       0,      0,      0,      0,      0,      0,      2],
     [2,     2,      2,      2,      2,      3,      3,      3,       2,      2,      2,      2,      2,      2,      2],
 ])
 
@@ -489,7 +495,7 @@ map12_spawn = np.array([
     [2,     0,      0,      0,   'rw',      0,    'k',    'k',    'lw',      0,      0,      0,      0,      0,      2],
     [2,     0,      0,      0,      0,      0,    'k',    'k',    'lw',      0,      0,      0,      0,      0,      2],
     [2,     0,      0,      0,      0,      0,    'k',    'k',    'lw',      0,      0,      0,      0,      0,      2],
-    [2,     0,      0,      0,      0,      0,    'k',    'k',    'lw',      0,      0,      0,      0,      0,      2],
+    [2,     0,      0,      0,      0,      0,    'k',    'k',       0,      0,      0,      0,      0,      0,      2],
     [2,     2,      2,      2,      2,      2,      2,      2,       2,      2,      2,      2,      2,      2,      2],
 ])
 

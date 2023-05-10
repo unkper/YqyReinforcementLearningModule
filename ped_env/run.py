@@ -166,7 +166,7 @@ def test_wrapper_api(debug=False):
     # env = Env(map_simple, person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=False,
     #           random_init_mode=True, person_handler=PedsRLHandlerWithForce)
 
-    env = FrameStackWrapper(env)
+    #env = FrameStackWrapper(env)
 
     for epoch in range(1):
         start_time = time.time()

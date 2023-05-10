@@ -32,23 +32,28 @@ def random_noise(data: pd.DataFrame, column_name, range=(-1, 1)):
     return data
 
 
-def draw_arrive_plot(path_dir, label_type=0, window=1, data_file_name="data/main.xlsx"):
+def draw_arrive_plot(path_dir, label_type=0, window=1, limit=300000, with_label=True, data_file_name="data/main.xlsx"):
     labels = {
         0: ["with_intrinsic_reward",
             "without_intrinsic_reward"],
-        1: ["Independent exploration",
+        1: ["A* Prior-Knowledge exploration",
+            "Multihead",
             "Minimum exploration",
+            "Independent exploration",
             "Covering exploration",
             "Burrowing exploration",
             "Leader-Follower exploration",
-            "A* Prior-Knowledge exploration"
-            "multihead"],
-        2: range(100)
+            ],
+        2: range(100),
+        3: ["Independent exploration",
+            "Minimum exploration",
+            "Covering exploration",
+            "Burrowing exploration"]
     }
     # 获取所有子文件夹名称,按照run1,run2的方式排序,无法处理runXX两位数的情况!
     subfolders = sorted(next(os.walk(path_dir))[1])
     dataframes = []
-    plt.grid(linestyle="--")  # 设置背景网格线为虚线
+
 
     # 打印子文件夹名称
     for subfolder in subfolders:
@@ -59,18 +64,20 @@ def draw_arrive_plot(path_dir, label_type=0, window=1, data_file_name="data/main
         except FileNotFoundError:
             continue
 
-    def _inner(y_label="total_n_found_exit", save_pth=path_dir):
+    def _inner(y_label="total_n_found_exit", save_pth=path_dir, div=1):
+        plt.grid(linestyle="--")  # 设置背景网格线为虚线
         fig, ax = plt.subplots()
 
         for fr, label in zip(dataframes, labels[label_type]):
             # 绘制图表
             if window != 1:
-                ax.plot(fr['timestep'], fr[y_label].rolling(window).mean(), label=label)
+                ax.plot(fr['timestep'], fr[y_label].rolling(window).mean()[0:limit] / div, label=label)
             else:
-                ax.plot(fr['timestep'], fr[y_label], label=label)
+                ax.plot(fr['timestep'], fr[y_label][0:limit], label=label)
         ax.set_xlabel('time_step')
         ax.set_ylabel(y_label.replace('/', '_'))
-        ax.legend(loc="best")
+        if with_label:
+            ax.legend(loc="best")
 
         plt.savefig(os.path.join(save_pth, "plot_{}.png".format(y_label.replace("/", "_"))))
 
@@ -92,10 +99,10 @@ def draw_arrive_plot(path_dir, label_type=0, window=1, data_file_name="data/main
                 dataframes.append(frame)
             except FileNotFoundError:
                 continue
-        _inner("n_found_exits/extrinsic/mean", s_pth)
+        _inner("n_found_exits/extrinsic/mean", s_pth, div=st)
         _inner("step_rewards/extrinsic/mean", s_pth)
 
 
 if __name__ == '__main__':
-    pth = r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_4agents_taskleave\2023_05_02_00_48_57exp_test"
-    draw_arrive_plot(pth, 2)
+    pth = r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\final_test\2023_05_10_03_07_24explore_type_test"
+    draw_arrive_plot(pth, 1, window=40)

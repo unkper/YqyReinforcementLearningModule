@@ -55,10 +55,10 @@ def test(config, load_file, episode=2):
 
 if __name__ == "__main__":
     from third_party.maicm.params.ped import params1 as ped_p
-    config = ped_p.Params("map_09", 6, 4)
-    config.args = ped_p.debug_mode(config.args)
-    config.args.n_rollout_threads = 2
+    config = ped_p.Params("map_10", 4, 1)
+    #config.args = ped_p.debug_mode(config.args)
+    config.args.n_rollout_threads = 1
 
-    path = r"/ec/maicm\models\pedsmove\map_09_6agents_taskleave\test\run27\model.pt"
+    path = r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\final_test\map10\2023_05_02_16_06_07exp_test\run1\model.pt"
 
     test(config.args, path)

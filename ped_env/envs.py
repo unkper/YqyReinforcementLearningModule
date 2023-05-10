@@ -644,6 +644,16 @@ class PedsMoveEnv(gym.Env):
             assert self.screen is not None
             self.screen.blit(self.surf, (0, 0))
             pygame.event.pump()
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        # 按下空格键，阻塞程序
+                        while True:
+                            event = pygame.event.wait()
+                            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                                break
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
         elif mode in {"rgb_array", "gray_array"}:

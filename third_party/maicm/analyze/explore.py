@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def draw_func(func):
+def draw_func(func, title="1/N^{}"):
+    plt.grid(linestyle="--")  # 设置背景网格线为虚线
     # 创建数据点
     x = np.linspace(1, 1000, 100)
     y = func(x)
@@ -16,9 +17,9 @@ def draw_func(func):
     plt.plot(x, y)
 
     # 添加标题和轴标签
-    plt.title('1/N^{}'.format(phi))
+    plt.title(title.format(phi))
     plt.xlabel('N')
-    plt.ylabel('1/N^{}'.format(phi))
+    plt.ylabel('Y')
 
     # 显示图像
     plt.show()
@@ -57,14 +58,14 @@ if __name__ == '__main__':
 
     phi = 0.7
     N = 10
-    # # draw_func(lambda x: np.power(x, -phi))
+    #draw_func(lambda x: np.power(x, -phi))
     #
     #draw_func(lambda x: N / (N + np.power(x, phi)))
     #
     phi = 0.1
     additional = 0.1
-    delta = 100
+    delta = 40
     func2 = lambda x: additional + 1 - 1 / (1 + np.exp(-phi * (x - delta)))
-    draw_func(func2)
+    draw_func(func2, title="0.1+1-1/(1+e^(-{}*(x-100))")
 
 # analyse(r"D:\projects\python\PedestrainSimulationModule\third_party\maicm\models\pedsmove\map_09_4agents_taskleave\2023_04_29_00_15_47exp_test\run1\data\agent_pos.pkl")

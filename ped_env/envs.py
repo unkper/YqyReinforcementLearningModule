@@ -663,9 +663,19 @@ class PedsMoveEnv(gym.Env):
             return data if mode == "rgb_array" else cv2.cvtColor(data, cv2.COLOR_RGB2GRAY)
 
     def render(self, mode="human", ratio=1):
+        """
+        mode为human时，代表显示经过pygame渲染的图像
+
+        mode为rgb_array时，代表返回经过pygame渲染的图像，将数据存放在render_data属性
+
+        mode为gray_array时，代表返回经过pygame渲染的图像并灰度化，将数据存放在render_data属性
+        """
         self.render_data = self._render(mode)
 
     def close(self):
+        """
+        销毁行人仿真环境的函数
+        """
         self.peds = []
         self.elements = []
         self.ped_to_group_dic = {}

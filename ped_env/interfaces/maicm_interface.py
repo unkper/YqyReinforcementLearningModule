@@ -129,7 +129,6 @@ class PedEnvWrapper:
         self.env.render(mode=mode, ratio=ratio)
 
     def close(self):
-        del self.visit_counts
         self.env.close()
 
     def seed(self, seed=None):

@@ -1,23 +1,11 @@
-import logging
 import random
 
 import torch
-import os
-import multiprocessing
 import numpy as np
-import tqdm
-
-from pathlib import Path
-from collections import deque
-from tensorboardX import SummaryWriter
 
 from third_party.maicm.main import make_parallel_env
-from utils.buffer import ReplayBuffer
-from utils.env_wrappers import SubprocVecEnv
-from utils.misc import apply_to_all_elements, timeout, RunningMeanStd
+from utils.misc import apply_to_all_elements
 from algorithms.sac import SAC
-from envs.magw.multiagent_env import GridWorld, VectObsEnv
-from ped_env.utils.maicm_interface import create_ped_env
 
 
 def test(config, load_file, episode=2):

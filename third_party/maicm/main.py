@@ -1,7 +1,5 @@
-import pickle
 import random
 import time
-from typing import List
 
 import dill
 import pandas as pd
@@ -20,11 +18,11 @@ from tensorboardX import SummaryWriter
 from ped_env.utils.misc import strf_now_time
 from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv
-from utils.misc import apply_to_all_elements, timeout, RunningMeanStd, save_params
+from utils.misc import apply_to_all_elements, RunningMeanStd, save_params
 from algorithms.sac import SAC
 
 from envs.magw.multiagent_env import GridWorld, VectObsEnv
-from ped_env.utils.maicm_interface import create_ped_env
+from ped_env.interfaces.maicm_interface import create_ped_env
 
 AGENT_CMAPS = ['Reds', 'Blues', 'Greens', 'Wistia']
 key_points_set = None

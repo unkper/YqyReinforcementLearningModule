@@ -157,6 +157,8 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
     def set_action(self, ped: Person, action):
         if self.with_force:
             ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
+            ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
+            ped.fiw_force(self.env.walls + self.env.obstacles)
         else:
             ped.set_velocity(action)
 

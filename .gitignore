@@ -25,3 +25,5 @@ venv_vizdoom
 /rl_platform/tianshou_case/vizdoom/checkpoints/
 /rl_platform/tianshou_case/ped_env/saved_checkpoints/
 *.mp4
+/third_party/maddpg/PNG/
+/third_party/maddpg/save/

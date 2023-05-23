@@ -33,9 +33,9 @@ n_actions = 2  # 动作空间的大小
 capacity = 5000000 # Replay Buffer的大小
 batch_size = 1024
 
-n_episode = 500  # 总共运行多少个episode
+n_episode = 4  # 总共运行多少个episode
 max_steps = 10000
-episodes_before_train = 20  #运行多少个episode后开始训练
+episodes_before_train = 2  #运行多少个episode后开始训练
 
 win = None
 param = None
@@ -81,7 +81,7 @@ for i_episode in tqdm.tqdm(range(n_episode)):
             break
     maddpg.episode_done += 1
     print('Episode: %d, reward = %f' % (i_episode, total_reward))
-    reward_record.append(total_reward / n_agents)
+    reward_record.append(total_reward.cpu().numpy() / n_agents)
 
     if maddpg.episode_done == maddpg.episodes_before_train:
         print('training now begins...')

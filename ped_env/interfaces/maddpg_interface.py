@@ -1,7 +1,8 @@
 from ped_env.envs import PedsMoveEnv
+from ped_env.interfaces.base import BaseWrapper
 
 
-class MADDPG_Wrapper:
+class MADDPG_Wrapper(BaseWrapper):
     def __init__(self, env):
         """
         将场景中的N个智能体转换成可被M个智能体的多智能体强化学习算法所控制

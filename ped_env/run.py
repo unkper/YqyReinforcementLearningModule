@@ -124,8 +124,8 @@ def test5():
 
     debug = False
 
-    person_num = 32
-    env = Env("map_12", person_num, group_size=(4, 4), frame_skipping=8, maxStep=300, debug_mode=debug,
+    person_num = 4
+    env = Env("map_07", person_num, group_size=(1, 1), frame_skipping=8, maxStep=10000, debug_mode=debug,
               random_init_mode=True)
     leader_num = env.agent_count
     policy = AStarPolicy(env.terrain)
@@ -134,17 +134,17 @@ def test5():
         starttime = time.time()
         step = 0
         obs = env.reset()
-        is_done = [False]
-        while not is_done[0]:
-            action = policy.step(obs)
+        is_done = {"0": False}
+        while not all(is_done.values()):
+            action = policy.step(obs, env)
+            action = {agentid: np.argmax(action[i]) for i, agentid in enumerate(env.possible_agents)}
             for i in range(1):
-                obs, reward, is_done, info = env.step(action)
+                obs, reward, is_done, truncated, info = env.step(action)
                 env.render()
-                if is_done[0]:
-                    break
                 if debug:
                     env.debug_step()
                 step += env.frame_skipping
+            time.sleep(0.05)
         endtime = time.time()
         print("智能体与智能体碰撞次数为{},与墙碰撞次数为{}!"
               .format(env.collide_agents_count, env.collide_wall_count))
@@ -221,7 +221,7 @@ def save_video(obs_arr, name="animation"):
 
 if __name__ == '__main__':
     # HelloWorldProject()
-    test2()
+    test5()
     # test_wrapper_api(debug=True)
 
     # import kdtree

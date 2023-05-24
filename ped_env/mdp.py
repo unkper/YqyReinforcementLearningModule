@@ -157,8 +157,10 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
     def set_action(self, ped: Person, action):
         if self.with_force:
             ped.self_driven_force(parse_discrete_action(action) if self.env.discrete else action)
-            ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
-            ped.fiw_force(self.env.walls + self.env.obstacles)
+
+            # !!!注意下面两行代码就是社会力的相关配置，加上代表采用社会力，不加代表取消使用社会力，单纯粒子运动。
+            # ped.fij_force(self.env.not_arrived_peds, self.env.ped_to_group_dic[ped])
+            # ped.fiw_force(self.env.walls + self.env.obstacles)
         else:
             ped.set_velocity(action)
 
@@ -207,6 +209,9 @@ class PedsRLHandlerWithForce(PedsHandlerInterface):
         return int_pos_j
 
     def get_reward(self, ped: Person, ped_index: int, time):
+        """
+        奖励函数的配置，其中gr代表给所有智能体的一个统一奖励，lr代表只给予自身的一个奖励，一般gr都为零
+        """
         gr, lr = 0.0, 0.0
         if ped.is_done and ped.has_removed:
             pass

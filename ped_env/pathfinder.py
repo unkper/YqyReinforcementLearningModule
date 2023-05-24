@@ -175,7 +175,7 @@ class AStar:
             # 在一开始就计算好各个位置的下一步方向向量，并存储到矩阵中，以节省算力
             for j in range(terrain.shape[1]):
                 for i in range(terrain.shape[0]):
-                    if terrain[i, j] == 0:  # 空地
+                    if terrain[i, j] == '0':  # 空地
                         start_pos = (i, j)
                         end_pos = (exit[0], exit[1])
                         vector_matrix[i][j], pa = self.next_loc(i, j, int(exit[0]), int(exit[1]))
@@ -330,19 +330,20 @@ class AStarPolicy():
             return False
         return True
 
-    def step(self, obs):
+    def step(self, obs, env):
         actions = []
-        for ob in obs:
-            pos_x, pos_y = ob[0:2]  # 得到智能体当前位置
+        for i in range(len(env.peds)):
+            #pos_x, pos_y = ob[0:2]  # 得到智能体当前位置
+            agent = env.peds[i]
+            pos_x, pos_y = agent.getX, agent.getY
             pos_integer = [int(pos_x), int(pos_y)]
-            rx, ry = ob[4:6]  # 得到相对于出口的距离
-            ex = pos_x + rx
-            ey = pos_y + ry
+            ex, ey = env.get_ped_nearest_exit_dis_01(pos_integer)
             exit = self.exit_tree.search_nn((ex, ey))[0].data  # 寻找相对最近的节点
-            if self.is_pos_vaild(pos_integer):
-                dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
-            else:
-                dir = 0
+            # if self.is_pos_vaild(pos_integer):
+            #     dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
+            # else:
+            #     dir = 0
+            dir = self.planner.dir_vector_matrix_dic[exit][pos_integer[0]][pos_integer[1]]
             action = np.zeros([ACTION_DIM])
             if dir != 0:
                 action[self.vec_to_discrete_action_dic[dir]] = 1.0

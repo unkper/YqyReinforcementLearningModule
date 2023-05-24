@@ -433,6 +433,15 @@ class PedsMoveEnv(gym.Env):
             min = dis if min > dis else min
         return min
 
+    def get_ped_nearest_exit_dis_01(self, person_pos):
+        x, y = person_pos
+        min = math.inf
+        for exit_point in self.terrain.exits:
+            ex, ey = exit_point
+            dis = sqrt(pow(ex - x, 2) + pow(ey - y, 2))
+            min = dis if min > dis else min
+        return ex, ey
+
     def get_ped_to_exit_dis(self, person_pos, exit_type):
         DeprecationWarning("废弃单出口的设定!")
         ex, ey = self.terrain.exits[exit_type - 3]  # 从3开始编号
